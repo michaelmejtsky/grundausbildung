@@ -6,11 +6,11 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.0',
+  VERSION: '1.5.1',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
-    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm','Geburtsdatum','Standesbuchnummer'],
+    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm','Geburtsdatum','Standesbuchnummer','Ausbildungsweg'],
     Kurse: ['ID','Titel','Bereich','Inhalt','Lernziele','Links','Aktiv','ErstelltAm'],
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
@@ -298,9 +298,10 @@ function gaSaveMember_(u,d){
   const email=gaText_(d.Email,240).toLowerCase();
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
-    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35)};
+    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35),Ausbildungsweg:gaChoice_(d.Ausbildungsweg||turnus.Bereich,GA.AREAS,'Ausbildungsweg')};
+  if(val.Ausbildungsweg==='Erweiterte Ausbildung'&&turnus.Bereich!=='Erweiterte Ausbildung')
+    throw new Error('Teilnehmer der Erweiterten Ausbildung müssen einem entsprechenden Turnus zugeordnet sein.');
   const rows=gaRows_('Mitglieder');
-  if(val.Dienstnummer&&rows.some(m=>m.ID!==d.ID&&m.Dienstnummer===val.Dienstnummer))throw new Error('Diese Dienstnummer wird bereits verwendet.');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
   if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
     throw new Error('Diese Mitglieds-E-Mail ist bereits vergeben.');
@@ -831,10 +832,10 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse){
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
- const advanced=q.GABAnerkannt==='JA'&&(turnusse||[]).some(t=>t.ID===m.TurnusID&&t.Bereich==='Erweiterte Ausbildung'),gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
+ const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
  const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
  const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
- return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Standesbuchnummer:m.Standesbuchnummer||'',
+ return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Ausbildungsweg:m.Ausbildungsweg||'',Standesbuchnummer:m.Standesbuchnummer||'',
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
@@ -855,7 +856,7 @@ function gaSaveQualification_(u,d){
   FDISKEintragDatum:fdisk,GABFreigabe:d.GABFreigabe==='JA'?'JA':'NEIN',
   GABAnerkannt:d.GABAnerkannt==='JA'?'JA':'NEIN',FDISKPlatzhalter:d.FDISKPlatzhalter==='JA'?'JA':'NEIN',Notiz:gaText_(d.Notiz,700),
   GeprueftVon:u.ID,GeprueftAm:gaNow_()};
- if(val.GABAnerkannt==='JA'&&gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Erweiterte Ausbildung')
+ if(val.GABAnerkannt==='JA'&&m.Ausbildungsweg!=='Erweiterte Ausbildung')
   throw new Error('GAB-Anerkennung ist nur bei erweiterter Ausbildung zulässig.');
  const existing=gaOptionalRows_('QualifikationMitglieder').find(x=>x.MitgliedID===m.ID);
  if(existing)gaReplace_('QualifikationMitglieder',existing.ID,val);
