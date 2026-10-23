@@ -528,7 +528,7 @@ function gaInviteCheck_(token){
   if(!user||(item.Status==='Offen'&&gaBool_(user.Aktiv))||
      (item.Status==='Passwortreset'&&!gaBool_(user.Aktiv)))
     throw new Error('Dieser Link ist für den aktuellen Zugangsstatus nicht gültig.');
-  return {Name:user.Name,Email:user.Email,Rolle:user.Rolle,Bereich:user.Bereich};
+  return {Name:user.Name,Email:user.Email,Rolle:user.Rolle,Bereich:user.Bereich,Zuruecksetzen:item.Status==='Passwortreset'};
 }
 function gaCheckInvite(token){return gaInviteCheck_(token);}
 function gaAcceptInvite(token,password){
