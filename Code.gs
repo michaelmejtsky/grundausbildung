@@ -190,7 +190,7 @@ function gaState_(u){
     checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
     checks,
     teilnahmen:admin||trainer?gaRows_('Teilnahmen'):participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[],
-    nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID):[],
+    nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||n.TurnusID==='M:'+own.ID):[],
     benachrichtigungen:notifications,
     benutzer:admin?gaRows_('Benutzer').map(gaPublicUser_):trainer?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
     // Ausgabe von Personenprofilen nur nach Login und rollenbasiert.
@@ -263,12 +263,30 @@ function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.N
   const role=gaChoice_(d.Rolle,GA.ROLES,'Rolle'),bereich=role==='Fachverwaltung'?gaNeed_(d.Bereich,'Zuständigkeit',100):gaText_(d.Bereich,100);
   const salt=gaId_()+gaId_();const val={ID:gaId_(),Name:name,Email:email,Rolle:role,Bereich:bereich,Aktiv:'JA',Salt:salt,Hash:gaHash_(pwd,salt),ErstelltAm:gaNow_()};
   gaAppend_('Benutzer',val);gaLog_(u.ID,'ANLEGEN','Benutzer',val.ID,{Email:email,Rolle:role});return {ok:true};}
-function gaSendMessage_(u,d){gaRequire_(u,['Administrator']);const title=gaNeed_(d.Titel,'Betreff',160),message=gaNeed_(d.Text,'Nachricht',3000);
-  const turnusId=gaText_(d.TurnusID,100);if(turnusId&&!gaFind_('Turnusse',turnusId))throw new Error('Turnus nicht gefunden.');
-  const id=gaId_();gaAppend_('Nachrichten',{ID:id,Titel:title,Text:message,TurnusID:turnusId,VonBenutzerID:u.ID,ErstelltAm:gaNow_()});
-  if(turnusId)gaNotifyTurnus_(turnusId,'Nachricht',title,message.slice(0,240),id);
-  else gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)).forEach(x=>gaNotify_(x.ID,'Nachricht',title,message.slice(0,240),id));
-  gaLog_(u.ID,'SENDEN','Nachricht',id,{TurnusID:turnusId});return {ok:true};}
+function gaSendMessage_(u,d){
+  gaRequire_(u,['Administrator']);
+  const title=gaNeed_(d.Titel,'Betreff',160),message=gaNeed_(d.Text,'Nachricht',3000);
+  const mode=gaChoice_(d.EmpfaengerArt||'TURNUS',['ALLE','TURNUS','MITGLIED'],'Empfängerart');
+  const members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv));
+  let target='',recipients=[];
+  if(mode==='TURNUS'){
+    const id=gaNeed_(d.TurnusID,'Turnus',100);
+    if(!gaFind_('Turnusse',id))throw new Error('Turnus nicht gefunden.');
+    target=id;recipients=members.filter(m=>m.TurnusID===id);
+  }else if(mode==='MITGLIED'){
+    const id=gaNeed_(d.MitgliedID,'Mitglied',100);
+    const member=members.find(m=>m.ID===id);
+    if(!member)throw new Error('Mitglied nicht gefunden oder nicht aktiv.');
+    target='M:'+id;recipients=[member];
+  }else recipients=members;
+  const emails=new Set(recipients.map(m=>String(m.Email||'').toLowerCase()).filter(Boolean));
+  const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.has(x.Email.toLowerCase()));
+  const id=gaId_();
+  gaAppend_('Nachrichten',{ID:id,Titel:title,Text:message,TurnusID:target,VonBenutzerID:u.ID,ErstelltAm:gaNow_()});
+  users.forEach(x=>gaNotify_(x.ID,'Nachricht',title,message.slice(0,240),id));
+  gaLog_(u.ID,'SENDEN','Nachricht',id,{EmpfaengerArt:mode,ZielID:target,Empfaenger:users.length});
+  return {ok:true,message:'Nachricht gespeichert. '+users.length+' aktive Teilnehmer benachrichtigt.'};
+}
 function gaReadNotification_(u,d){const n=gaFind_('Benachrichtigungen',d.ID);if(!n||n.BenutzerID!==u.ID)throw new Error('Benachrichtigung nicht gefunden.');gaReplace_('Benachrichtigungen',n.ID,{GelesenAm:gaNow_()});return {ok:true};}
 
 /**
