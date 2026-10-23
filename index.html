@@ -174,9 +174,18 @@ function overview(){
 function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
 function courses(){
  const cards=STATE.kurse.filter(c=>c.Aktiv==='JA');
- return '<section class="panel"><h2>Freigegebener Kurskatalog ('+cards.length+')</h2>'+
- '<p class="muted">Neue Kurse werden unter „Kursprojekte“ vorbereitet und erst nach einer Freigabe veröffentlicht.</p>'+
- '<div class="items">'+(cards.length?cards.map(courseCard).join(''):'Noch keine veröffentlichten Kurse.')+'</div></section>';
+ const edit=FORM==='course'&&EDIT?by(cards,EDIT):null;
+ const form=STATE.rechte?.KurseBearbeiten&&edit?'<section class="panel"><h2>Veröffentlichten Kurs bearbeiten</h2>'+
+ '<form data-form="course"><div class="grid">'+
+ '<div><label>Titel</label><input name="Titel" required value="'+h(edit.Titel)+'"></div>'+
+ '<div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions(edit.Bereich)+'</select></div>'+
+ '<div class="wide"><label>Ausbildungsinhalt (Pflicht)</label><textarea name="Inhalt" required>'+h(edit.Inhalt||'')+'</textarea></div>'+
+ '<div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit.Lernziele||'')+'</textarea></div>'+
+ '<div class="wide"><label>Präsentation und Unterlagen (HTTPS-Links, je Zeile)</label><textarea name="Links">'+h(edit.Links||'')+'</textarea></div>'+
+ '</div><p class="small muted">Die Änderung wird sofort veröffentlicht und protokolliert. Bestehende Teilnahmen bleiben erhalten.</p>'+
+ '<div class="btnline"><button class="primary">Änderungen veröffentlichen</button><button type="button" class="secondary" data-cancel="1">Abbrechen</button></div></form></section>':'';
+ return form+'<section class="panel"><h2>Veröffentlichter Kurskatalog ('+cards.length+')</h2>'+
+ '<div class="items">'+(cards.length?cards.map(c=>courseCard(c)+(STATE.rechte?.KurseBearbeiten?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Kurs bearbeiten</button></div>':'')).join(''):'Noch keine veröffentlichten Kurse.')+'</div></section>';
 }
 function projects(){
  const r=STATE.rechte||{},canCreate=!!r.KurseGestalten,canApprove=!!r.KurseFreigeben;
@@ -218,6 +227,8 @@ function rights(){
  const permissions=[
  ['KurseGestalten','Kurse gestalten und Projekte einreichen'],
  ['KurseFreigeben','Kurse prüfen und veröffentlichen'],
+ ['KurseBearbeiten','Veröffentlichte Kurse bearbeiten'],
+ ['FrageboegenBearbeiten','Fragebögen gestalten'],
  ['TerminePlanen','Ausbildungstermine planen'],
  ['MeldungenBearbeiten','Mängel und Ideen bearbeiten'],
  ['BewertungenAnsehen','Kursbewertungen auswerten']
@@ -259,21 +270,36 @@ function reports(){
  (m.Rueckmeldung?'<p class="notice">'+h(m.Rueckmeldung)+'</p>':''))+'</div>').join(''):'Keine Meldungen in dieser Auswahl.')+
  '</div></section>';
 }
+function gaQuestions(courseId){
+ const all=STATE.frageboegen||[];
+ const form=all.find(x=>x.KursID===courseId)||all.find(x=>x.KursID==='ALLGEMEIN');
+ let questions=['Waren die Ausbildungsziele verständlich?','Wurden die Inhalte verständlich erklärt?',
+ 'War die Ausbildung praxisnah und für den Feuerwehrdienst hilfreich?','War das Tempo der Ausbildung angemessen?',
+ 'Konntest du ausreichend Fragen stellen?','Waren die eingesetzten Unterlagen und Hilfsmittel hilfreich?',
+ 'Wie zufrieden warst du insgesamt mit der Ausbildung?'];
+ if(form){try{const list=JSON.parse(form.FragenJSON);if(Array.isArray(list)&&list.length)questions=list;}catch{}}
+ return questions;
+}
 function ratings(){
- if(role()!=='Teilnehmer')return '';
  const pending=STATE.offeneBewertungen||[],done=STATE.eigeneBewertungen||[];
- const pendingHtml=pending.map(t=>'<form class="item" data-form="rating">'+
- '<input type="hidden" name="TerminID" value="'+h(t.ID)+'">'+
- '<b>'+h(by(STATE.kurse,t.KursID)?.Titel||'Ausbildung')+'</b>'+
- '<p class="detail">'+dt(t.Beginn)+' · '+h(t.Ort||'')+'</p>'+
- '<label>Wie war der Kurs?</label><select name="Sterne" required><option value="">Bitte bewerten</option>'+
+ const forms=pending.map(t=>{
+ const questions=gaQuestions(t.KursID);
+ return '<form class="item" data-form="rating"><input type="hidden" name="TerminID" value="'+h(t.ID)+'">'+
+ '<h3>'+h(by(STATE.kurse,t.KursID)?.Titel||'Ausbildung')+'</h3><div class="detail">'+dt(t.Beginn)+'</div>'+
+ '<label>Gesamteindruck (1–5 Sterne)</label><select name="Sterne" required><option value="">Bitte wählen</option>'+
  [5,4,3,2,1].map(n=>'<option value="'+n+'">'+('★'.repeat(n))+' ('+n+'/5)</option>').join('')+'</select>'+
- '<label>Deine Anmerkung (freiwillig)</label><textarea name="Kommentar" maxlength="2500" placeholder="Was war gut? Was könnte verbessert werden?"></textarea>'+
- '<div class="btnline"><button class="primary">Kursbewertung absenden</button></div></form>').join('');
- return '<section class="panel"><h2>Jetzt Kurs bewerten</h2><p class="muted">Eine Bewertung ist erst möglich, wenn ein Ausbilder deine Anwesenheit als teilgenommen bestätigt hat. Du kannst jeden Kurstermin einmal bewerten.</p>'+
- '<div class="items">'+(pendingHtml||'Aktuell keine offenen Kursbewertungen.')+'</div></section>'+
- '<section class="panel"><h2>Meine abgegebenen Bewertungen</h2><div class="items">'+
- (done.length?done.slice().reverse().map(x=>'<div class="item"><b>'+h(by(STATE.kurse,x.KursID)?.Titel||'Ausbildung')+'</b><div class="detail">'+h('★'.repeat(Number(x.Sterne)||0))+' · '+dt(x.ErstelltAm)+'</div><p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Du hast noch keinen Kurs bewertet.')+
+ questions.map((q,i)=>'<label>'+h((i+1)+'. '+q)+'</label><select name="Frage_'+i+'" required><option value="">Bitte bewerten</option>'+
+ [5,4,3,2,1].map(n=>'<option value="'+n+'">'+n+' / 5</option>').join('')+'</select>').join('')+
+ '<label>Was hat dir besonders gut gefallen?</label><textarea name="Positives" maxlength="1500"></textarea>'+
+ '<label>Was war nicht so toll oder sollte verbessert werden?</label><textarea name="Verbesserungen" maxlength="1500"></textarea>'+
+ '<label>Ideen und Wünsche für zukünftige Ausbildungen</label><textarea name="Ideen" maxlength="1500"></textarea>'+
+ '<label>Weitere Anmerkungen</label><textarea name="Kommentar" maxlength="2500"></textarea>'+
+ '<div class="btnline"><button class="primary">Bewertung absenden</button></div></form>';
+ }).join('');
+ return '<section class="panel"><h2>Meine Kursbewertungen</h2><p class="muted">Nur nach bestätigter Teilnahme. Deine Antworten bleiben auch nach Änderungen am Fragebogen gespeichert.</p>'+
+ '<div class="items">'+(forms||'Keine offenen Kursbewertungen.')+'</div></section>'+
+ '<section class="panel"><h2>Bereits abgegeben</h2><div class="items">'+
+ (done.length?done.map(x=>'<div class="item"><b>'+h(by(STATE.kurse,x.KursID)?.Titel||'Kurs')+'</b><div class="detail">'+h(x.Sterne)+' / 5 Sterne</div></div>').join(''):'Noch keine Bewertungen.')+
  '</div></section>';
 }
 function reviews(){
@@ -568,7 +594,12 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='permissions')await doSave('setPermission',data);
  else if(type==='report')await doSave('submitReport',data);
  else if(type==='reportStatus')await doSave('setReportStatus',data);
- else if(type==='rating')await doSave('saveRating',data);
+ else if(type==='rating'){
+  const questions=gaQuestions(by(STATE.termine,data.TerminID)?.KursID),answers={};
+  questions.forEach((q,i)=>answers[String(i)]=Number(fd.get('Frage_'+i)));
+  data.Antworten=answers;
+  await doSave('saveRating',data);
+ }
  else if(type==='term')await doSave('saveTermin',data);
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
