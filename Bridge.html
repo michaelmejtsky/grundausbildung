@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Grundausbildung – Verbindung</title></head>
+<body style="font-family:system-ui; padding:10px; margin:0; font-size:12px; color:#64748b">
+<div id="bridgeState">Geschützte Verbindung wird hergestellt …</div>
+<script>
+'use strict';
+/* Apps Script HTML-Service unter Google-Domain, Frontend unter GitHub Pages.
+ * Hier werden ausschließlich explizit freigegebene Aktionen weitergeleitet.
+ * Es dürfen keine Zugangsdaten in dieser Datei eingebettet sein.
+ */
+(function(){
+  const APP_ORIGIN='https://michaelmejtsky.github.io';
+  const ALLOWED=['gaLogin','gaApi','gaCheckInvite','gaAcceptInvite'];
+  window.addEventListener('message',function(event){
+    if(event.source!==window.parent || event.origin!==APP_ORIGIN)return;
+    const msg=event.data||{};
+    if(msg.source!=='GA_APP'||typeof msg.requestId!=='string'||!ALLOWED.includes(msg.method))return;
+    const args=Array.isArray(msg.args)?msg.args:[];
+    try{
+      google.script.run
+        .withSuccessHandler(function(value){
+          event.source.postMessage({source:'GA_BRIDGE',requestId:msg.requestId,ok:true,value:value},APP_ORIGIN);
+        })
+        .withFailureHandler(function(err){
+          event.source.postMessage({source:'GA_BRIDGE',requestId:msg.requestId,ok:false,error:String(err&&err.message||'Anfrage fehlgeschlagen')},APP_ORIGIN);
+        })[msg.method].apply(null,args);
+    }catch(err){
+      event.source.postMessage({source:'GA_BRIDGE',requestId:msg.requestId,ok:false,error:'Die Anfrage konnte nicht gestartet werden.'},APP_ORIGIN);
+    }
+  });
+  window.parent.postMessage({source:'GA_BRIDGE',ready:true},APP_ORIGIN);
+  document.getElementById('bridgeState').textContent='Verbindung bereit';
+})();
+</script></body></html>
