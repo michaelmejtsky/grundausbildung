@@ -23,7 +23,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.1</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.2</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -366,7 +366,7 @@ function qualifications(){
  gaStatusBadge(q.BSWModulAbgeschlossen,'Modul BSW abgeschlossen','Modul BSW offen')+
  gaStatusBadge(q.Alter16,'16 Jahre erreicht','Unter 16 / unbekannt')+
  gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst: JA','BSW-Dienst: NEIN')+'</div>'+
- '<div class="detail">Ausbildungsweg: '+h(q.Ausbildungsweg||'Nicht angegeben')+' · Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+' · FDISK-Platzhalter: '+h(q.FDISKPlatzhalter==='JA'?'Ja':'Nein')+'</div>'+
+ '<div class="detail">Aktuelle Stufe: '+h(q.Ausbildungsweg||'GAB')+' · Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+' · FDISK-Platzhalter: '+h(q.FDISKPlatzhalter==='JA'?'Ja':'Nein')+'</div>'+
  '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'"><div class="grid">'+
  '<div><label>Geburtsdatum</label><input type="date" name="Geburtsdatum" value="'+h(q.Geburtsdatum)+'"></div>'+
  '<div><label>Erste Hilfe</label><select name="ErsteHilfeStatus"><option '+(q.ErsteHilfeStatus==='Ausständig'?'selected':'')+'>Ausständig</option><option '+(q.ErsteHilfeStatus==='Bestätigt'?'selected':'')+'>Bestätigt</option></select></div>'+
@@ -396,9 +396,9 @@ function members(){
  '<div><label>Standesbuchnummer</label><input name="Standesbuchnummer" maxlength="35" value="'+h(edit?.Standesbuchnummer||'')+'"></div>'+
  '<div><label>Ausbildungsweg</label><select name="Ausbildungsweg" required>'+
  '<option value="Grundausbildung" '+((edit?.Ausbildungsweg||'Grundausbildung')==='Grundausbildung'?'selected':'')+'>GAB – Grundausbildung</option>'+
- '<option value="Erweiterte Ausbildung" '+(edit?.Ausbildungsweg==='Erweiterte Ausbildung'?'selected':'')+'>Erweiterte Ausbildung (mit bereits abgeschlossener GAB)</option></select></div>'+
+ '<option value="Erweiterte Ausbildung" '+(edit?.Ausbildungsweg==='Erweiterte Ausbildung'?'selected':'')+'>Erweiterte Ausbildung (GAB-Abschluss muss bestätigt sein)</option></select></div>'+
  '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
- '<p class="small muted">Der Ausbildungsweg ordnet Kurse zu, ist aber selbst kein Abschlussnachweis. Bei Erweiterter Ausbildung muss die GAB gesondert bestätigt/anerkannt werden.</p>'+
+ '<p class="small muted">GAB ist die erste Stufe. GAB-Teilnehmer dürfen bereits erweiterte Kurse besuchen. Sobald die GAB bestätigt und vollständig ist, erscheint automatisch die Stufe „Erweiterte Ausbildung“. Die Turnuszuordnung bleibt erhalten. Bei Direkteinstieg in die Erweiterte Ausbildung muss die bereits absolvierte GAB nachgewiesen und vom Admin anerkannt werden.</p>'+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
  (edit?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+'</div></form>'+
@@ -454,7 +454,7 @@ function mine(){
  if(!member)return '<section class="panel"><h2>Teilnehmerprofil fehlt</h2><p>Bitte den Administrator bitten, deine E-Mail beim Mitgliedseintrag zu hinterlegen.</p></section>';
  const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===member.ID)||{};
  const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
- const qualification='<section class="panel"><h2>Meine Ausbildungsfreigaben</h2><p class="muted">Ausbildungsweg: '+h(q.Ausbildungsweg||'Nicht zugeordnet')+'</p><div class="row">'+
+ const qualification='<section class="panel"><h2>Meine Ausbildungsfreigaben</h2><p class="muted">Aktuelle Stufe: '+h(q.Ausbildungsweg||'GAB')+'</p><div class="row">'+
  gaStatusBadge(q.GABAbgeschlossen,'GAB abgeschlossen','GAB ausständig')+
  gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul abgeschlossen','BSW-Modul offen')+
  gaStatusBadge(q.Alter16,'16 Jahre erreicht','Alter nicht bestätigt')+
