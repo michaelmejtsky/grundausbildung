@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.2.0',
+  VERSION: '1.3.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -21,7 +21,11 @@ const GA = Object.freeze({
     Protokoll: ['ID','Zeit','BenutzerID','Aktion','Entitaet','EntitaetID','Details'],
     Einladungen: ['ID','BenutzerID','Email','TokenHash','ExpiresAt','UsedAt','Status','ErstelltVon','ErstelltAm'],
     PushGeraete: ['ID','BenutzerID','Endpoint','P256DH','Auth','Aktiv','AktualisiertAm'],
-    PushRegeln: ['ID','BenutzerID','Nachrichten','Termine','Aufgaben','AktualisiertAm']
+    PushRegeln: ['ID','BenutzerID','Nachrichten','Termine','Aufgaben','AktualisiertAm','Bewertungen'],
+    Berechtigungen: ['ID','BenutzerID','KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','AktualisiertAm'],
+    KursProjekte: ['ID','KursID','Titel','Bereich','Typ','Inhalt','Lernziele','PraesentationURL','WeitereLinks','Status','ErstelltVon','ErstelltAm','GeaendertVon','GeaendertAm','GeprueftVon','GeprueftAm','Rueckmeldung'],
+    Meldungen: ['ID','Kategorie','Titel','Beschreibung','KursID','Status','ErstelltVon','ErstelltAm','BearbeitetVon','BearbeitetAm','Rueckmeldung'],
+    Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -168,6 +172,13 @@ function gaApi(method,data,token){
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
   if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
+  if(method==='setPermission')return gaLock_(()=>gaSetPermission_(u,d));
+  if(method==='saveProject')return gaLock_(()=>gaSaveProject_(u,d));
+  if(method==='submitProject')return gaLock_(()=>gaSubmitProject_(u,d));
+  if(method==='reviewProject')return gaLock_(()=>gaReviewProject_(u,d));
+  if(method==='submitReport')return gaLock_(()=>gaSubmitReport_(u,d));
+  if(method==='setReportStatus')return gaLock_(()=>gaSetReportStatus_(u,d));
+  if(method==='saveRating')return gaLock_(()=>gaSaveRating_(u,d));
   if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
@@ -204,6 +215,18 @@ function gaState_(u){
     pushGeraeteAnzahl:gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
     pushRegeln:admin?gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID),Geraete:gaOptionalRows_('PushGeraete').filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
     benutzer:admin?gaRows_('Benutzer').map(gaPublicUser_):trainer?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
+    rechte:gaPermissions_(u),
+    kursProjekte:admin?gaOptionalRows_('KursProjekte'):trainer?gaOptionalRows_('KursProjekte').filter(x=>x.ErstelltVon===u.ID||gaCan_(u,'KurseFreigeben')):[],
+    berechtigungen:admin?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x)})):[],
+    meldungen:admin||gaCan_(u,'MeldungenBearbeiten')?gaOptionalRows_('Meldungen'):
+      trainer?gaOptionalRows_('Meldungen').filter(x=>x.ErstelltVon===u.ID):[],
+    bewertungen:gaCan_(u,'BewertungenAnsehen')?gaOptionalRows_('Bewertungen'):[],
+    eigeneBewertungen:participant&&own?gaOptionalRows_('Bewertungen').filter(x=>x.MitgliedID===own.ID):[],
+    offeneBewertungen:participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID&&gaBool_(t.Anwesend)).filter(t=>{
+      const term=allTermine.find(x=>x.ID===t.TerminID);
+      return term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
+        !gaOptionalRows_('Bewertungen').some(r=>r.TerminID===term.ID&&r.MitgliedID===own.ID);
+    }).map(t=>allTermine.find(x=>x.ID===t.TerminID)).filter(Boolean):[],
     // Ausgabe von Personenprofilen nur nach Login und rollenbasiert.
     meMember:participant&&own?own:null
   };
@@ -226,7 +249,8 @@ function gaNotify_(userId,type,title,message,reference){
   gaAppend_('Benachrichtigungen',{ID:gaId_(),BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
 }
 function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaRows_('Mitglieder').filter(m=>m.TurnusID===turnusId&&gaBool_(m.Aktiv)).map(m=>m.Email.toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
-function gaSaveTermin_(u,d){gaRequire_(u,['Administrator']);const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);if(!course||!turnus||course.Bereich!==turnus.Bereich)throw new Error('Kurs und Turnus müssen demselben Ausbildungsbereich zugehören.');
+function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);
+  if(!course||!gaBool_(course.Aktiv))throw new Error('Der Kurs ist noch nicht veröffentlicht.');if(!course||!turnus||course.Bereich!==turnus.Bereich)throw new Error('Kurs und Turnus müssen demselben Ausbildungsbereich zugehören.');
   const begin=gaDateTime_(d.Beginn),end=gaDateTime_(d.Ende);if(end<=begin)throw new Error('Das Ende muss nach dem Beginn liegen.');
   const val={KursID:d.KursID,TurnusID:d.TurnusID,Beginn:begin,Ende:end,Ort:gaText_(d.Ort,160),Status:'Geplant'};
   if(d.ID){gaReplace_('Termine',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Termin',d.ID,val);return {ok:true};}
