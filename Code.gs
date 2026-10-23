@@ -795,3 +795,88 @@ function gaSaveRating_(u,d){
  gaLog_(u.ID,'BEWERTUNG','Termin',term.ID,{KursID:course.ID,Sterne:score});
  return {ok:true,message:'Vielen Dank! Deine Kursbewertung wurde gespeichert.'};
 }
+
+
+/** Qualifikationsfreigaben; keine öffentliche Daten-API. */
+function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances){
+ const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
+ const complete=id=>terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+ const gab=rs.filter(r=>valid(r.PflichtGAB)),bsw=rs.filter(r=>valid(r.PflichtBSW));
+ const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
+ const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
+ const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
+ const advanced=q.GABAnerkannt==='JA',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
+ const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
+ const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
+ return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,
+  Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
+  ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',
+  GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
+  GABAbgeschlossen:gabDone,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
+  BSWDienstMoeglich:gabDone&&bswDone&&!!age16,
+  Fortschritt:requirements.length?Math.round(done*100/requirements.length):0,
+  PflichtGesamt:requirements.length,PflichtAbsolviert:done,
+  OffeneGABKurse:advanced?[]:gabOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs'),
+  OffeneBSWKurse:bswOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs')};
+}
+function gaSaveQualification_(u,d){
+ gaRequire_(u,['Administrator']);const m=gaFind_('Mitglieder',gaText_(d.MitgliedID,100));
+ if(!m)throw new Error('Mitglied nicht gefunden.');
+ const birth=gaDateOnly_(d.Geburtsdatum),status=gaChoice_(d.ErsteHilfeStatus||'Ausständig',['Ausständig','Bestätigt'],'Erste-Hilfe-Status'),
+ aid=gaDateOnly_(d.ErsteHilfeBestaetigtAm),fdisk=gaDateOnly_(d.FDISKEintragDatum);
+ if(status==='Bestätigt'&&!aid)throw new Error('Bestätigung der Ersten Hilfe braucht das tatsächliche Kursdatum.');
+ const val={Geburtsdatum:birth,ErsteHilfeStatus:status,ErsteHilfeBestaetigtAm:status==='Bestätigt'?aid:'',
+  FDISKEintragDatum:fdisk,GABFreigabe:d.GABFreigabe==='JA'?'JA':'NEIN',
+  GABAnerkannt:d.GABAnerkannt==='JA'?'JA':'NEIN',Notiz:gaText_(d.Notiz,700),
+  GeprueftVon:u.ID,GeprueftAm:gaNow_()};
+ if(val.GABAnerkannt==='JA'&&gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Erweiterte Ausbildung')
+  throw new Error('GAB-Anerkennung ist nur bei erweiterter Ausbildung zulässig.');
+ const existing=gaOptionalRows_('QualifikationMitglieder').find(x=>x.MitgliedID===m.ID);
+ if(existing)gaReplace_('QualifikationMitglieder',existing.ID,val);
+ else gaAppend_('QualifikationMitglieder',{ID:gaId_(),MitgliedID:m.ID,...val});
+ gaLog_(u.ID,'QUALIFIKATION','Mitglied',m.ID,{GAB:val.GABFreigabe,GABAnerkannt:val.GABAnerkannt,ErsteHilfeStatus:status});
+ return {ok:true,message:'Qualifikationsnachweise gespeichert.'};
+}
+function gaSetCourseRequirement_(u,d){
+ gaRequire_(u,['Administrator']);const c=gaFind_('Kurse',gaText_(d.KursID,100));
+ if(!c||!gaBool_(c.Aktiv))throw new Error('Nur veröffentlichte Kurse als Pflichtmodul markieren.');
+ const val={PflichtGAB:d.PflichtGAB==='JA'?'JA':'NEIN',PflichtBSW:d.PflichtBSW==='JA'?'JA':'NEIN',
+  AktualisiertVon:u.ID,AktualisiertAm:gaNow_()};
+ const old=gaOptionalRows_('KursAnforderungen').find(x=>x.KursID===c.ID);
+ if(old)gaReplace_('KursAnforderungen',old.ID,val);
+ else gaAppend_('KursAnforderungen',{ID:gaId_(),KursID:c.ID,...val});
+ gaLog_(u.ID,'PFLICHTMODUL','Kurs',c.ID,val);return {ok:true,message:'Pflichtmodulstatus gespeichert.'};
+}
+function gaSetAttendanceMember_(u,d){
+ gaRequire_(u,['Administrator']);const t=gaFind_('Termine',gaText_(d.TerminID,100)),m=gaFind_('Mitglieder',gaText_(d.MitgliedID,100));
+ if(!t||!m||t.TurnusID!==m.TurnusID)throw new Error('Termin oder Mitglied nicht zugeordnet.');
+ const old=gaRows_('Teilnahmen').find(x=>x.TerminID===t.ID&&x.MitgliedID===m.ID),present=d.Anwesend==='JA';
+ const val={Anwesend:present?'JA':'NEIN',AusbilderIDs:old?.AusbilderIDs||u.ID,BestaetigtVon:u.ID,BestaetigtAm:gaNow_()};
+ if(old)gaReplace_('Teilnahmen',old.ID,val);
+ else gaAppend_('Teilnahmen',{ID:gaId_(),TerminID:t.ID,MitgliedID:m.ID,...val});
+ if(t.Status!=='Durchgeführt')gaReplace_('Termine',t.ID,{Status:'Durchgeführt'});
+ if(present&&(!old||old.Anwesend!=='JA')){
+  const account=gaRows_('Benutzer').find(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&x.Email.toLowerCase()===String(m.Email).toLowerCase());
+  if(account)gaNotify_(account.ID,'Bewertung','Kursbewertung möglich','Du kannst deinen absolvierten Kurs jetzt bewerten.',t.ID);
+ }
+ gaLog_(u.ID,'TEILNAHME_ADMIN','Termin',t.ID,{MitgliedID:m.ID,Anwesend:val.Anwesend});
+ return {ok:true,message:'Teilnahme gespeichert.'};
+}
+function gaSendDirect_(u,d){
+ const recipient=gaFind_('Benutzer',gaText_(d.AnBenutzerID,100));
+ if(!recipient||!gaBool_(recipient.Aktiv)||recipient.ID===u.ID)throw new Error('Empfänger nicht verfügbar.');
+ if(u.Rolle==='Teilnehmer'&&!['Administrator','Ausbilder','Fachverwaltung'].includes(recipient.Rolle))
+  throw new Error('Teilnehmer können Ausbilder und Verwaltung anschreiben.');
+ const item={ID:gaId_(),VonBenutzerID:u.ID,AnBenutzerID:recipient.ID,Titel:gaNeed_(d.Titel,'Betreff',160),
+  Text:gaNeed_(d.Text,'Nachricht',3000),ErstelltAm:gaNow_(),GelesenAm:''};
+ gaAppend_('Direktnachrichten',item);
+ gaNotify_(recipient.ID,'Nachricht',item.Titel,'Du hast eine persönliche Nachricht.',item.ID);
+ gaLog_(u.ID,'NACHRICHT','Benutzer',recipient.ID,{ID:item.ID});
+ return {ok:true,message:'Persönliche Nachricht gesendet.'};
+}
+function gaReadDirect_(u,d){
+ const n=gaFind_('Direktnachrichten',gaText_(d.ID,100));
+ if(!n||n.AnBenutzerID!==u.ID)throw new Error('Nachricht nicht gefunden.');
+ gaReplace_('Direktnachrichten',n.ID,{GelesenAm:gaNow_()});return {ok:true};
+}
