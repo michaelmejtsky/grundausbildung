@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.1',
+  VERSION: '1.5.2',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -299,8 +299,6 @@ function gaSaveMember_(u,d){
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
     Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35),Ausbildungsweg:gaChoice_(d.Ausbildungsweg||turnus.Bereich,GA.AREAS,'Ausbildungsweg')};
-  if(val.Ausbildungsweg==='Erweiterte Ausbildung'&&turnus.Bereich!=='Erweiterte Ausbildung')
-    throw new Error('Teilnehmer der Erweiterten Ausbildung müssen einem entsprechenden Turnus zugeordnet sein.');
   const rows=gaRows_('Mitglieder');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
   if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
@@ -833,9 +831,12 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse){
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
  const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
+ // GAB ist die erste Stufe; nach belegtem Abschluss folgt automatisch die Erweiterte Ausbildung.
+ // Wer GAB macht, darf bereits vorher freiwillig an erweiterten Kursen teilnehmen.
+ const actualPath=gabDone?'Erweiterte Ausbildung':'Grundausbildung';
  const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
  const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
- return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Ausbildungsweg:m.Ausbildungsweg||'',Standesbuchnummer:m.Standesbuchnummer||'',
+ return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Ausbildungsweg:actualPath,AusbildungswegAufnahme:m.Ausbildungsweg||'Grundausbildung',Standesbuchnummer:m.Standesbuchnummer||'',
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
