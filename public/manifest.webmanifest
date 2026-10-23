@@ -1,0 +1,26 @@
+{
+  "name": "Grundausbildung – Feuerwehr St. Pölten Stadt",
+  "short_name": "Grundausbildung",
+  "description": "Ausbildungsplattform für Feuerwehrkurse, Mitglieder und Verwaltung",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#10283f",
+  "theme_color": "#10283f",
+  "lang": "de-AT",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/"
+}
