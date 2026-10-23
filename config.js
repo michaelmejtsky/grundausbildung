@@ -1,3 +1,3 @@
-// Nach Apps-Script-Bereitstellung die /exec-URL einsetzen und hier committen.
-// Keine Zugangsdaten, Sitzungs-Tokens oder persönlichen Angaben eintragen.
-window.GA_BACKEND_URL = '';
+// Nach Cloudflare-Worker-Bereitstellung die HTTPS-Worker-URL eintragen.
+// Keine Kennwörter, Tokens oder Mitgliederdaten hier speichern.
+window.GA_API_URL = '';
