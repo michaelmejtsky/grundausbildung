@@ -5,7 +5,7 @@
 ## Dateien
 - `Code.gs`: Google-Apps-Script-Backend, automatisch verwaltete Tabellen, Rollen, Checklisten und Anwesenheitsprotokoll.
 - `Index.html`: responsive Web-App für Administrator, Ausbilder, Teilnehmer und Fachverwaltung.
-- `Grundausbildung_Datenbasis.xlsx`: vorbereitete 11 Tabellen, Beispielkurs und Grundchecklisten.
+- **Google Sheets (bereits angelegt):** 11 Datentabellen plus START-Register, Beispielkurs und Grundchecklisten. Link siehe unten.
 
 ## Installation
 1. Die Google-Tabelle ist bereits erstellt: https://docs.google.com/spreadsheets/d/1DZPggVf8T2F-GFIT_57kbqWQcSCF1TA6s5GV01iQXJc/edit – KEINE Excel-Datei importieren.
@@ -13,7 +13,7 @@
 3. Bestehenden leeren Beispielcode in `Code.gs` durch den vollständigen Inhalt der beiliegenden Datei `Code.gs` ersetzen. **Neue HTML-Datei** anlegen: `Index` (nicht `Index.html.html`) und den Inhalt von `Index.html` einfügen.
 4. Das Skriptprojekt **Grundausbildung** nennen. Projekt-Einstellungen: Zeitzone `Europe/Vienna` wählen. Änderungen speichern.
 5. In der Apps-Script-Oberfläche die Funktion `onOpen` auswählen und einmal ausführen, Berechtigungen prüfen; danach Google-Tabelle neu laden. Alternativ `gaEinrichten` direkt ausführen.
-6. Im Tabellen-Menü **Grundausbildung → 1 · Tabellen prüfen/erstellen** ausführen. Danach **2 · Ersten Administrator einrichten**. Administrator-E-Mail und ein sicheres, mindestens 12-stelliges Passwort angeben.
+6. Im Tabellen-Menü **Grundausbildung → 1 · Tabellen prüfen/erstellen** ausführen (bestehende Daten bleiben erhalten). Danach **2 · Ersten Administrator einrichten**. Administrator-E-Mail und ein sicheres, mindestens 12-stelliges Passwort angeben.
 7. **Bereitstellen → Neue Bereitstellung → Web-App**. Für den Pilot: Ausführen als **Ich**, Zugriff **Nutzer mit Link** (je nach Workspace-Umgebung heißt die Option möglicherweise anders). **Wichtig:** Die Anwendung hat ein eigenes, vom Administrator vergebenes Login. Der Link darf nicht veröffentlicht werden. Später muss die Authentifizierung für den Produktivbetrieb durch eine stärker abgesicherte Lösung mit zentraler Identitätsprüfung ersetzt werden.
 8. Web-App-URL öffnen und anmelden. Aus Sicherheitsgründen die Google-Tabelle nicht an Teilnehmer/Ausbilder freigeben.
 9. In der App Turnus erstellen → Mitglied aufnehmen → unter **Zugänge** Benutzer einrichten → Kurse verwalten → Ausbildungstermin erstellen. Rolle `Fachverwaltung` mit Bereich `Zeugkammer` erhält passende Aufgaben.
