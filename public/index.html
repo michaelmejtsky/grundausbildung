@@ -119,7 +119,7 @@ function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
  const base=admin?[
  ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
- ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],
+ ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
@@ -135,14 +135,14 @@ function navs(){
 }
 function title(){return ({
  overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',
- terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',
+ terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
  attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
 function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
@@ -283,6 +283,34 @@ function terms(){
  termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>';
 }
 function turnusse(){return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid"><div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div></div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section><section class="panel"><h2>Turnusse</h2><div class="items">'+STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div></div>').join('')+'</div></section>'}
+function gaStatusBadge(ok,yes,no){return '<span class="tag '+(ok?'ok':'bad')+'">'+h(ok?yes:no)+'</span>';}
+function qualifications(){
+ const qs=STATE.qualifikationen||[],req=STATE.kursAnforderungen||[];
+ const requirements='<section class="panel"><h2>Pflichtmodule definieren</h2><p class="muted">Markiere die Kurse, die für die Grundausbildung oder für das Modul Brandsicherheitswachen notwendig sind. Nur bestätigte Teilnahmen zählen.</p>'+
+ STATE.kurse.filter(c=>c.Aktiv==='JA').map(c=>{const r=req.find(x=>x.KursID===c.ID)||{};return '<form class="item" data-form="requirement"><input type="hidden" name="KursID" value="'+h(c.ID)+'"><b>'+h(c.Titel)+'</b>'+
+ '<div class="row"><label class="inline-check"><input type="checkbox" name="PflichtGAB" value="JA" '+(r.PflichtGAB==='JA'?'checked':'')+'> Pflicht für GAB</label>'+
+ '<label class="inline-check"><input type="checkbox" name="PflichtBSW" value="JA" '+(r.PflichtBSW==='JA'?'checked':'')+'> Pflicht für Modul BSW</label></div>'+
+ '<button class="smallbtn">Pflichtstatus speichern</button></form>'}).join('')+'</section>';
+ const members=qs.map(q=>'<div class="item"><b>'+h(q.Name)+'</b><div class="row">'+gaStatusBadge(q.GABAbgeschlossen,'GAB abgeschlossen','GAB offen')+
+ gaStatusBadge(q.BSWModulAbgeschlossen,'Modul BSW abgeschlossen','Modul BSW offen')+
+ gaStatusBadge(q.Alter16,'16 Jahre erreicht','Unter 16 / unbekannt')+
+ gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst: JA','BSW-Dienst: NEIN')+'</div>'+
+ '<div class="detail">Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+'</div>'+
+ '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'"><div class="grid">'+
+ '<div><label>Geburtsdatum</label><input type="date" name="Geburtsdatum" value="'+h(q.Geburtsdatum)+'"></div>'+
+ '<div><label>Erste Hilfe</label><select name="ErsteHilfeStatus"><option '+(q.ErsteHilfeStatus==='Ausständig'?'selected':'')+'>Ausständig</option><option '+(q.ErsteHilfeStatus==='Bestätigt'?'selected':'')+'>Bestätigt</option></select></div>'+
+ '<div><label>Erste-Hilfe-Kursdatum (tatsächlich)</label><input type="date" name="ErsteHilfeBestaetigtAm" value="'+h(q.ErsteHilfeBestaetigtAm)+'"></div>'+
+ '<div><label>FDISK-Eintragungsdatum</label><input type="date" name="FDISKEintragDatum" value="'+h(q.FDISKEintragDatum)+'"></div>'+
+ '<div><label>GAB abgeschlossen und bestätigt</label><select name="GABFreigabe"><option value="NEIN">Nein</option><option value="JA" '+(q.GABFreigabe==='JA'?'selected':'')+'>Ja</option></select></div>'+
+ '<div><label>Bereits absolvierte GAB anerkennen (nur erweiterte Ausbildung)</label><select name="GABAnerkannt"><option value="NEIN">Nein</option><option value="JA" '+(q.GABAnerkannt==='JA'?'selected':'')+'>Ja</option></select></div>'+
+ '</div><div class="btnline"><button class="primary">Qualifikation speichern</button></div></form></div>').join('');
+ const attendance='<section class="panel"><h2>Teilnahmen einzeln bestätigen</h2><p class="muted">Als Administrator kannst du eine Teilnahme auch nachträglich korrigieren.</p>'+
+ '<form data-form="singleAttendance"><div class="grid"><div><label>Mitglied</label><select name="MitgliedID" required>'+option(STATE.mitglieder.filter(m=>m.Aktiv==='JA'),name)+'</select></div>'+
+ '<div><label>Ausbildungstermin</label><select name="TerminID" required>'+option(STATE.termine,t=>(by(STATE.kurse,t.KursID)?.Titel||'Kurs')+' · '+t.Beginn)+'</select></div>'+
+ '<div><label>Teilgenommen?</label><select name="Anwesend"><option value="JA">Ja</option><option value="NEIN">Nein</option></select></div></div><div class="btnline"><button class="primary">Teilnahme speichern</button></div></form></section>';
+ return '<section class="panel"><h2>Qualifikationsübersicht</h2><p>Für einen BSW-Dienst müssen <b>alle drei</b> Bedingungen erfüllt sein: GAB abgeschlossen, BSW-Modul absolviert und mindestens 16 Jahre alt. Eine bestehende GAB kann bei erweiterter Ausbildung ausdrücklich anerkannt werden.</p></section>'+
+ attendance+'<section class="panel"><h2>Mitglieder und Nachweise</h2><div class="items">'+members+'</div></section>'+requirements;
+}
 function members(){
  const edit=FORM==='member'&&EDIT?by(STATE.mitglieder,EDIT):null;
  const options=STATE.turnusse.filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(t.ID===edit?.TurnusID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
@@ -291,6 +319,9 @@ function members(){
  '<div><label>Nachname</label><input name="Nachname" required maxlength="100" value="'+h(edit?.Nachname||'')+'"></div>'+
  '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
  '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
+ '<div><label>Geburtsdatum (für BSW-Freigabe)</label><input type="date" name="Geburtsdatum" value="'+h(edit?.Geburtsdatum||'')+'"></div>'+
+ 
+ '<div><label>Standesbuchnummer</label><input name="Standesbuchnummer" maxlength="35" value="'+h(edit?.Standesbuchnummer||'')+'"></div>'+
  '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
@@ -328,10 +359,37 @@ function messages(){
  return compose+'<section class="panel"><h2>Nachrichten</h2><div class="items">'+(STATE.nachrichten.length?STATE.nachrichten.slice().reverse().map(n=>{
   const dest=String(n.TurnusID||'').startsWith('M:')?'Einzelperson: '+name(by(STATE.mitglieder,n.TurnusID.slice(2))):n.TurnusID?(by(STATE.turnusse,n.TurnusID)?.Bezeichnung||'Turnus'):'Alle Teilnehmer';
   return '<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b><small class="muted">'+dt(n.ErstelltAm)+'</small></div>'+(admin?'<div class="detail">An: '+h(dest)+'</div>':'')+'<p class="msg">'+h(n.Text)+'</p></div>';
- }).join(''):'Noch keine Nachrichten.')+'</div></section>';
+ }).join(''):'Noch keine Nachrichten.')+'</div></section>'+
+ '<section class="panel"><h2>Persönliche Nachrichten</h2><form data-form="direct"><div class="grid">'+
+ '<div><label>Empfänger</label><select name="AnBenutzerID" required>'+option((STATE.nachrichtenEmpfaenger||[]).filter(x=>x.ID!==STATE.user.ID),u=>u.Name+' ('+u.Rolle+')')+'</select></div>'+
+ '<div><label>Betreff</label><input name="Titel" maxlength="160" required></div>'+
+ '<div class="wide"><label>Nachricht</label><textarea name="Text" maxlength="3000" required></textarea></div></div>'+
+ '<div class="btnline"><button class="primary">Persönliche Nachricht senden</button></div></form>'+
+ '<div class="items">'+((STATE.direktnachrichten||[]).length?(STATE.direktnachrichten||[]).map(m=>{
+  const sent=m.VonBenutzerID===STATE.user.ID;
+  const contact=(STATE.nachrichtenEmpfaenger||[]).find(x=>x.ID===(sent?m.AnBenutzerID:m.VonBenutzerID));
+  return '<div class="item"><b>'+h(m.Titel)+'</b><div class="detail">'+(sent?'An: ':'Von: ')+h(contact?.Name||'Mitglied')+' · '+dt(m.ErstelltAm)+'</div>'+
+   '<p class="msg">'+h(m.Text)+'</p>'+(!sent&&!m.GelesenAm?'<button class="smallbtn" data-read-direct="'+h(m.ID)+'">Als gelesen markieren</button>':'')+'</div>';
+ }).join(''):'Keine persönlichen Nachrichten.')+'</div></section>';
 }
 function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(STATE.kurse,term.KursID),ms=STATE.mitglieder.filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA'),trainers=STATE.benutzer.filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));let previous=STATE.teilnahmen.filter(x=>x.TerminID===term.ID);return '<section class="panel"><div class="row between"><h2>'+h(c?.Titel||'Kurs')+'</h2><button class="secondary" data-close-term="1">Zurück</button></div><p class="muted">'+dt(term.Beginn)+' · '+h(term.Ort)+'</p>'+(c?courseCard(c):'')+'<hr class="divider"><h2>Anwesenheit bestätigen</h2><form data-form="attendance"><h3>Teilnehmer</h3>'+ms.map(m=>{let old=previous.find(t=>t.MitgliedID===m.ID);return '<label class="inline-check"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(old?.Anwesend==='JA'?'checked':'')+'> '+h(name(m))+'</label>'}).join('')+'<h3>Durchführende Ausbilder</h3>'+trainers.map(t=>{let old=previous[0]?.AusbilderIDs?.split(',')||[];return '<label class="inline-check"><input type="checkbox" name="trainer" value="'+h(t.ID)+'" '+(old.includes(t.ID)||(!previous.length&&t.ID===STATE.user.ID)?'checked':'')+'> '+h(t.Name)+'</label>'}).join('')+'<div class="notice">Mit Bestätigung werden Anwesenheit, Ausbilder, Datum und der bestätigende Benutzer protokolliert. Eine erneute Bestätigung korrigiert den Datensatz mit neuem Protokolleintrag.</div><div class="btnline"><button class="primary">Ausbildung verbindlich bestätigen</button></div></form></section>'}return '<section class="panel"><h2>Ausbildung auswählen</h2><p class="muted">Öffne den Termin, sieh die Unterlagen und bestätige anschließend die Anwesenheit.</p><div class="items">'+STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)).map(t=>{let c=by(STATE.kurse,t.KursID);return '<div class="item"><div class="row between"><div><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(t.Beginn)+' · '+h(t.Ort)+'</div></div><button class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div></div>'}).join('')+'</div></section>'}
-function mine(){const m=STATE.meMember;if(!m)return '<section class="panel"><h2>Teilnehmerprofil noch nicht zugeordnet</h2><p>Bitte den Administrator bitten, deine E-Mail beim Mitgliedseintrag zu hinterlegen.</p></section>';const total=STATE.checks.length,done=STATE.checks.filter(x=>x.Status==='Erledigt'||x.Status==='Nicht erforderlich').length;return '<div class="cards">'+metric(done+' / '+total,'Verwaltungsaufgaben abgeschlossen')+metric(STATE.teilnahmen.filter(t=>t.Anwesend==='JA').length,'Absolvierte Termine')+metric(STATE.termine.filter(t=>t.Status==='Geplant').length,'Anstehende Kurstermine')+'</div><section class="panel"><h2>Meine Checkliste</h2><div class="items">'+STATE.checks.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID);return '<div class="item"><div class="row between"><b>'+h(item?.Titel||'Aufgabe')+'</b>'+status(ch.Status)+'</div>'+(ch.Kommentar?'<p class="muted">'+h(ch.Kommentar)+'</p>':'')+'</div>'}).join('')+'</div></section><section class="panel"><h2>Absolvierte Ausbildungen</h2><div class="items">'+STATE.teilnahmen.filter(t=>t.Anwesend==='JA').map(t=>{let term=by(STATE.termine,t.TerminID),c=term&&by(STATE.kurse,term.KursID);return '<div class="item"><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(term?.Beginn)+' · '+status('Erledigt')+'</div></div>'}).join('')+'</div></section>'}
+function mine(){
+ const own=STATE.meMember;if(!own)return '<section class="panel">Teilnehmerprofil nicht zugeordnet.</section>';
+ const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===own.ID)||{};
+ const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
+ const qualifications='<section class="panel"><h2>Meine Ausbildungsfreigaben</h2><div class="row">'+
+ gaStatusBadge(q.GABAbgeschlossen,'GAB abgeschlossen','GAB ausständig')+
+ gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul abgeschlossen','BSW-Modul ausständig')+
+ gaStatusBadge(q.Alter16,'16 Jahre erreicht','Alter noch nicht erfüllt')+
+ gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst möglich','Noch nicht BSW-dienstberechtigt')+'</div>'+
+ '<h3>Ausbildungsfortschritt: '+done+' / '+total+' Pflichtmodule ('+h(q.Fortschritt||0)+' %)</h3>'+
+ '<progress max="100" value="'+h(q.Fortschritt||0)+'" style="width:100%;height:24px"></progress>'+
+ '<p class="muted">Erste Hilfe: '+h(q.ErsteHilfeStatus||'Ausständig')+
+ ' · In FDISK eingetragen am: '+h(q.FDISKEintragDatum||'Noch nicht dokumentiert')+'</p>'+
+ '<h3>Offene GAB-Kurse</h3><p>'+h((q.OffeneGABKurse||[]).join(', ')||'Keine laut aktueller Pflichtliste')+'</p>'+
+ '<h3>Offene BSW-Kurse</h3><p>'+h((q.OffeneBSWKurse||[]).join(', ')||'Keine laut aktueller Pflichtliste')+'</p></section>';
+ return qualifications;
+}
 function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
 
@@ -397,7 +455,7 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -451,6 +509,7 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
    }catch(err){tip(err.message,true);}finally{x.disabled=false;}
    return;
  }
+ if(x.dataset.readDirect){await doSave('readDirect',{ID:x.dataset.readDirect});return}
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
 $('app').addEventListener('change',e=>{
@@ -487,6 +546,10 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='user')await doSave('inviteUser',data);
  else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
+ else if(type==='direct')await doSave('sendDirect',data);
+ else if(type==='qualification')await doSave('saveQualification',data);
+ else if(type==='requirement')await doSave('setCourseRequirement',data);
+ else if(type==='singleAttendance')await doSave('setAttendanceMember',data);
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
