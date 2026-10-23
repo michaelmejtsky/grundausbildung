@@ -1,3 +1,11 @@
+
+## V1.5.2 – Ausbildungsstufen und Bewertungsfragebögen
+- **Stufenfolge:** Grundausbildung (GAB) → Erweiterte Ausbildung. Motivierte GAB-Teilnehmer dürfen bereits während der GAB an erweiterten Ausbildungsangeboten teilnehmen. Nach bestätigter GAB mit allen definierten Pflichtmodulen wird die **aktuell angezeigte Ausbildungsstufe automatisch** zur Erweiterten Ausbildung. Die vorhandene Turnuszuordnung und bestätigte Kursnachweise bleiben unverändert; ein Wechsel in einen anderen konkreten Turnus ist eine separate Verwaltungsaktion.
+- Ein Direkteinstieg als „Erweiterte Ausbildung“ ist möglich, führt aber ohne durch den Admin anerkannte oder nachgewiesene GAB **nicht** zu einer automatischen GAB-/BSW-Freigabe.
+- **Kursbewertung:** Sieben allgemeine Bewertungsfragen (1–5), getrennte Freitextfelder für Positives, Verbesserungswünsche, Ideen und sonstige Notizen. Unter „Bewertungsfragebögen“ kann der Administrator oder ein berechtigter Ausbilder eine allgemeine Vorlage oder abweichende Kursfragen (1–15) speichern. Alte Bewertungsantworten behalten ihr jeweiliges Fragen-Snapshot.
+- **Veröffentlichte Kurse:** Sofortbearbeitung über separat vergebbares Recht „Veröffentlichte Kurse bearbeiten“ – unabhängig vom Recht, neue Kursprojekte freizugeben. Jede Änderung wird protokolliert.
+- **Veröffentlichung:** GitHub Pages ändert nur die Oberfläche. Die bestehende Google Apps Script-Code.gs muss auf V1.5.2 aktualisiert, `gaEinrichten` ausgeführt und die **bestehende** Web-App als neue Version bereitgestellt werden. Cloudflare-Schlüssel nicht ändern. **Echte Push-Zustellung** bleibt ein gesonderter Installationstest.
+
 # Grundausbildung – Feuerwehr St. Pölten Stadt
 
 **Stand: V1.4.1 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
