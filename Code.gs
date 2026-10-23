@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.4.1',
+  VERSION: '1.5.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -22,13 +22,14 @@ const GA = Object.freeze({
     Einladungen: ['ID','BenutzerID','Email','TokenHash','ExpiresAt','UsedAt','Status','ErstelltVon','ErstelltAm'],
     PushGeraete: ['ID','BenutzerID','Endpoint','P256DH','Auth','Aktiv','AktualisiertAm'],
     PushRegeln: ['ID','BenutzerID','Nachrichten','Termine','Aufgaben','AktualisiertAm','Bewertungen'],
-    Berechtigungen: ['ID','BenutzerID','KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','AktualisiertAm'],
+    Berechtigungen: ['ID','BenutzerID','KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','AktualisiertAm','KurseBearbeiten','FrageboegenBearbeiten'],
     KursProjekte: ['ID','KursID','Titel','Bereich','Typ','Inhalt','Lernziele','PraesentationURL','WeitereLinks','Status','ErstelltVon','ErstelltAm','GeaendertVon','GeaendertAm','GeprueftVon','GeprueftAm','Rueckmeldung'],
     Meldungen: ['ID','Kategorie','Titel','Beschreibung','KursID','Status','ErstelltVon','ErstelltAm','BearbeitetVon','BearbeitetAm','Rueckmeldung'],
-    Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm'],
+    Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm','FragebogenID','FragebogenVersion','FragenSnapshotJSON','AntwortenJSON','Positives','Verbesserungen','Ideen'],
     QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt','FDISKPlatzhalter'],
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
-    Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm']
+    Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm'],
+    BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -172,6 +173,7 @@ function gaApi(method,data,token){
   if(method==='logout'){CacheService.getScriptCache().remove(gaTokenKey_(token));return {ok:true};}
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
+  if(method==='saveQuestionnaire')return gaLock_(()=>gaSaveQuestionnaire_(u,d));
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
   if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
@@ -212,6 +214,7 @@ function gaState_(u){
  const projects=(admin||trainer)?gaOptionalRows_('KursProjekte'):[];
  const reports=(admin||trainer)?gaOptionalRows_('Meldungen'):[];
  const ratings=(participant||rights.BewertungenAnsehen)?gaOptionalRows_('Bewertungen'):[];
+ const questionnaires=(admin||trainer||participant)?gaOptionalRows_('BewertungsFrageboegen'):[];
  const devices=gaOptionalRows_('PushGeraete'),pushRulesRows=gaOptionalRows_('PushRegeln');
  const ownTerm=participant&&own?allTermine.filter(t=>t.TurnusID===own.TurnusID):[];
  const ownAttendance=participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
@@ -243,6 +246,7 @@ function gaState_(u){
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
   eigeneBewertungen:ownRatings,
+  frageboegen:questionnaires.filter(x=>x.Aktiv==='JA'),
   offeneBewertungen:participant&&own?ownAttendance.filter(t=>gaBool_(t.Anwesend)).map(t=>allTermine.find(term=>term.ID===t.TerminID)).filter(term=>
     term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
@@ -260,9 +264,17 @@ function gaSaveTurnus_(u,d){gaRequire_(u,['Administrator']);let val={Bezeichnung
   if(d.ID){gaReplace_('Turnusse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Turnus',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Turnusse',val);gaLog_(u.ID,'ANLEGEN','Turnus',val.ID,val);return {ok:true};}
 function gaLinks_(x){const text=gaText_(x,5000);const lines=text.split(/\n/).map(s=>s.trim()).filter(Boolean);if(lines.length>12)throw new Error('Maximal 12 Links.');for(const l of lines){if(!/^https:\/\//i.test(l))throw new Error('Unterlagen müssen HTTPS-Links sein (ein Link pro Zeile).');}return lines.join('\n');}
-function gaSaveCourse_(u,d){gaRequire_(u,['Administrator']);let val={Titel:gaNeed_(d.Titel,'Kurstitel',160),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Inhalt:gaText_(d.Inhalt,5000),Lernziele:gaText_(d.Lernziele,3000),Links:gaLinks_(d.Links),Aktiv:'JA'};
-  if(d.ID){gaReplace_('Kurse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Kurs',d.ID,{Titel:val.Titel});return {ok:true};}
-  val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Kurse',val);gaLog_(u.ID,'ANLEGEN','Kurs',val.ID,{Titel:val.Titel});return {ok:true};}
+function gaSaveCourse_(u,d){
+ gaRequireRight_(u,'KurseBearbeiten');
+ const id=gaNeed_(d.ID,'Kurs-ID',100),old=gaFind_('Kurse',id);
+ if(!old||!gaBool_(old.Aktiv))throw new Error('Veröffentlichter Kurs nicht gefunden.');
+ const val={Titel:gaNeed_(d.Titel,'Kurstitel',160),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),
+ Inhalt:gaNeed_(d.Inhalt,'Ausbildungsinhalt',8000),Lernziele:gaText_(d.Lernziele,3000),
+ Links:gaLinks_(d.Links),Aktiv:'JA'};
+ gaReplace_('Kurse',id,val);
+ gaLog_(u.ID,'KURS_NACH_VEROEFFENTLICHUNG_BEARBEITEN','Kurs',id,{Vorher:old,Nachher:val});
+ return {ok:true,message:'Veröffentlichter Kurs aktualisiert. Änderung protokolliert.'};
+}
 function gaDateTime_(s){s=gaText_(s,30);if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)||Number.isNaN(Date.parse(s)))throw new Error('Datum/Uhrzeit ungültig.');return s;}
 function gaNotify_(userId,type,title,message,reference){
   const category=type==='Nachricht'?'Nachrichten':type==='Termin'?'Termine':type==='Bewertung'?'Bewertungen':'Aufgaben';
@@ -646,7 +658,7 @@ function gaPushEinrichten(){
 
 
 /** Rollenrechte (nur Admin vergibt Rechte; beim Trainer grundsätzlich alles AUS). */
-const GA_RIGHTS=['KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen'];
+const GA_RIGHTS=['KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','KurseBearbeiten','FrageboegenBearbeiten'];
 function gaPermissions_(user,rightsRows){
  if(user.Rolle==='Administrator')return Object.fromEntries(GA_RIGHTS.map(k=>[k,true]));
  if(user.Rolle!=='Ausbilder')return Object.fromEntries(GA_RIGHTS.map(k=>[k,false]));
@@ -789,10 +801,21 @@ function gaSaveRating_(u,d){
  const score=Number(d.Sterne);
  if(!Number.isInteger(score)||score<1||score>5)throw new Error('Bitte eine Bewertung von 1 bis 5 Sternen vergeben.');
  const comment=gaText_(d.Kommentar,2500);
+ const form=gaActiveQuestionnaire_(course.ID),answers=d.Antworten||{};
+ if(!answers||typeof answers!=='object'||Array.isArray(answers))throw new Error('Bewertungsantworten fehlen.');
+ const normalized={};
+ form.questions.forEach((q,i)=>{
+   const val=Number(answers[String(i)]);
+   if(!Number.isInteger(val)||val<1||val>5)throw new Error('Bitte alle Bewertungsfragen (1–5) beantworten.');
+   normalized[String(i)]=val;
+ });
+ const positives=gaText_(d.Positives,1500),improvements=gaText_(d.Verbesserungen,1500),ideas=gaText_(d.Ideen,1500);
  const prev=gaOptionalRows_('Bewertungen').find(x=>x.TerminID===term.ID&&x.MitgliedID===member.ID);
  if(prev)throw new Error('Du hast diesen Termin bereits bewertet.');
  const entry={ID:gaId_(),TerminID:term.ID,KursID:course.ID,MitgliedID:member.ID,
-  Sterne:String(score),Kommentar:comment,ErstelltAm:gaNow_(),AktualisiertAm:gaNow_()};
+  Sterne:String(score),Kommentar:comment,ErstelltAm:gaNow_(),AktualisiertAm:gaNow_(),
+  FragebogenID:form.id,FragebogenVersion:String(form.version),FragenSnapshotJSON:JSON.stringify(form.questions),
+  AntwortenJSON:JSON.stringify(normalized),Positives:positives,Verbesserungen:improvements,Ideen:ideas};
  gaAppend_('Bewertungen',entry);
  gaLog_(u.ID,'BEWERTUNG','Termin',term.ID,{KursID:course.ID,Sterne:score});
  return {ok:true,message:'Vielen Dank! Deine Kursbewertung wurde gespeichert.'};
@@ -884,4 +907,40 @@ function gaReadDirect_(u,d){
  const n=gaFind_('Direktnachrichten',gaText_(d.ID,100));
  if(!n||n.AnBenutzerID!==u.ID)throw new Error('Nachricht nicht gefunden.');
  gaReplace_('Direktnachrichten',n.ID,{GelesenAm:gaNow_()});return {ok:true};
+}
+
+const GA_DEFAULT_QUESTIONS=[
+ 'Waren die Ausbildungsziele verständlich?',
+ 'Wurden die Inhalte verständlich erklärt?',
+ 'War die Ausbildung praxisnah und für den Feuerwehrdienst hilfreich?',
+ 'War das Tempo der Ausbildung angemessen?',
+ 'Konntest du ausreichend Fragen stellen?',
+ 'Waren die eingesetzten Unterlagen und Hilfsmittel hilfreich?',
+ 'Wie zufrieden warst du insgesamt mit der Ausbildung?'
+];
+function gaActiveQuestionnaire_(courseId){
+ const rows=gaOptionalRows_('BewertungsFrageboegen');
+ const custom=rows.find(x=>x.KursID===courseId&&gaBool_(x.Aktiv));
+ const fallback=rows.find(x=>x.KursID==='ALLGEMEIN'&&gaBool_(x.Aktiv));
+ const selected=custom||fallback;
+ if(!selected)return {id:'STANDARD',version:1,questions:GA_DEFAULT_QUESTIONS};
+ let questions;try{questions=JSON.parse(selected.FragenJSON);}catch{throw new Error('Ungültige Fragebogen-Daten.');}
+ if(!Array.isArray(questions)||questions.length<1||questions.length>15)throw new Error('Fragebogen nicht gültig.');
+ return {id:selected.ID,version:Number(selected.Version)||1,questions};
+}
+function gaSaveQuestionnaire_(u,d){
+ gaRequireRight_(u,'FrageboegenBearbeiten');
+ const courseId=gaText_(d.KursID,100)||'ALLGEMEIN';
+ if(courseId!=='ALLGEMEIN'&&!gaFind_('Kurse',courseId))throw new Error('Kurs nicht gefunden.');
+ const raw=Array.isArray(d.Fragen)?d.Fragen:String(d.Fragen||'').split(/\r?\n/);
+ const questions=raw.map(q=>gaText_(q,250)).filter(Boolean);
+ if(questions.length<1||questions.length>15||new Set(questions.map(q=>q.toLowerCase())).size!==questions.length)
+  throw new Error('Bitte 1 bis 15 verschiedene Fragen hinterlegen.');
+ const old=gaOptionalRows_('BewertungsFrageboegen').find(x=>x.KursID===courseId&&gaBool_(x.Aktiv));
+ const version=old?(Number(old.Version)||1)+1:1;
+ if(old)gaReplace_('BewertungsFrageboegen',old.ID,{Aktiv:'NEIN'});
+ gaAppend_('BewertungsFrageboegen',{ID:gaId_(),KursID:courseId,FragenJSON:JSON.stringify(questions),
+ Version:String(version),Aktiv:'JA',AktualisiertVon:u.ID,AktualisiertAm:gaNow_()});
+ gaLog_(u.ID,'FRAGEBOGEN_AKTUALISIERT','Kurs',courseId,{Version:version,Fragen:questions.length});
+ return {ok:true,message:'Fragebogen gespeichert. Alte Bewertungen bleiben unverändert.'};
 }
