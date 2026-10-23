@@ -114,10 +114,10 @@ function tip(msg,error=false){let e=$('toast');e.textContent=msg;e.className='to
 async function api(action,payload={}){return rpc('gaApi',action,payload,TOKEN)}
 async function reload(){STATE=await api('state');render();}
 function role(){return STATE?.user?.Rolle}
-function navs(){const r=role();const base=r==='Administrator'?[['overview','Übersicht'],['courses','Kurse'],['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],['users','Zugänge'],['messages','Nachrichten']]:r==='Ausbilder'?[['courses','Kurse & Unterlagen'],['attendance','Durchführung']]:r==='Teilnehmer'?[['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],['messages','Nachrichten']]:[['tasks','Meine Aufgaben']];return base.concat([['notifications','Benachrichtigungen']]);}
-function title(){return ({overview:'Übersicht',courses:'Kurse & Unterlagen',terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',users:'Benutzerzugänge',messages:'Nachrichten',attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen'})[VIEW]||'Grundausbildung';}
+function navs(){const r=role();const base=r==='Administrator'?[['overview','Übersicht'],['courses','Kurse'],['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],['users','Zugänge'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']]:r==='Ausbilder'?[['courses','Kurse & Unterlagen'],['attendance','Durchführung']]:r==='Teilnehmer'?[['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],['messages','Nachrichten']]:[['tasks','Meine Aufgaben']];return base.concat([['notifications','Benachrichtigungen']]);}
+function title(){return ({overview:'Übersicht',courses:'Kurse & Unterlagen',terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',users:'Benutzerzugänge',messages:'Nachrichten',attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'})[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
 function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+(role()==='Administrator'?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Bearbeiten</button></div>':'')+'</div>'}
@@ -150,7 +150,65 @@ function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(ST
 function mine(){const m=STATE.meMember;if(!m)return '<section class="panel"><h2>Teilnehmerprofil noch nicht zugeordnet</h2><p>Bitte den Administrator bitten, deine E-Mail beim Mitgliedseintrag zu hinterlegen.</p></section>';const total=STATE.checks.length,done=STATE.checks.filter(x=>x.Status==='Erledigt'||x.Status==='Nicht erforderlich').length;return '<div class="cards">'+metric(done+' / '+total,'Verwaltungsaufgaben abgeschlossen')+metric(STATE.teilnahmen.filter(t=>t.Anwesend==='JA').length,'Absolvierte Termine')+metric(STATE.termine.filter(t=>t.Status==='Geplant').length,'Anstehende Kurstermine')+'</div><section class="panel"><h2>Meine Checkliste</h2><div class="items">'+STATE.checks.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID);return '<div class="item"><div class="row between"><b>'+h(item?.Titel||'Aufgabe')+'</b>'+status(ch.Status)+'</div>'+(ch.Kommentar?'<p class="muted">'+h(ch.Kommentar)+'</p>':'')+'</div>'}).join('')+'</div></section><section class="panel"><h2>Absolvierte Ausbildungen</h2><div class="items">'+STATE.teilnahmen.filter(t=>t.Anwesend==='JA').map(t=>{let term=by(STATE.termine,t.TerminID),c=term&&by(STATE.kurse,term.KursID);return '<div class="item"><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(term?.Beginn)+' · '+status('Erledigt')+'</div></div>'}).join('')+'</div></section>'}
 function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
-function notifications(){return '<section class="panel"><h2>Benachrichtigungen</h2><p class="small muted">Diese Einträge erscheinen in der App. System-Push im Hintergrund ist in Version 1.0 noch nicht aktiviert.</p><div class="items">'+(STATE.benachrichtigungen.length?STATE.benachrichtigungen.map(n=>'<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b>'+(n.GelesenAm?'<span class="tag">Gelesen</span>':'<span class="tag blue">Neu</span>')+'</div><p class="msg">'+h(n.Text)+'</p><div class="detail">'+dt(n.ErstelltAm)+'</div>'+(!n.GelesenAm?'<div class="btnline"><button class="smallbtn" data-read="'+h(n.ID)+'">Als gelesen markieren</button></div>':'')+'</div>').join(''):'Noch keine Benachrichtigungen.')+'</div></section>'}
+
+function notifications(){
+ const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+ const permission=supported?Notification.permission:'Nicht unterstützt';
+ const prefs=STATE.pushEigeneRegeln||{};
+ const allowed=['Nachrichten','Termine','Aufgaben'].filter(cat=>prefs[cat]!==false);
+ const help=!supported?'Push wird hier nicht unterstützt. Auf dem iPhone musst du die App zuerst zum Home-Bildschirm hinzufügen und von dort öffnen.':
+ permission==='denied'?'Push wurde im Browser verweigert. Bitte in den Geräteeinstellungen freigeben.':
+ 'Push muss auf jedem Gerät ausdrücklich aktiviert werden. Der Administrator kann die Benachrichtigungsarten zusätzlich einschränken.';
+ const controls='<section class="panel"><h2>Push-Benachrichtigungen</h2><p class="muted">'+h(help)+'</p>'+
+ '<p class="small">Berechtigung: <b>'+h(permission)+'</b> · Registrierte Geräte: <b>'+h(STATE.pushGeraeteAnzahl||0)+'</b></p>'+
+ '<p class="small">Vom Administrator erlaubt: '+h(allowed.join(', ')||'Keine')+'</p>'+
+ '<div class="btnline"><button class="primary" type="button" data-push-enable="1" '+(!supported||permission==='denied'?'disabled':'')+'>Push aktivieren</button>'+
+ '<button class="secondary" type="button" data-push-disable="1" '+(!supported?'disabled':'')+'>Auf diesem Gerät deaktivieren</button></div>'+
+ '<p class="small muted">Wenn die Cloudflare-VAPID-Schlüssel noch fehlen, bleibt die Push-Zustellung deaktiviert. Nachrichten in der App funktionieren trotzdem.</p></section>';
+ const list=STATE.benachrichtigungen.length?STATE.benachrichtigungen.map(n=>'<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b>'+
+ (n.GelesenAm?'<span class="tag">Gelesen</span>':'<span class="tag blue">Neu</span>')+'</div><p class="msg">'+h(n.Text)+'</p><div class="detail">'+dt(n.ErstelltAm)+'</div>'+
+ (!n.GelesenAm?'<div class="btnline"><button class="smallbtn" data-read="'+h(n.ID)+'">Als gelesen markieren</button></div>':'')+'</div>').join(''):'Noch keine Benachrichtigungen.';
+ return controls+'<section class="panel"><h2>Mitteilungen</h2><div class="items">'+list+'</div></section>';
+}
+function pushAdmin(){
+ if(role()!=='Administrator')return '';
+ const rows=STATE.pushRegeln||[];
+ return '<section class="panel"><h2>Push-Empfänger festlegen</h2><p class="muted">Die drei Push-Arten sind einzeln pro Benutzer freigebbar. In-App-Nachrichten bleiben erhalten; die Geräte benötigen zusätzlich die Zustimmung des jeweiligen Mitglieds.</p>'+
+ '<div class="items">'+(rows.length?rows.map(u=>'<form class="item" data-form="pushRule">'+
+ '<input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'"><div class="row between"><div><b>'+h(u.Name)+'</b><small class="muted">'+h(u.Rolle)+' · '+h(u.Geraete)+' Push-Gerät(e)</small></div>'+
+ '<button class="smallbtn" type="submit">Speichern</button></div><div class="row" style="gap:20px">'+
+ ['Nachrichten','Termine','Aufgaben'].map(cat=>'<label class="inline-check"><input type="checkbox" name="'+cat+'" value="JA" '+(u[cat]?'checked':'')+'> '+cat+'</label>').join('')+
+ '</div></form>').join(''):'Noch keine aktiven Benutzer.')+'</div></section>'+
+ '<section class="panel"><h2>Push-Test</h2><p class="small muted">Erst unter „Benachrichtigungen“ das eigene Gerät anmelden.</p><button type="button" class="secondary" data-test-push="1">Test-Push an mich senden</button></section>';
+}
+function gaB64UrlBytes(value){
+ const s=String(value).replace(/-/g,'+').replace(/_/g,'/');
+ const raw=atob(s+'='.repeat((4-s.length%4)%4));
+ return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+async function gaEnablePush(){
+ if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))
+  throw new Error('Push funktioniert auf diesem Gerät nicht. Auf iPhones muss die App installiert sein.');
+ // Erlaubnis unmittelbar beim Klick anfordern (iOS-Anforderung).
+ const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+ if(permission!=='granted')throw new Error('Push-Berechtigung wurde nicht erteilt.');
+ const settings=await rpc('gaPushInfo');
+ if(!settings?.configured||!settings.publicKey)throw new Error('Cloudflare ist für Push noch nicht vollständig eingerichtet.');
+ const registration=await navigator.serviceWorker.ready;
+ let subscription=await registration.pushManager.getSubscription();
+ if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:gaB64UrlBytes(settings.publicKey)});
+ const data=subscription.toJSON();
+ if(!data.endpoint||!data.keys?.p256dh||!data.keys?.auth)throw new Error('Gerät konnte nicht registriert werden.');
+ return api('registerPush',{Endpoint:data.endpoint,P256DH:data.keys.p256dh,Auth:data.keys.auth});
+}
+async function gaDisablePush(){
+ if(!('serviceWorker' in navigator)||!('PushManager' in window))throw new Error('Push nicht verfügbar.');
+ const registration=await navigator.serviceWorker.ready,sub=await registration.pushManager.getSubscription();
+ if(!sub)return {message:'Dieses Gerät hat Push bereits deaktiviert.'};
+ await api('removePush',{Endpoint:sub.endpoint});
+ await sub.unsubscribe();
+ return {message:'Push auf diesem Gerät ausgeschaltet.'};
+}
 async function doSave(method,data){try{const result=await api(method,data);FORM='';EDIT=null;tip(result?.message||'Erfolgreich gespeichert.');await reload();}catch(e){tip(e.message,true)}}
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
