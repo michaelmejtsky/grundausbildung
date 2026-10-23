@@ -1,0 +1,6 @@
+{
+  "name": "grundausbildung-api",
+  "main": "cloudflare-worker.js",
+  "compatibility_date": "2026-10-23",
+  "workers_dev": true
+}
