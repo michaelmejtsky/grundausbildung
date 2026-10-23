@@ -433,8 +433,9 @@ function gaInviteLink_(token) {
     'https://michaelmejtsky.github.io/grundausbildung/';
   if(!/^https:\/\/[a-z0-9.-]+\/[\w./-]*\/?$/i.test(appUrl))
     throw new Error('GA_APP_URL ist ungültig; nur HTTPS-App-Adressen sind erlaubt.');
-  const base=appUrl.split('#')[0];
-  return base + (base.includes('#') ? '' : '#') + 'invite=' + encodeURIComponent(token);
+  // Eigene Aktivierungsseite statt App-Startseite: unabhängig vom PWA-Cache.
+  const base=appUrl.split('#')[0].replace(/(?:index\.html)?\/?$/i,'/');
+  return base+'einladung.html#invite='+encodeURIComponent(token);
 }
 function gaInviteUser_(actor,d) {
   gaRequire_(actor,['Administrator']);
