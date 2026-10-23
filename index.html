@@ -359,7 +359,18 @@ function messages(){
  return compose+'<section class="panel"><h2>Nachrichten</h2><div class="items">'+(STATE.nachrichten.length?STATE.nachrichten.slice().reverse().map(n=>{
   const dest=String(n.TurnusID||'').startsWith('M:')?'Einzelperson: '+name(by(STATE.mitglieder,n.TurnusID.slice(2))):n.TurnusID?(by(STATE.turnusse,n.TurnusID)?.Bezeichnung||'Turnus'):'Alle Teilnehmer';
   return '<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b><small class="muted">'+dt(n.ErstelltAm)+'</small></div>'+(admin?'<div class="detail">An: '+h(dest)+'</div>':'')+'<p class="msg">'+h(n.Text)+'</p></div>';
- }).join(''):'Noch keine Nachrichten.')+'</div></section>';
+ }).join(''):'Noch keine Nachrichten.')+'</div></section>'+
+ '<section class="panel"><h2>Persönliche Nachrichten</h2><form data-form="direct"><div class="grid">'+
+ '<div><label>Empfänger</label><select name="AnBenutzerID" required>'+option((STATE.nachrichtenEmpfaenger||[]).filter(x=>x.ID!==STATE.user.ID),u=>u.Name+' ('+u.Rolle+')')+'</select></div>'+
+ '<div><label>Betreff</label><input name="Titel" maxlength="160" required></div>'+
+ '<div class="wide"><label>Nachricht</label><textarea name="Text" maxlength="3000" required></textarea></div></div>'+
+ '<div class="btnline"><button class="primary">Persönliche Nachricht senden</button></div></form>'+
+ '<div class="items">'+((STATE.direktnachrichten||[]).length?(STATE.direktnachrichten||[]).map(m=>{
+  const sent=m.VonBenutzerID===STATE.user.ID;
+  const contact=(STATE.nachrichtenEmpfaenger||[]).find(x=>x.ID===(sent?m.AnBenutzerID:m.VonBenutzerID));
+  return '<div class="item"><b>'+h(m.Titel)+'</b><div class="detail">'+(sent?'An: ':'Von: ')+h(contact?.Name||'Mitglied')+' · '+dt(m.ErstelltAm)+'</div>'+
+   '<p class="msg">'+h(m.Text)+'</p>'+(!sent&&!m.GelesenAm?'<button class="smallbtn" data-read-direct="'+h(m.ID)+'">Als gelesen markieren</button>':'')+'</div>';
+ }).join(''):'Keine persönlichen Nachrichten.')+'</div></section>';
 }
 function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(STATE.kurse,term.KursID),ms=STATE.mitglieder.filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA'),trainers=STATE.benutzer.filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));let previous=STATE.teilnahmen.filter(x=>x.TerminID===term.ID);return '<section class="panel"><div class="row between"><h2>'+h(c?.Titel||'Kurs')+'</h2><button class="secondary" data-close-term="1">Zurück</button></div><p class="muted">'+dt(term.Beginn)+' · '+h(term.Ort)+'</p>'+(c?courseCard(c):'')+'<hr class="divider"><h2>Anwesenheit bestätigen</h2><form data-form="attendance"><h3>Teilnehmer</h3>'+ms.map(m=>{let old=previous.find(t=>t.MitgliedID===m.ID);return '<label class="inline-check"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(old?.Anwesend==='JA'?'checked':'')+'> '+h(name(m))+'</label>'}).join('')+'<h3>Durchführende Ausbilder</h3>'+trainers.map(t=>{let old=previous[0]?.AusbilderIDs?.split(',')||[];return '<label class="inline-check"><input type="checkbox" name="trainer" value="'+h(t.ID)+'" '+(old.includes(t.ID)||(!previous.length&&t.ID===STATE.user.ID)?'checked':'')+'> '+h(t.Name)+'</label>'}).join('')+'<div class="notice">Mit Bestätigung werden Anwesenheit, Ausbilder, Datum und der bestätigende Benutzer protokolliert. Eine erneute Bestätigung korrigiert den Datensatz mit neuem Protokolleintrag.</div><div class="btnline"><button class="primary">Ausbildung verbindlich bestätigen</button></div></form></section>'}return '<section class="panel"><h2>Ausbildung auswählen</h2><p class="muted">Öffne den Termin, sieh die Unterlagen und bestätige anschließend die Anwesenheit.</p><div class="items">'+STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)).map(t=>{let c=by(STATE.kurse,t.KursID);return '<div class="item"><div class="row between"><div><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(t.Beginn)+' · '+h(t.Ort)+'</div></div><button class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div></div>'}).join('')+'</div></section>'}
 function mine(){
@@ -444,7 +455,7 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -498,6 +509,7 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
    }catch(err){tip(err.message,true);}finally{x.disabled=false;}
    return;
  }
+ if(x.dataset.readDirect){await doSave('readDirect',{ID:x.dataset.readDirect});return}
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
 $('app').addEventListener('change',e=>{
@@ -534,6 +546,10 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='user')await doSave('inviteUser',data);
  else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
+ else if(type==='direct')await doSave('sendDirect',data);
+ else if(type==='qualification')await doSave('saveQualification',data);
+ else if(type==='requirement')await doSave('setCourseRequirement',data);
+ else if(type==='singleAttendance')await doSave('setAttendanceMember',data);
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
