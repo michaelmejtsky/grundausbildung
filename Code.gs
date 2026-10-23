@@ -70,7 +70,7 @@ function gaEinrichten() {
   defaults.forEach(v=>{if(!existing.includes(v[0]))gaAppend_('Checklistenpunkte',{
     ID:gaId_(),Titel:v[0],Bereich:v[1],Zustaendig:v[2],Aktiv:'JA',ErstelltAm:gaNow_()
   });});
-  SpreadsheetApp.getUi().alert('Grundausbildung bereit: 11 Tabellenblätter, Beispielkurs und Checklistenpunkte geprüft. Vorhandene Daten wurden nicht gelöscht.');
+  SpreadsheetApp.getUi().alert('Grundausbildung bereit: '+Object.keys(GA.SHEETS).length+' Datentabellen, Beispielkurs und Checklistenpunkte geprüft. Vorhandene Daten wurden nicht gelöscht.');
 }
 function gaErstenAdminEinrichten() {
   const ui=SpreadsheetApp.getUi();
