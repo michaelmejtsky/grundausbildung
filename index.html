@@ -265,6 +265,6 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
- }finally{if(btn)btn.disabled=false}
+ }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
 </script></body></html>
