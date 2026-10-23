@@ -2,11 +2,12 @@
  * Grundausbildung - Cloudflare Worker V1.1
  *
  * Environment in Cloudflare:
- *   GA_SCRIPT_URL      = https://script.google.com/macros/s/.../exec
+ *   Apps-Script-URL ist unten bereits eingetragen (kann via GA_SCRIPT_URL überschrieben werden)
  *   GA_WORKER_SECRET   = identischer geheimer Schlüssel aus Apps Script (Secret)
  * CORS ausschließlich für die eigene GitHub-Pages-Seite.
  */
 const ALLOWED_ORIGIN='https://michaelmejtsky.github.io';
+const DEPLOYED_SCRIPT_URL='https://script.google.com/macros/s/AKfycbw0t9edW1egW27B1dHhen2I73GZji3JfQ8aBSFAjghd5gZXSTu24r7E_iMvTqBe3hhT/exec';
 function cors(){
  return {
   'Access-Control-Allow-Origin':ALLOWED_ORIGIN,
@@ -29,7 +30,8 @@ export default {
   }
   if(request.method!=='POST')return reply({ok:false,error:'Nur POST erlaubt.'},405);
   if(origin!==ALLOWED_ORIGIN)return reply({ok:false,error:'Unzulässiger Ursprung.'},403);
-  if(!env.GA_SCRIPT_URL||!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(env.GA_SCRIPT_URL))
+  const scriptUrl=env.GA_SCRIPT_URL||DEPLOYED_SCRIPT_URL;
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(scriptUrl))
     return reply({ok:false,error:'Backend ist noch nicht konfiguriert.'},503);
   if(!env.GA_WORKER_SECRET||env.GA_WORKER_SECRET.length<48)
     return reply({ok:false,error:'Worker-Schlüssel fehlt.'},503);
@@ -44,7 +46,7 @@ export default {
     const timer=setTimeout(()=>controller.abort(),45000);
     let upstream;
     try{
-      upstream=await fetch(env.GA_SCRIPT_URL,{
+      upstream=await fetch(scriptUrl,{
         method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify({method:json.method,args:json.args,gatewayKey:env.GA_WORKER_SECRET}),
         redirect:'follow',signal:controller.signal
