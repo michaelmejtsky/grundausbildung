@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.1.0',
+  VERSION: '1.2.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -19,7 +19,9 @@ const GA = Object.freeze({
     Nachrichten: ['ID','Titel','Text','TurnusID','VonBenutzerID','ErstelltAm'],
     Benachrichtigungen: ['ID','BenutzerID','Typ','Titel','Text','BezugID','ErstelltAm','GelesenAm','PushStatus'],
     Protokoll: ['ID','Zeit','BenutzerID','Aktion','Entitaet','EntitaetID','Details'],
-    Einladungen: ['ID','BenutzerID','Email','TokenHash','ExpiresAt','UsedAt','Status','ErstelltVon','ErstelltAm']
+    Einladungen: ['ID','BenutzerID','Email','TokenHash','ExpiresAt','UsedAt','Status','ErstelltVon','ErstelltAm'],
+    PushGeraete: ['ID','BenutzerID','Endpoint','P256DH','Auth','Aktiv','AktualisiertAm'],
+    PushRegeln: ['ID','BenutzerID','Nachrichten','Termine','Aufgaben','AktualisiertAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -31,7 +33,8 @@ function onOpen() {
     .addItem('1 · Tabellen prüfen/erstellen','gaEinrichten')
     .addItem('2 · Ersten Administrator einrichten','gaErstenAdminEinrichten')
     .addItem('3 · Systemprüfung','gaSystemPruefen')
-    .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten').addToUi();
+    .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten')
+    .addItem('5 · Push-Speicher und Trigger einrichten','gaPushEinrichten').addToUi();
 }
 
 function gaSheet_() {
@@ -170,6 +173,10 @@ function gaApi(method,data,token){
   if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
   if(method==='sendMessage')return gaLock_(()=>gaSendMessage_(u,d));
   if(method==='readNotification')return gaLock_(()=>gaReadNotification_(u,d));
+  if(method==='registerPush')return gaLock_(()=>gaRegisterPush_(u,d));
+  if(method==='removePush')return gaLock_(()=>gaRemovePush_(u,d));
+  if(method==='setPushRule')return gaLock_(()=>gaSetPushRule_(u,d));
+  if(method==='testPush')return gaLock_(()=>gaTestPush_(u));
   throw new Error('Unbekannte Aktion.');
 }
 function gaState_(u){
@@ -192,6 +199,9 @@ function gaState_(u){
     teilnahmen:admin||trainer?gaRows_('Teilnahmen'):participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[],
     nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||n.TurnusID==='M:'+own.ID):[],
     benachrichtigungen:notifications,
+    pushEigeneRegeln:gaPushRule_(u.ID),
+    pushGeraeteAnzahl:gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
+    pushRegeln:admin?gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID),Geraete:gaOptionalRows_('PushGeraete').filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
     benutzer:admin?gaRows_('Benutzer').map(gaPublicUser_):trainer?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
     // Ausgabe von Personenprofilen nur nach Login und rollenbasiert.
     meMember:participant&&own?own:null
@@ -207,14 +217,20 @@ function gaSaveCourse_(u,d){gaRequire_(u,['Administrator']);let val={Titel:gaNee
   if(d.ID){gaReplace_('Kurse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Kurs',d.ID,{Titel:val.Titel});return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Kurse',val);gaLog_(u.ID,'ANLEGEN','Kurs',val.ID,{Titel:val.Titel});return {ok:true};}
 function gaDateTime_(s){s=gaText_(s,30);if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)||Number.isNaN(Date.parse(s)))throw new Error('Datum/Uhrzeit ungültig.');return s;}
-function gaNotify_(userId,type,title,message,reference){gaAppend_('Benachrichtigungen',{ID:gaId_(),BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:'Nur In-App · Push nicht eingerichtet'});}
+function gaNotify_(userId,type,title,message,reference){
+  const category=type==='Nachricht'?'Nachrichten':type==='Termin'?'Termine':'Aufgaben';
+  const allowed=gaPushRule_(userId)[category];
+  const hasDevice=gaOptionalRows_('PushGeraete').some(x=>x.BenutzerID===userId&&gaBool_(x.Aktiv));
+  const pushStatus=!allowed?'Vom Administrator deaktiviert':hasDevice?'Wartend':'Kein Gerät registriert';
+  gaAppend_('Benachrichtigungen',{ID:gaId_(),BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
+}
 function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaRows_('Mitglieder').filter(m=>m.TurnusID===turnusId&&gaBool_(m.Aktiv)).map(m=>m.Email.toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
 function gaSaveTermin_(u,d){gaRequire_(u,['Administrator']);const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);if(!course||!turnus||course.Bereich!==turnus.Bereich)throw new Error('Kurs und Turnus müssen demselben Ausbildungsbereich zugehören.');
   const begin=gaDateTime_(d.Beginn),end=gaDateTime_(d.Ende);if(end<=begin)throw new Error('Das Ende muss nach dem Beginn liegen.');
   const val={KursID:d.KursID,TurnusID:d.TurnusID,Beginn:begin,Ende:end,Ort:gaText_(d.Ort,160),Status:'Geplant'};
   if(d.ID){gaReplace_('Termine',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Termin',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Termine',val);gaLog_(u.ID,'ANLEGEN','Termin',val.ID,val);
-  gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);return {ok:true};}
+  gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);gaPushQueue_(5);return {ok:true};}
 function gaSaveMember_(u,d){gaRequire_(u,['Administrator']);if(!gaFind_('Turnusse',d.TurnusID))throw new Error('Bitte einen gültigen Turnus wählen.');
   const email=gaText_(d.Email,240).toLowerCase();if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA'};
@@ -266,7 +282,7 @@ function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.N
 function gaSendMessage_(u,d){
   gaRequire_(u,['Administrator']);
   const title=gaNeed_(d.Titel,'Betreff',160),message=gaNeed_(d.Text,'Nachricht',3000);
-  const mode=gaChoice_(d.EmpfaengerArt||'TURNUS',['ALLE','TURNUS','MITGLIED'],'Empfängerart');
+  const mode=gaChoice_(d.EmpfaengerArt||(d.TurnusID?'TURNUS':'ALLE'),['ALLE','TURNUS','MITGLIED'],'Empfängerart');
   const members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv));
   let target='',recipients=[];
   if(mode==='TURNUS'){
@@ -285,6 +301,7 @@ function gaSendMessage_(u,d){
   gaAppend_('Nachrichten',{ID:id,Titel:title,Text:message,TurnusID:target,VonBenutzerID:u.ID,ErstelltAm:gaNow_()});
   users.forEach(x=>gaNotify_(x.ID,'Nachricht',title,message.slice(0,240),id));
   gaLog_(u.ID,'SENDEN','Nachricht',id,{EmpfaengerArt:mode,ZielID:target,Empfaenger:users.length});
+  gaPushQueue_(5);
   return {ok:true,message:'Nachricht gespeichert. '+users.length+' aktive Teilnehmer benachrichtigt.'};
 }
 function gaReadNotification_(u,d){const n=gaFind_('Benachrichtigungen',d.ID);if(!n||n.BenutzerID!==u.ID)throw new Error('Benachrichtigung nicht gefunden.');gaReplace_('Benachrichtigungen',n.ID,{GelesenAm:gaNow_()});return {ok:true};}
@@ -422,4 +439,104 @@ function gaWorkerSchluesselEinrichten(){
   const key=[gaId_(),gaId_(),gaId_()].join('').replace(/-/g,'');
   store.setProperty('GA_WORKER_SECRET',key);
   ui.alert('WICHTIG: Einmaliger Cloudflare-Worker-Schlüssel. Jetzt sicher kopieren und als Worker-Secret GA_WORKER_SECRET speichern. Er wird in diesem Dialog angezeigt und danach nicht erneut.\\n\\n'+key);
+}
+
+
+/** Push V1.2 – Geräte/Präferenzen immer privat in der Tabelle, niemals in GitHub.
+ * Die Serverzustellung läuft ausschließlich signiert über den Cloudflare-Worker.
+ */
+function gaOptionalRows_(name){return gaSheet_().getSheetByName(name)?gaRows_(name):[];}
+function gaPushRule_(userId){
+  const row=gaOptionalRows_('PushRegeln').find(x=>x.BenutzerID===userId);
+  return {
+    Nachrichten:row?gaBool_(row.Nachrichten):true,
+    Termine:row?gaBool_(row.Termine):true,
+    Aufgaben:row?gaBool_(row.Aufgaben):true
+  };
+}
+function gaSetPushRule_(actor,d){
+  gaRequire_(actor,['Administrator']);
+  const person=gaRows_('Benutzer').find(x=>x.ID===gaText_(d.BenutzerID,100)&&gaBool_(x.Aktiv));
+  if(!person)throw new Error('Aktiver Benutzer für Push-Einstellungen nicht gefunden.');
+  const val={Nachrichten:d.Nachrichten===true||d.Nachrichten==='JA'?'JA':'NEIN',
+    Termine:d.Termine===true||d.Termine==='JA'?'JA':'NEIN',
+    Aufgaben:d.Aufgaben===true||d.Aufgaben==='JA'?'JA':'NEIN',
+    AktualisiertAm:gaNow_()};
+  const row=gaOptionalRows_('PushRegeln').find(x=>x.BenutzerID===person.ID);
+  if(row)gaReplace_('PushRegeln',row.ID,val);
+  else gaAppend_('PushRegeln',{ID:gaId_(),BenutzerID:person.ID,...val});
+  gaLog_(actor.ID,'PUSH_REGEL','Benutzer',person.ID,val);
+  return {ok:true,message:'Push-Empfängerregeln gespeichert.'};
+}
+function gaRegisterPush_(user,d){
+  if(!gaSheet_().getSheetByName('PushGeraete'))throw new Error('Bitte zuerst im Tabellenmenü „Push-Speicher und Trigger einrichten“ ausführen.');
+  const endpoint=gaText_(d.Endpoint,600),p256dh=gaText_(d.P256DH,150),auth=gaText_(d.Auth,100);
+  if(!/^https:\/\/(?:fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|push\.services\.mozilla\.com|(?:[a-z0-9.-]+\.)?push\.apple\.com)\//i.test(endpoint)||
+    !/^[A-Za-z0-9_-]{86,88}$/.test(p256dh)||!/^[A-Za-z0-9_-]{20,40}$/.test(auth))
+    throw new Error('Push-Gerätedaten ungültig.');
+  const devices=gaOptionalRows_('PushGeraete'),existing=devices.find(x=>x.Endpoint===endpoint);
+  if(existing&&existing.BenutzerID!==user.ID)throw new Error('Dieses Gerät ist mit einem anderen Zugang verknüpft. Bitte vorher abmelden.');
+  if(!existing&&devices.filter(x=>x.BenutzerID===user.ID&&gaBool_(x.Aktiv)).length>=6)
+    throw new Error('Maximal 6 registrierte Geräte pro Benutzer.');
+  const fields={Endpoint:endpoint,P256DH:p256dh,Auth:auth,Aktiv:'JA',AktualisiertAm:gaNow_()};
+  if(existing)gaReplace_('PushGeraete',existing.ID,fields);
+  else gaAppend_('PushGeraete',{ID:gaId_(),BenutzerID:user.ID,...fields});
+  gaLog_(user.ID,'PUSH_GERAET_AN','Benutzer',user.ID,{});
+  return {ok:true,message:'Push für dieses Gerät angemeldet.'};
+}
+function gaRemovePush_(user,d){
+  const endpoint=gaText_(d.Endpoint,600);
+  gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===user.ID&&x.Endpoint===endpoint)
+    .forEach(x=>gaReplace_('PushGeraete',x.ID,{Aktiv:'NEIN',AktualisiertAm:gaNow_()}));
+  gaLog_(user.ID,'PUSH_GERAET_AUS','Benutzer',user.ID,{});
+  return {ok:true};
+}
+function gaTestPush_(user){
+  gaNotify_(user.ID,'Nachricht','Grundausbildung – Test-Push','Dein Gerät kann Benachrichtigungen empfangen.','');
+  const result=gaPushQueue_(5);
+  return {ok:true,message:'Test-Benachrichtigung erstellt. '+result};
+}
+function gaPushQueue_(limit){
+  const key=PropertiesService.getScriptProperties().getProperty('GA_WORKER_SECRET');
+  if(!key||key.length<48)return 'Push-Server nicht eingerichtet.';
+  const url='https://grundausbildung.michael-mejtsky.workers.dev/internal/push';
+  const devices=gaOptionalRows_('PushGeraete').filter(x=>gaBool_(x.Aktiv));
+  const pending=gaRows_('Benachrichtigungen').filter(n=>n.PushStatus==='Wartend').slice(0,Math.max(1,Math.min(10,limit||5)));
+  for(const n of pending){
+    const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':'Aufgaben'];
+    const selected=devices.filter(x=>x.BenutzerID===n.BenutzerID);
+    if(!allowed||!selected.length){
+      gaReplace_('Benachrichtigungen',n.ID,{PushStatus:allowed?'Kein Gerät registriert':'Vom Administrator deaktiviert'});
+      continue;
+    }
+    const data={devices:selected.slice(0,6).map(d=>({id:d.ID,subscription:{endpoint:d.Endpoint,p256dh:d.P256DH,auth:d.Auth}})),
+      notification:{title:gaText_(n.Titel,90),body:gaText_(n.Text,180),id:n.ID,url:'/grundausbildung/',kind:n.Typ}};
+    const ts=Math.floor(Date.now()/1000),nonce=(gaId_().replace(/-/g,'')),payload=JSON.stringify(data);
+    const signature=Utilities.computeHmacSha256Signature(ts+'.'+nonce+'.'+payload,key,Utilities.Charset.UTF_8)
+      .map(b=>('0'+(b&255).toString(16)).slice(-2)).join('');
+    try{
+      const res=UrlFetchApp.fetch(url,{method:'post',contentType:'application/json',
+        payload:JSON.stringify({ts,nonce,payload,signature}),muteHttpExceptions:true,
+        followRedirects:false});
+      const result=JSON.parse(res.getContentText());
+      if(res.getResponseCode()===200&&result.ok){
+        const good=(result.results||[]).filter(x=>x.ok).length;
+        const gone=new Set((result.results||[]).filter(x=>x.gone).map(x=>x.id));
+        devices.filter(d=>gone.has(d.ID)).forEach(d=>gaReplace_('PushGeraete',d.ID,{Aktiv:'NEIN',AktualisiertAm:gaNow_()}));
+        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:good?'Gesendet ('+good+')':'Nicht zugestellt'});
+      }else{
+        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Fehlgeschlagen; Push-Konfiguration prüfen'});
+      }
+    }catch(err){
+      gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Fehlgeschlagen; Verbindung prüfen'});
+    }
+  }
+  return pending.length+' Nachricht(en) bearbeitet.';
+}
+function gaPushJob_(){gaPushQueue_(8);}
+function gaPushEinrichten(){
+  gaEinrichten();
+  const current=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='gaPushJob_');
+  if(!current.length)ScriptApp.newTrigger('gaPushJob_').timeBased().everyMinutes(5).create();
+  SpreadsheetApp.getUi().alert('Push-Speicher eingerichtet. Versandprüfung alle 5 Minuten. Für echte Push-Nachrichten noch VAPID-Schlüssel im Cloudflare-Worker hinterlegen.');
 }
