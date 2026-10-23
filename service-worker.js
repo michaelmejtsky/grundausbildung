@@ -49,8 +49,10 @@ self.addEventListener('notificationclick',event=>{
    const dest=new URL('./'+(id?'?notification='+encodeURIComponent(id):''),base);
    const list=await clients.matchAll({type:'window',includeUncontrolled:true});
    for(const client of list){
-     if(!client.url.startsWith(base.href))continue;
-     // Bereits geöffnete App: Nachricht anzeigen, ohne Benutzersitzung zu verlieren.
+     let path='';
+     try{const opened=new URL(client.url);if(opened.origin!==base.origin)continue;path=opened.pathname;}catch{continue;}
+     if(path!==base.pathname&&path!==base.pathname+'index.html')continue;
+     // Bereits geöffnete App: Nachricht anzeigen, ohne die Benutzersitzung zu verlieren.
      if(id&&client.postMessage)client.postMessage({type:'ga-open-notification',id});
      if('focus' in client)return client.focus();
    }
