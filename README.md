@@ -1,3 +1,9 @@
+## Push-Diagnose mit Einzelprüfung (v2)
+
+Bei der Meldung, dass Cloudflare-Push nicht vollständig eingerichtet sei: Die App selbst erreicht dann bereits die Worker-Statusabfrage; mindestens ein VAPID-Feld wird vom **veröffentlichten** Worker nicht als gültig erkannt. In der App unter **Benachrichtigungen → Cloudflare-Push prüfen** zeigt die neue Worker-Version ohne Preisgabe von Schlüsseln, ob `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_JWK` und `VAPID_SUBJECT` vorhanden, syntaktisch gültig und als Schlüsselpaar konsistent sind. Bei Meldung „alte Diagnose“ ist noch eine vorige Worker-Version aktiv.
+
+**GitHub-Update ist kein Cloudflare-Deployment:** Falls Cloudflare die Worker-Datei nicht automatisch aus GitHub übernimmt, muss die aktuelle [cloudflare-worker.js](https://github.com/michaelmejtsky/grundausbildung/blob/main/cloudflare-worker.js) im Worker `grundausbildung` über dessen Code-Editor oder bestehende Deploy-Pipeline veröffentlicht werden. Die bestehenden Werte von `GA_WORKER_SECRET` oder `GA_SCRIPT_URL` weder überschreiben noch ins Repo laden. Für neue VAPID-Schlüssel immer das komplette öffentliche/private Schlüsselpaar aus derselben Erzeugung verwenden. Niemals den privaten Wert in einen Chat schicken. Nach erfolgreicher Statusprüfung zusätzlich Geräteanmeldung und echte Test-Push prüfen.
+
 ## V1.5.3 – Passwort zurücksetzen und korrigiertes App-Symbol
 
 - Admin → **Zugänge**: Für aktive Benutzer **Passwort zurücksetzen** wählen. Nur die hinterlegte E-Mail bekommt einen einmaligen 30-Minuten-Link zur selbstständigen Passwortänderung. Passwörter sind nicht auslesbar. Bestehende Anmeldesitzungen werden bei der Passwortänderung ungültig.

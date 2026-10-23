@@ -637,9 +637,26 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
    if(box)box.textContent='Cloudflare-Verbindung wird geprüft …';
    try{
      const result=await rpc('gaPushInfo');
-     if(box)box.textContent=result?.configured===true?
-       '✅ Cloudflare erkennt die Push-Schlüssel. Du kannst jetzt Push auf diesem Gerät aktivieren und anschließend einen Test senden.':
-       '⚠️ Der veröffentlichte Cloudflare-Worker erkennt die VAPID-Einstellungen nicht vollständig. Bitte das aktuelle Worker-Deployment sowie VAPID_PUBLIC_KEY, VAPID_PRIVATE_JWK und VAPID_SUBJECT prüfen.';
+     if(box){
+       if(result?.diagnosticVersion!==2||!result?.checks){
+         box.textContent='⚠️ Der Cloudflare-Worker antwortet noch mit der alten Diagnose. Die aktuelle Datei cloudflare-worker.js aus GitHub muss in Cloudflare bereitgestellt werden. Keine Schlüssel hier eingeben.';
+       }else{
+         const c=result.checks;
+         const status=x=>x?'✅':'❌';
+         const rows=[
+           status(c.publicKeyPresent)+' VAPID_PUBLIC_KEY vorhanden',
+           status(c.publicKeyValid)+' VAPID_PUBLIC_KEY hat das richtige Format',
+           status(c.privateKeyPresent)+' VAPID_PRIVATE_JWK vorhanden',
+           status(c.privateKeyValid)+' VAPID_PRIVATE_JWK ist ein gültiges P-256-JWK',
+           status(c.subjectPresent)+' VAPID_SUBJECT vorhanden',
+           status(c.subjectValid)+' VAPID_SUBJECT im Format mailto:adresse@domain.at',
+           status(c.keyPairMatches)+' Öffentlicher und privater Schlüssel gehören zusammen'
+         ];
+         if(result.configured===true)rows.push('✅ Cloudflare ist für die Registrierung von Push-Geräten vorbereitet. Jetzt Push auf dem Gerät aktivieren und Testnachricht senden.');
+         else rows.push('Bitte nur die mit ❌ markierten Einstellungen im Worker grundausbildung korrigieren, speichern und deployen. GA_WORKER_SECRET unverändert lassen.');
+         box.textContent=rows.join('\n');
+       }
+     }
    }catch(err){
      if(box)box.textContent='❌ Push-Prüfung fehlgeschlagen: '+String(err.message||'Unbekannter Fehler');
    }finally{x.disabled=false;}
