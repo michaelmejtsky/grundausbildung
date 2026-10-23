@@ -1,0 +1,33 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Push-Status – Grundausbildung</title><style>
+body{margin:0;padding:24px;min-height:100vh;box-sizing:border-box;display:grid;place-items:center;background:#123554;color:#17334e;font:16px system-ui,sans-serif}
+main{background:white;width:min(100%,590px);border-radius:18px;padding:26px;box-sizing:border-box}h1{margin:0 0 12px;font-size:25px}p{line-height:1.55}button{border:0;border-radius:10px;background:#1764b4;color:#fff;padding:12px 20px;font:inherit;font-weight:700;cursor:pointer}
+.status{padding:15px;border-radius:10px;background:#eef3f9;margin:15px 0;line-height:1.5;white-space:pre-wrap}.ok{background:#e7f6e9}.bad{background:#ffeded}
+small{color:#546b80}a{color:#165a9a}
+</style></head><body><main><h1>🚒 Push-Verbindung prüfen</h1>
+<p>Prüfung der Cloudflare-Einstellungen deiner Grundausbildungsplattform. Es werden <b>keine privaten Schlüssel, Passwörter oder Mitgliederdaten</b> angezeigt oder übertragen.</p>
+<button id="check">Verbindung jetzt prüfen</button>
+<div id="status" class="status" role="status">Noch nicht geprüft.</div>
+<p><small>Wenn die drei Cloudflare-Variablen vorhanden sind, aber die Prüfung fehlschlägt, kontrolliere insbesondere, ob die aktuelle <code>cloudflare-worker.js</code> tatsächlich als Deployment veröffentlicht ist. In Cloudflare müssen die Variablen unter dem bestehenden Worker <code>grundausbildung</code> gespeichert sein.</small></p>
+<p><a href="./">Zur Grundausbildungs-App</a></p>
+<script>
+const box=document.getElementById('status');
+document.getElementById('check').addEventListener('click',async()=>{
+ const btn=document.getElementById('check');btn.disabled=true;box.className='status';box.textContent='Prüfung läuft …';
+ try{
+ const response=await fetch('https://grundausbildung.michael-mejtsky.workers.dev/',{
+  method:'POST',mode:'cors',cache:'no-store',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({method:'gaPushInfo',args:[]})
+ });
+ const data=await response.json();
+ if(response.ok&&data.ok&&data.value?.configured===true){
+   box.className='status ok';box.textContent='✅ Cloudflare erkennt die Push-Konfiguration!\nDie VAPID-Einstellungen sind vorhanden.\nNächster Schritt: In der App unter „Benachrichtigungen“ Push am Gerät aktivieren und Test-Push senden.';
+ }else if(response.ok&&data.ok&&data.value?.configured===false){
+   box.className='status bad';box.textContent='⚠️ Der veröffentlichte Worker meldet Push als nicht vollständig.\nPrüfe im Worker grundausbildung die Namen VAPID_PUBLIC_KEY, VAPID_PRIVATE_JWK und VAPID_SUBJECT sowie deren Werte und das letzte Deployment. GA_WORKER_SECRET unverändert lassen.';
+ }else{
+   box.className='status bad';box.textContent='❌ Der Worker antwortet, erkennt die Statusabfrage aber nicht wie erwartet.\nHTTP '+response.status+' – '+String(data.error||'Unbekannte Antwort').slice(0,220)+'\nMöglicherweise läuft noch eine ältere Worker-Version.';
+ }
+ }catch(e){
+  box.className='status bad';box.textContent='❌ Verbindungstest fehlgeschlagen: '+String(e.message).slice(0,220)+'\nPrüfe die Worker-Domain, Verbindung und das Cloudflare-Deployment.';
+ }finally{btn.disabled=false;}
+});
+</script></main></body></html>
