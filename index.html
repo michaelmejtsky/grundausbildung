@@ -132,8 +132,12 @@ async function installApp(){
 }
 $('installApp').addEventListener('click',installApp);
 $('installAppTop').addEventListener('click',installApp);
+let GA_SERVICE_WORKER_ERROR='';
 if('serviceWorker' in navigator&&location.protocol==='https:'){
-  navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'}).catch(error=>{
+    GA_SERVICE_WORKER_ERROR=String(error?.message||error);
+    console.error('Service Worker konnte nicht registriert werden:',error);
+  });
 }
 initInvite();
 function gaPushFeedback(msg,error=false){
@@ -601,10 +605,29 @@ async function gaEnablePush(){
  const settings=await rpc('gaPushInfo');
  if(!settings?.configured||!settings.publicKey)throw new Error('Cloudflare ist für Push noch nicht vollständig eingerichtet.');
  gaPushFeedback('Push-Berechtigung erteilt. Dienst am Gerät wird vorbereitet …');
- const registration=await Promise.race([
-   navigator.serviceWorker.ready,
-   new Promise((_,reject)=>setTimeout(()=>reject(new Error('Der Push-Dienst der App wird nicht aktiv. Bitte App neu öffnen und nochmals versuchen.')),12000))
- ]);
+ let registration;
+ try{
+   // Beim Klick aktiv neu registrieren, statt unbegrenzt auf einen defekten Worker zu warten.
+   registration=await Promise.race([
+     navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'}),
+     new Promise((_,reject)=>setTimeout(()=>reject(new Error('Zeitüberschreitung bei der Service-Worker-Registrierung.')),12000))
+   ]);
+ }catch(error){
+   throw new Error('Service Worker konnte nicht registriert werden: '+String(error?.message||error));
+ }
+ if(!registration.active){
+   gaPushFeedback('Push-Berechtigung erteilt. Service Worker wird aktiviert …');
+   try{
+     registration=await Promise.race([
+       navigator.serviceWorker.ready,
+       new Promise((_,reject)=>setTimeout(()=>reject(new Error('Zeitüberschreitung bei der Service-Worker-Aktivierung.')),15000))
+     ]);
+   }catch(error){
+     const state=registration?.installing?.state||registration?.waiting?.state||'nicht vorhanden';
+     throw new Error('Der Push-Dienst wird nicht aktiv (Service Worker: '+state+'). '+String(GA_SERVICE_WORKER_ERROR||error?.message||error));
+   }
+ }
+ if(!registration.active)throw new Error('Service Worker registriert, aber nicht aktiv.');
  let subscription=await registration.pushManager.getSubscription();
  const currentKey=gaB64UrlBytes(settings.publicKey);
  if(subscription&&subscription.options?.applicationServerKey){
