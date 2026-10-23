@@ -23,11 +23,12 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.2</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.3</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={};
+let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 const $=id=>document.getElementById(id);
 const h=s=>String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const by=(arr,id)=>(arr||[]).find(x=>x.ID===id);
@@ -114,19 +115,202 @@ function tip(msg,error=false){let e=$('toast');e.textContent=msg;e.className='to
 async function api(action,payload={}){return rpc('gaApi',action,payload,TOKEN)}
 async function reload(){STATE=await api('state');render();}
 function role(){return STATE?.user?.Rolle}
-function navs(){const r=role();const base=r==='Administrator'?[['overview','Übersicht'],['courses','Kurse'],['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],['users','Zugänge'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']]:r==='Ausbilder'?[['courses','Kurse & Unterlagen'],['attendance','Durchführung']]:r==='Teilnehmer'?[['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],['messages','Nachrichten']]:[['tasks','Meine Aufgaben']];return base.concat([['notifications','Benachrichtigungen']]);}
-function title(){return ({overview:'Übersicht',courses:'Kurse & Unterlagen',terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',users:'Benutzerzugänge',messages:'Nachrichten',attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'})[VIEW]||'Grundausbildung';}
+function navs(){
+ const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
+ const base=admin?[
+ ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
+ ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],
+ ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
+ ['reviews','Kursbewertungen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
+ ]:trainer?[
+ ['courses','Kurskatalog'],['projects','Kursprojekte'],
+ ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
+ ['attendance','Durchführung'],['reports','Mängel & Ideen'],
+ ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[])
+ ]:r==='Teilnehmer'?[
+ ['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],
+ ['ratings','Kurs bewerten'],['messages','Nachrichten']
+ ]:[['tasks','Meine Aufgaben']];
+ return base.concat([['notifications','Benachrichtigungen']]);
+}
+function title(){return ({
+ overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',
+ terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',
+ users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
+ reviews:'Kursbewertungen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
+ attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
+ tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
+})[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
-function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+(role()==='Administrator'?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Bearbeiten</button></div>':'')+'</div>'}
-function courses(){const edit=FORM==='course'&&EDIT?by(STATE.kurse,EDIT):null;const form=role()==='Administrator'?'<section class="panel"><h2>'+(edit?'Kurs bearbeiten':'Neuen Kurs anlegen')+'</h2><form data-form="course"><div class="grid"><div><label>Kurstitel</label><input name="Titel" required maxlength="160" value="'+h(edit?.Titel||'')+'"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions(edit?.Bereich)+'</select></div><div class="wide"><label>Kursinhalt</label><textarea name="Inhalt">'+h(edit?.Inhalt||'')+'</textarea></div><div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit?.Lernziele||'')+'</textarea></div><div class="wide"><label>Links zu Google-Präsentationen, Drive oder PDF (je Zeile ein HTTPS-Link)</label><textarea name="Links" placeholder="https://docs.google.com/presentation/d/...">'+h(edit?.Links||'')+'</textarea></div></div><div class="btnline"><button class="primary" type="submit">'+(edit?'Änderung speichern':'Kurs speichern')+'</button>'+(edit?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+'</div></form></section>':'';return form+'<section class="panel"><h2>Kurskatalog ('+STATE.kurse.length+')</h2><div class="items">'+(STATE.kurse.length?STATE.kurse.map(courseCard).join(''):'Noch keine Kurse vorhanden.')+'</div></section>'}
+function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
+function courses(){
+ const cards=STATE.kurse.filter(c=>c.Aktiv==='JA');
+ return '<section class="panel"><h2>Freigegebener Kurskatalog ('+cards.length+')</h2>'+
+ '<p class="muted">Neue Kurse werden unter „Kursprojekte“ vorbereitet und erst nach einer Freigabe veröffentlicht.</p>'+
+ '<div class="items">'+(cards.length?cards.map(courseCard).join(''):'Noch keine veröffentlichten Kurse.')+'</div></section>';
+}
+function projects(){
+ const r=STATE.rechte||{},canCreate=!!r.KurseGestalten,canApprove=!!r.KurseFreigeben;
+ const project=FORM==='project'&&EDIT?by(STATE.kursProjekte,EDIT):null;
+ const editable=project&&project.Status!=='Zur Prüfung'&&project.Status!=='Veröffentlicht'&&
+  (project.ErstelltVon===STATE.user.ID||canApprove);
+ const form=canCreate&&(!project||editable)?'<section class="panel"><h2>'+h(project?'Kursprojekt bearbeiten':'Neues Ausbildungsprojekt')+'</h2>'+
+ '<form data-form="project"><div class="grid">'+
+ '<div><label>Kurstitel</label><input name="Titel" required maxlength="160" value="'+h(project?.Titel||'')+'"></div>'+
+ '<div><label>Bereich</label><select name="Bereich">'+areaOptions(project?.Bereich)+'</select></div>'+
+ '<div><label>Kursart</label><select name="Typ"><option value="Theorie" '+(project?.Typ!=='Praxis'?'selected':'')+'>Theorie / Unterricht</option><option value="Praxis" '+(project?.Typ==='Praxis'?'selected':'')+'>Praxisschulung</option></select></div>'+
+ '<div><label>Bearbeitungsstand</label><select name="Status">'+['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].filter(st=>st!=='Zurück zur Bearbeitung'||project?.Status===st).map(st=>'<option value="'+h(st)+'" '+((project?.Status||'Neu')===st?'selected':'')+'>'+h(st)+'</option>').join('')+'</select></div>'+
+ '<div class="wide"><label>Ausbildungsinhalt (bei Einreichung Pflicht)</label><textarea name="Inhalt" maxlength="8000">'+h(project?.Inhalt||'')+'</textarea></div>'+
+ '<div class="wide"><label>Lernziele</label><textarea name="Lernziele" maxlength="4000">'+h(project?.Lernziele||'')+'</textarea></div>'+
+ '<div class="wide"><label>Präsentation (HTTPS-Link, bei Theorie Pflicht)</label><input name="PraesentationURL" type="url" placeholder="https://docs.google.com/presentation/..." value="'+h(project?.PraesentationURL||'')+'"></div>'+
+ '<div class="wide"><label>Weitere Unterlagen (HTTPS-Links, jeweils neue Zeile)</label><textarea name="WeitereLinks">'+h(project?.WeitereLinks||'')+'</textarea></div>'+
+ '</div><div class="notice">Du kannst unfertige Projekte speichern. Erst bei „Zur Prüfung senden“ müssen der Ausbildungsinhalt und bei Theorie zusätzlich eine Präsentation vorhanden sein. Ein Prüfer entscheidet über die Veröffentlichung.</div>'+
+ '<div class="btnline"><button type="submit" class="primary">'+(project?'Änderungen speichern':'Projekt anlegen')+'</button>'+
+ (project?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+
+ '</div></form></section>':'';
+ const projectsList=(STATE.kursProjekte||[]).slice().reverse().map(p=>{
+  const isOwner=p.ErstelltVon===STATE.user.ID;
+  const amend=canCreate&&(isOwner||canApprove)&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
+  const submit=canCreate&&(isOwner||canApprove)&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
+  const approve=canApprove&&p.Status==='Zur Prüfung';
+  return '<div class="item"><div class="row between"><div><b>'+h(p.Titel)+'</b><div class="detail">'+h(p.Bereich)+' · '+h(p.Typ)+' · Status: '+h(p.Status)+'</div></div>'+status(p.Status)+'</div>'+
+  (p.Rueckmeldung?'<div class="notice">Prüfvermerk: '+h(p.Rueckmeldung)+'</div>':'')+
+  '<div class="detail">Inhalt: '+h(p.Inhalt?'vorhanden':'fehlt')+' · Präsentation: '+h(p.PraesentationURL?'vorhanden':p.Typ==='Praxis'?'für Praxis nicht erforderlich':'fehlt')+'</div>'+
+  '<div class="btnline">'+(amend?'<button class="smallbtn" data-edit="project" data-id="'+h(p.ID)+'">Bearbeiten</button>':'')+
+  (submit?'<button class="primary" data-submit-project="'+h(p.ID)+'">Zur Prüfung senden</button>':'')+
+  (approve?'<button class="primary" data-approve-project="'+h(p.ID)+'">Freigeben</button><button class="secondary" data-return-project="'+h(p.ID)+'">Zurückgeben</button>':'')+
+  '</div></div>';
+ }).join('');
+ return form+'<section class="panel"><h2>Kursprojekte</h2><p class="muted">Neu → In Ausarbeitung → Zur Prüfung → Veröffentlicht. Nur Administratoren und ausdrücklich berechtigte Ausbilder dürfen freigeben.</p>'+
+ '<div class="items">'+(projectsList||'Noch keine Kursprojekte sichtbar.')+'</div></section>';
+}
+function rights(){
+ if(role()!=='Administrator')return '';
+ const permissions=[
+ ['KurseGestalten','Kurse gestalten und Projekte einreichen'],
+ ['KurseFreigeben','Kurse prüfen und veröffentlichen'],
+ ['TerminePlanen','Ausbildungstermine planen'],
+ ['MeldungenBearbeiten','Mängel und Ideen bearbeiten'],
+ ['BewertungenAnsehen','Kursbewertungen auswerten']
+ ];
+ return '<section class="panel"><h2>Ausbilderberechtigungen</h2><p class="muted">Jede Berechtigung wird einzeln vergeben. Die Serverprüfung verhindert, dass Ausbilder ihre eigenen Rechte erweitern.</p>'+
+ '<div class="items">'+((STATE.berechtigungen||[]).length?(STATE.berechtigungen||[]).map(u=>
+  '<form class="item" data-form="permissions"><input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'">'+
+  '<div class="row between"><b>'+h(u.Name)+'</b><button class="smallbtn" type="submit">Berechtigungen speichern</button></div>'+
+  permissions.map(([k,l])=>'<label class="inline-check"><input type="checkbox" name="'+k+'" value="JA" '+(u[k]?'checked':'')+'> '+h(l)+'</label>').join('')+'</form>'
+ ).join(''):'Keine aktiven Ausbilder vorhanden. Zuerst über „Zugänge“ einladen.')+'</div></section>';
+}
+function reports(){
+ const admin=role()==='Administrator',manager=admin||!!STATE.rechte?.MeldungenBearbeiten;
+ const cats=['Mangel App','Mangel Ausbildung','Idee Ausbildung','Idee App'],
+  statuses=['Offen','In Bearbeitung','Erledigt','Abgelehnt'];
+ const submit=admin||role()==='Ausbilder'?
+ '<section class="panel"><h2>Idee oder Mangel melden</h2><form data-form="report"><div class="grid">'+
+ '<div><label>Kategorie</label><select name="Kategorie">'+cats.map(x=>'<option>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Betroffener Kurs (optional)</label><select name="KursID"><option value="">Allgemein</option>'+STATE.kurse.map(c=>'<option value="'+h(c.ID)+'">'+h(c.Titel)+'</option>').join('')+'</select></div>'+
+ '<div class="wide"><label>Kurzer Titel</label><input name="Titel" required maxlength="180"></div>'+
+ '<div class="wide"><label>Beschreibung</label><textarea name="Beschreibung" required maxlength="5000" placeholder="Was sollte geändert oder verbessert werden?"></textarea></div>'+
+ '</div><div class="btnline"><button class="primary">Meldung absenden</button></div></form></section>':'';
+ let reports=STATE.meldungen||[];
+ if(REPORT_FILTER.category)reports=reports.filter(x=>x.Kategorie===REPORT_FILTER.category);
+ if(REPORT_FILTER.status)reports=reports.filter(x=>x.Status===REPORT_FILTER.status);
+ return submit+'<section class="panel"><h2>'+(manager?'Meldungsliste':'Meine Meldungen')+'</h2>'+
+ '<div class="grid"><div><label>Nach Kategorie filtern</label><select data-report-category><option value="">Alle Kategorien</option>'+
+ cats.map(x=>'<option value="'+h(x)+'" '+(REPORT_FILTER.category===x?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Nach Status filtern</label><select data-report-status><option value="">Alle Status</option>'+
+ statuses.map(x=>'<option value="'+h(x)+'" '+(REPORT_FILTER.status===x?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div></div>'+
+ '<p class="muted small">'+reports.length+' Meldungen angezeigt</p><div class="items">'+
+ (reports.length?reports.slice().reverse().map(m=>'<div class="item"><div class="row between"><b>'+h(m.Titel)+'</b><span class="tag">'+h(m.Status)+'</span></div>'+
+ '<div class="detail">'+h(m.Kategorie)+' · '+dt(m.ErstelltAm)+(m.KursID?' · '+h(by(STATE.kurse,m.KursID)?.Titel||'Kurs'):'')+'</div>'+
+ '<p class="msg">'+h(m.Beschreibung)+'</p>'+
+ (manager?'<form data-form="reportStatus"><input type="hidden" name="ID" value="'+h(m.ID)+'"><div class="grid">'+
+ '<div><label>Status</label><select name="Status">'+statuses.map(x=>'<option '+(x===m.Status?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Rückmeldung</label><input name="Rueckmeldung" maxlength="1500" value="'+h(m.Rueckmeldung||'')+'"></div></div>'+
+ '<div class="btnline"><button class="smallbtn">Bearbeitung speichern</button></div></form>':
+ (m.Rueckmeldung?'<p class="notice">'+h(m.Rueckmeldung)+'</p>':''))+'</div>').join(''):'Keine Meldungen in dieser Auswahl.')+
+ '</div></section>';
+}
+function ratings(){
+ if(role()!=='Teilnehmer')return '';
+ const pending=STATE.offeneBewertungen||[],done=STATE.eigeneBewertungen||[];
+ const pendingHtml=pending.map(t=>'<form class="item" data-form="rating">'+
+ '<input type="hidden" name="TerminID" value="'+h(t.ID)+'">'+
+ '<b>'+h(by(STATE.kurse,t.KursID)?.Titel||'Ausbildung')+'</b>'+
+ '<p class="detail">'+dt(t.Beginn)+' · '+h(t.Ort||'')+'</p>'+
+ '<label>Wie war der Kurs?</label><select name="Sterne" required><option value="">Bitte bewerten</option>'+
+ [5,4,3,2,1].map(n=>'<option value="'+n+'">'+('★'.repeat(n))+' ('+n+'/5)</option>').join('')+'</select>'+
+ '<label>Deine Anmerkung (freiwillig)</label><textarea name="Kommentar" maxlength="2500" placeholder="Was war gut? Was könnte verbessert werden?"></textarea>'+
+ '<div class="btnline"><button class="primary">Kursbewertung absenden</button></div></form>').join('');
+ return '<section class="panel"><h2>Jetzt Kurs bewerten</h2><p class="muted">Eine Bewertung ist erst möglich, wenn ein Ausbilder deine Anwesenheit als teilgenommen bestätigt hat. Du kannst jeden Kurstermin einmal bewerten.</p>'+
+ '<div class="items">'+(pendingHtml||'Aktuell keine offenen Kursbewertungen.')+'</div></section>'+
+ '<section class="panel"><h2>Meine abgegebenen Bewertungen</h2><div class="items">'+
+ (done.length?done.slice().reverse().map(x=>'<div class="item"><b>'+h(by(STATE.kurse,x.KursID)?.Titel||'Ausbildung')+'</b><div class="detail">'+h('★'.repeat(Number(x.Sterne)||0))+' · '+dt(x.ErstelltAm)+'</div><p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Du hast noch keinen Kurs bewertet.')+
+ '</div></section>';
+}
+function reviews(){
+ if(!STATE.rechte?.BewertungenAnsehen)return '<section class="panel"><p>Keine Berechtigung für die Bewertungsübersicht.</p></section>';
+ const courses=STATE.kurse||[],all=STATE.bewertungen||[];
+ let filtered=all.filter(x=>(!REVIEW_FILTER.course||x.KursID===REVIEW_FILTER.course)&&
+ (!REVIEW_FILTER.score||String(x.Sterne)===REVIEW_FILTER.score));
+ const avg=filtered.length?(filtered.reduce((sum,r)=>sum+(Number(r.Sterne)||0),0)/filtered.length).toFixed(1):'–';
+ return '<section class="panel"><h2>Auswertung Kursbewertungen</h2><div class="cards">'+metric(filtered.length,'Bewertungen')+metric(avg,'Durchschnitt (von 5)')+'</div>'+
+ '<div class="grid"><div><label>Nach Kurs filtern</label><select data-review-course><option value="">Alle Kurse</option>'+
+ courses.map(c=>'<option value="'+h(c.ID)+'" '+(REVIEW_FILTER.course===c.ID?'selected':'')+'>'+h(c.Titel)+'</option>').join('')+'</select></div>'+
+ '<div><label>Nach Sternen filtern</label><select data-review-score><option value="">Alle Sterne</option>'+
+ [5,4,3,2,1].map(n=>'<option value="'+n+'" '+(REVIEW_FILTER.score===String(n)?'selected':'')+'>'+n+' Sterne</option>').join('')+'</select></div></div>'+
+ '<div class="items" style="margin-top:16px">'+
+ (filtered.length?filtered.slice().reverse().map(x=>'<div class="item"><b>'+h(by(courses,x.KursID)?.Titel||'Kurs')+'</b>'+
+ '<div class="detail">'+h('★'.repeat(Number(x.Sterne)||0))+' · '+dt(x.ErstelltAm)+'</div>'+
+ '<p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Noch keine Bewertungen zu dieser Auswahl.')+
+ '</div></section>';
+}
 function areaOptions(sel){return ['Grundausbildung','Erweiterte Ausbildung'].map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
 function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+(c&&safeLinks(c.Links)?'<div class="btnline"><button class="smallbtn" data-linkcourse="'+h(c.ID)+'">Kursunterlagen anzeigen</button></div>':'')+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
-function terms(){let courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');return '<section class="panel"><h2>Ausbildungstermin anlegen</h2><form data-form="term"><div class="grid"><div><label>Kurs</label><select name="KursID" required>'+option(courses,x=>x.Titel+' ('+x.Bereich+')')+'</select></div><div><label>Turnus</label><select name="TurnusID" required>'+option(turnus,x=>x.Bezeichnung+' ('+x.Bereich+')')+'</select></div><div><label>Beginn</label><input type="datetime-local" name="Beginn" required></div><div><label>Ende</label><input type="datetime-local" name="Ende" required></div><div class="wide"><label>Ort</label><input name="Ort" placeholder="z. B. Lehrsaal, Übungshof"></div></div><div class="btnline"><button class="primary">Termin erstellen</button></div></form></section><section class="panel"><h2>Geplante und durchgeführte Termine</h2>'+termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>'}
+function terms(){
+ const courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');
+ const create=STATE.rechte?.TerminePlanen?
+ '<section class="panel"><h2>Ausbildungstermin anlegen</h2><form data-form="term"><div class="grid">'+
+ '<div><label>Veröffentlichter Kurs</label><select name="KursID" required>'+option(courses,x=>x.Titel+' ('+x.Bereich+')')+'</select></div>'+
+ '<div><label>Turnus</label><select name="TurnusID" required>'+option(turnus,x=>x.Bezeichnung+' ('+x.Bereich+')')+'</select></div>'+
+ '<div><label>Beginn</label><input type="datetime-local" name="Beginn" required></div>'+
+ '<div><label>Ende</label><input type="datetime-local" name="Ende" required></div>'+
+ '<div class="wide"><label>Ort</label><input name="Ort" maxlength="160" placeholder="z. B. Lehrsaal, Übungshof"></div></div>'+
+ '<div class="btnline"><button class="primary">Termin erstellen</button></div></form></section>':'';
+ return create+'<section class="panel"><h2>Geplante und durchgeführte Termine</h2>'+
+ termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>';
+}
 function turnusse(){return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid"><div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div></div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section><section class="panel"><h2>Turnusse</h2><div class="items">'+STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div></div>').join('')+'</div></section>'}
-function members(){return '<section class="panel"><h2>Mitglied in einen Turnus aufnehmen</h2><form data-form="member"><div class="grid"><div><label>Vorname</label><input name="Vorname" required></div><div><label>Nachname</label><input name="Nachname" required></div><div><label>E-Mail (für Teilnehmerzugang)</label><input name="Email" type="email"></div><div><label>Telefon</label><input name="Telefon" type="tel"></div><div class="wide"><label>Turnus</label><select name="TurnusID" required>'+option(STATE.turnusse,x=>x.Bezeichnung)+'</select></div></div><label class="inline-check" style="margin-top:16px"><input type="checkbox" name="SofortEinladen" value="JA"> <span>Teilnehmerzugang gleich per E-Mail einladen</span></label><p class="small muted">Für die Einladung ist eine gültige E-Mail-Adresse erforderlich.</p><div class="btnline"><button class="primary">Mitglied aufnehmen</button></div></form><p class="small muted">Nach dem Anlegen werden passende Checklisten automatisch erstellt. Optional kannst du beim Aufnehmen direkt eine E-Mail-Einladung mit Passwortvergabe senden.</p></section><section class="panel"><h2>Mitgliederübersicht ('+STATE.mitglieder.length+')</h2><div class="tablewrap"><table><thead><tr><th>Name</th><th>Turnus</th><th>Kontakt</th><th>Checkliste</th><th>Zugang</th></tr></thead><tbody>'+STATE.mitglieder.map(m=>{const cs=STATE.checks.filter(x=>x.MitgliedID===m.ID);return '<tr><td><b>'+h(name(m))+'</b></td><td>'+h(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'–')+'</td><td>'+h(m.Email||'')+'<br>'+h(m.Telefon||'')+'</td><td>'+cs.filter(c=>c.Status==='Erledigt').length+'/'+cs.length+' erledigt</td><td>'+(m.Email?(STATE.benutzer.some(u=>u.Email.toLowerCase()===m.Email.toLowerCase()&&u.Aktiv==='JA')?'<span class="tag ok">Zugang aktiv</span>':'<button class="smallbtn" data-invite-member="'+h(m.ID)+'">Zugang einladen</button>'):'<span class="muted small">E-Mail fehlt</span>')+'</td></tr>'}).join('')+'</tbody></table></div></section>'}
+function members(){
+ const edit=FORM==='member'&&EDIT?by(STATE.mitglieder,EDIT):null;
+ const options=STATE.turnusse.filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(t.ID===edit?.TurnusID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
+ const form='<section class="panel"><h2>'+(edit?'Mitglied bearbeiten':'Mitglied in einen Turnus aufnehmen')+'</h2>'+
+ '<form data-form="member"><div class="grid"><div><label>Vorname</label><input name="Vorname" required maxlength="100" value="'+h(edit?.Vorname||'')+'"></div>'+
+ '<div><label>Nachname</label><input name="Nachname" required maxlength="100" value="'+h(edit?.Nachname||'')+'"></div>'+
+ '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
+ '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
+ '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
+ (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
+ '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
+ (edit?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+'</div></form>'+
+ '<p class="small muted">Beim Entfernen bleiben Ausbildungsnachweise archiviert und der Teilnehmerzugang wird gesperrt. Bearbeiten eines deaktivierten Mitglieds reaktiviert den Mitgliedseintrag.</p></section>';
+ const rows=STATE.mitglieder.map(m=>{
+   const cs=STATE.checks.filter(c=>c.MitgliedID===m.ID),active=m.Aktiv==='JA';
+   const access=STATE.benutzer.some(u=>u.Email.toLowerCase()===String(m.Email||'').toLowerCase()&&u.Aktiv==='JA');
+   return '<tr><td><b>'+h(name(m))+'</b><span class="tag '+(active?'ok':'bad')+'">'+(active?'Aktiv':'Deaktiviert')+'</span></td>'+
+   '<td>'+h(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'–')+'</td>'+
+   '<td>'+h(m.Email||'')+'<br>'+h(m.Telefon||'')+'</td>'+
+   '<td>'+cs.filter(c=>c.Status==='Erledigt').length+'/'+cs.length+' erledigt</td>'+
+   '<td><div class="btnline"><button class="smallbtn" type="button" data-edit="member" data-id="'+h(m.ID)+'">Bearbeiten</button>'+
+   (active?'<button class="smallbtn" type="button" data-remove-member="'+h(m.ID)+'">Entfernen</button>':'')+
+   (active&&m.Email&&!access?'<button class="smallbtn" type="button" data-invite-member="'+h(m.ID)+'">Zugang einladen</button>':'')+
+   '</div></td></tr>';
+ }).join('');
+ return form+'<section class="panel"><h2>Mitgliederübersicht ('+STATE.mitglieder.length+')</h2><div class="tablewrap"><table>'+
+ '<thead><tr><th>Name</th><th>Turnus</th><th>Kontakt</th><th>Checkliste</th><th>Aktionen</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
 function selectStatus(current){return ['Offen','Erledigt','Nicht erforderlich'].map(x=>'<option value="'+h(x)+'" '+(current===x?'selected':'')+'>'+h(x)+'</option>').join('')}
 function checkRows(subset){return subset.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID),member=by(STATE.mitglieder,ch.MitgliedID);if(!item||!member)return '';return '<form class="item" data-form="check" data-id="'+h(ch.ID)+'"><div class="row between"><div><b>'+h(name(member))+'</b><div class="detail">'+h(item.Titel)+' · '+h(item.Zustaendig)+'</div></div>'+status(ch.Status)+'</div><div class="grid"><div><label>Status</label><select name="Status">'+selectStatus(ch.Status)+'</select></div><div><label>Notiz</label><input name="Kommentar" maxlength="500" value="'+h(ch.Kommentar)+'"></div></div><div class="btnline"><button class="smallbtn">Status speichern</button></div></form>'}).join('')}
 function checks(){return '<section class="panel"><h2>Neuen Checklistenpunkt erstellen</h2><form data-form="checkItem"><div class="grid"><div><label>Bezeichnung</label><input name="Titel" required placeholder="z. B. Bekleidung ausgegeben"></div><div><label>Ausbildungsbereich</label><select name="Bereich"><option value="Alle">Alle</option>'+areaOptions()+'</select></div><div class="wide"><label>Zuständige Stelle</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><div class="btnline"><button class="primary">Punkt erstellen</button></div></form></section><section class="panel"><h2>Offene Aufgaben ('+STATE.checks.filter(x=>x.Status==='Offen').length+')</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status==='Offen'))+'</div></section><section class="panel"><h2>Alle Checklisten-Einträge</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
@@ -155,7 +339,7 @@ function notifications(){
  const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
  const permission=supported?Notification.permission:'Nicht unterstützt';
  const prefs=STATE.pushEigeneRegeln||{};
- const allowed=['Nachrichten','Termine','Aufgaben'].filter(cat=>prefs[cat]!==false);
+ const allowed=['Nachrichten','Termine','Aufgaben','Bewertungen'].filter(cat=>prefs[cat]!==false);
  const help=!supported?'Push wird hier nicht unterstützt. Auf dem iPhone musst du die App zuerst zum Home-Bildschirm hinzufügen und von dort öffnen.':
  permission==='denied'?'Push wurde im Browser verweigert. Bitte in den Geräteeinstellungen freigeben.':
  'Push muss auf jedem Gerät ausdrücklich aktiviert werden. Der Administrator kann die Benachrichtigungsarten zusätzlich einschränken.';
@@ -177,7 +361,7 @@ function pushAdmin(){
  '<div class="items">'+(rows.length?rows.map(u=>'<form class="item" data-form="pushRule">'+
  '<input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'"><div class="row between"><div><b>'+h(u.Name)+'</b><small class="muted">'+h(u.Rolle)+' · '+h(u.Geraete)+' Push-Gerät(e)</small></div>'+
  '<button class="smallbtn" type="submit">Speichern</button></div><div class="row" style="gap:20px">'+
- ['Nachrichten','Termine','Aufgaben'].map(cat=>'<label class="inline-check"><input type="checkbox" name="'+cat+'" value="JA" '+(u[cat]?'checked':'')+'> '+cat+'</label>').join('')+
+ ['Nachrichten','Termine','Aufgaben','Bewertungen'].map(cat=>'<label class="inline-check"><input type="checkbox" name="'+cat+'" value="JA" '+(u[cat]?'checked':'')+'> '+cat+'</label>').join('')+
  '</div></form>').join(''):'Noch keine aktiven Benutzer.')+'</div></section>'+
  '<section class="panel"><h2>Push-Test</h2><p class="small muted">Erst unter „Benachrichtigungen“ das eigene Gerät anmelden.</p><button type="button" class="secondary" data-test-push="1">Test-Push an mich senden</button></section>';
 }
@@ -213,13 +397,42 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
  if(x.dataset.term){TERM=x.dataset.term;render();return}
  if(x.dataset.closeTerm){TERM=null;render();return}
  if(x.dataset.linkcourse){VIEW='courses';render();return}
+ if(x.dataset.submitProject){
+  x.disabled=true;
+  try{const r=await api('submitProject',{ID:x.dataset.submitProject});tip(r.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
+ if(x.dataset.approveProject||x.dataset.returnProject){
+  const isReturn=!!x.dataset.returnProject,id=x.dataset.approveProject||x.dataset.returnProject;
+  let note='';
+  if(isReturn){
+    const response=prompt('Welche Änderungen soll der Ausbilder vornehmen?');
+    if(response===null)return;
+    note=response.trim();
+    if(!note){tip('Bitte eine Rückmeldung eingeben.',true);return;}
+  }else if(!confirm('Dieses Kursprojekt verbindlich freigeben und veröffentlichen?'))return;
+  x.disabled=true;
+  try{const result=await api('reviewProject',{ID:id,Entscheidung:isReturn?'Zurückgeben':'Freigeben',Rueckmeldung:note});tip(result.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
+ if(x.dataset.removeMember){
+  const m=by(STATE.mitglieder,x.dataset.removeMember);
+  if(!m)return;
+  if(!confirm('Mitglied „'+name(m)+'“ aus der aktiven Liste entfernen?\nDer Teilnehmerzugang wird gesperrt. Ausbildungsnachweise bleiben gespeichert.'))return;
+  x.disabled=true;
+  try{const result=await api('removeMember',{ID:m.ID});FORM='';EDIT=null;tip(result.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
  if(x.dataset.inviteMember){
   const m=by(STATE.mitglieder,x.dataset.inviteMember);
   if(!m||!m.Email){tip('Mitglied oder E-Mail-Adresse fehlt.',true);return}
@@ -241,14 +454,24 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
 $('app').addEventListener('change',e=>{
+ if(e.target.matches('[data-report-category]')){REPORT_FILTER.category=e.target.value;render();return;}
+ if(e.target.matches('[data-report-status]')){REPORT_FILTER.status=e.target.value;render();return;}
+ if(e.target.matches('[data-review-course]')){REVIEW_FILTER.course=e.target.value;render();return;}
+ if(e.target.matches('[data-review-score]')){REVIEW_FILTER.score=e.target.value;render();return;}
  const selector=e.target.closest('[data-recipient-mode]');if(!selector)return;
  const form=selector.closest('form');form.querySelectorAll('[data-recipient-target]').forEach(el=>{el.style.display=el.dataset.recipientTarget===selector.value?'block':'none';});
 });
 $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const fd=new FormData(form),type=form.dataset.form,data=Object.fromEntries(fd.entries());const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
  try{if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',data)}
+ else if(type==='project'){if(EDIT)data.ID=EDIT;await doSave('saveProject',data);}
+ else if(type==='permissions')await doSave('setPermission',data);
+ else if(type==='report')await doSave('submitReport',data);
+ else if(type==='reportStatus')await doSave('setReportStatus',data);
+ else if(type==='rating')await doSave('saveRating',data);
  else if(type==='term')await doSave('saveTermin',data);
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
+  if(EDIT)data.ID=EDIT;
   const invite=data.SofortEinladen==='JA',email=String(data.Email||'').trim();
   if(invite&&!email){tip('Für die Zugangseinladung muss eine E-Mail-Adresse eingetragen sein.',true);return;}
   const saved=await api('saveMember',data);
