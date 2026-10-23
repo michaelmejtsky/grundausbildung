@@ -242,7 +242,7 @@ function gaSaveCourse_(u,d){gaRequire_(u,['Administrator']);let val={Titel:gaNee
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Kurse',val);gaLog_(u.ID,'ANLEGEN','Kurs',val.ID,{Titel:val.Titel});return {ok:true};}
 function gaDateTime_(s){s=gaText_(s,30);if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)||Number.isNaN(Date.parse(s)))throw new Error('Datum/Uhrzeit ungültig.');return s;}
 function gaNotify_(userId,type,title,message,reference){
-  const category=type==='Nachricht'?'Nachrichten':type==='Termin'?'Termine':'Aufgaben';
+  const category=type==='Nachricht'?'Nachrichten':type==='Termin'?'Termine':type==='Bewertung'?'Bewertungen':'Aufgaben';
   const allowed=gaPushRule_(userId)[category];
   const hasDevice=gaOptionalRows_('PushGeraete').some(x=>x.BenutzerID===userId&&gaBool_(x.Aktiv));
   const pushStatus=!allowed?'Vom Administrator deaktiviert':hasDevice?'Wartend':'Kein Gerät registriert';
@@ -336,7 +336,19 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);cons
     if(existing)gaReplace_('Teilnahmen',existing.ID,entry);else gaAppend_('Teilnahmen',Object.assign({ID:gaId_(),TerminID:term.ID,MitgliedID:m.ID},entry));
   });gaReplace_('Termine',term.ID,{Status:'Durchgeführt'});
   gaLog_(u.ID,'BESTAETIGEN','Termin',term.ID,{AusbilderIDs:trainerIds,Anwesend:members.filter(m=>answers.get(m.ID)).length,Total:members.length});
-  gaNotifyTurnus_(term.TurnusID,'Teilnahme','Ausbildung dokumentiert','Die Anwesenheit wurde erfasst.',term.ID);return {ok:true};}
+  const course=gaFind_('Kurse',term.KursID);
+  const completed=gaOptionalRows_('Bewertungen');
+  const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv));
+  const firstTime=members.filter(m=>answers.get(m.ID)&&!previous.some(t=>
+    t.TerminID===term.ID&&t.MitgliedID===m.ID&&gaBool_(t.Anwesend)));
+  firstTime.filter(m=>!completed.some(b=>b.TerminID===term.ID&&b.MitgliedID===m.ID)).forEach(m=>{
+    const user=users.find(x=>x.Email.toLowerCase()===String(m.Email||'').toLowerCase());
+    if(user)gaNotify_(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
+      'Du hast an „'+(course?course.Titel:'Ausbildung')+'“ teilgenommen. Du kannst den Kurs jetzt in der App bewerten.',term.ID);
+  });
+  gaPushQueue_(5);
+  return {ok:true,message:'Anwesenheit bestätigt. '+firstTime.length+' neue Bewertungsbenachrichtigungen vorbereitet.'};
+}
 function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.Name,'Name',140),email=gaText_(d.Email,240).toLowerCase(),pwd=String(d.Passwort||'');
   if(!gaEmail_(email)||pwd.length<12)throw new Error('Gültige E-Mail und Passwort mit mindestens 12 Zeichen erforderlich.');
   if(gaRows_('Benutzer').some(x=>x.Email.toLowerCase()===email))throw new Error('Benutzer existiert bereits.');
@@ -515,7 +527,8 @@ function gaPushRule_(userId){
   return {
     Nachrichten:row?gaBool_(row.Nachrichten):true,
     Termine:row?gaBool_(row.Termine):true,
-    Aufgaben:row?gaBool_(row.Aufgaben):true
+    Aufgaben:row?gaBool_(row.Aufgaben):true,
+    Bewertungen:row?gaBool_(row.Bewertungen):true
   };
 }
 function gaSetPushRule_(actor,d){
@@ -525,6 +538,7 @@ function gaSetPushRule_(actor,d){
   const val={Nachrichten:d.Nachrichten===true||d.Nachrichten==='JA'?'JA':'NEIN',
     Termine:d.Termine===true||d.Termine==='JA'?'JA':'NEIN',
     Aufgaben:d.Aufgaben===true||d.Aufgaben==='JA'?'JA':'NEIN',
+    Bewertungen:d.Bewertungen===true||d.Bewertungen==='JA'?'JA':'NEIN',
     AktualisiertAm:gaNow_()};
   const row=gaOptionalRows_('PushRegeln').find(x=>x.BenutzerID===person.ID);
   if(row)gaReplace_('PushRegeln',row.ID,val);
@@ -567,7 +581,7 @@ function gaPushQueue_(limit){
   const devices=gaOptionalRows_('PushGeraete').filter(x=>gaBool_(x.Aktiv));
   const pending=gaRows_('Benachrichtigungen').filter(n=>n.PushStatus==='Wartend').slice(0,Math.max(1,Math.min(10,limit||5)));
   for(const n of pending){
-    const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':'Aufgaben'];
+    const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':n.Typ==='Bewertung'?'Bewertungen':'Aufgaben'];
     const selected=devices.filter(x=>x.BenutzerID===n.BenutzerID);
     if(!allowed||!selected.length){
       gaReplace_('Benachrichtigungen',n.ID,{PushStatus:allowed?'Kein Gerät registriert':'Vom Administrator deaktiviert'});
