@@ -1,8 +1,25 @@
 # Grundausbildung – Feuerwehr St. Pölten Stadt
 
-**Stand: V1.3 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
+**Stand: V1.4.1 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
 
 
+
+## V1.4.1 – Qualifikationsstatus, Teilnehmerdaten und vollständige Auskunft zum Umsetzungsstand
+
+Die **aktuelle** GitHub-Code.gs ist V1.4.1. Der Code ist noch **nicht automatisch** in der bestehenden Apps-Script-Web-App-Bereitstellung installiert. Für den Produktivbetrieb die bestehende Code.gs übernehmen, Script Properties und /exec-Adresse behalten, `gaEinrichten` ausführen, **bestehende Bereitstellung als neue Version** veröffentlichen.
+
+- Mitgliederstamm: Geburtsdatum und **eine** Standesbuchnummer (identisch mit Dienstnummer), plus Name und Kontaktdaten.
+- Admin → Qualifikationen: Einzelne Teilnahmen bestätigen oder verneinen, GAB anerkennen (nur bei Erweiterter Ausbildung), Erste-Hilfe-Nachweis verwalten, Pflichtkurse für GAB/BSW konfigurieren und Status einsehen.
+- Die drei unabhängigen Voraussetzungen `GABAbgeschlossen`, `BSWModulAbgeschlossen`, `Alter16` müssen alle wahr sein, damit `BSWDienstMoeglich` wahr ist. Unbekanntes Geburtsdatum, fehlende Pflichtmodule oder fehlende Teilnahme führen nie automatisch zur Freigabe.
+- Erste Hilfe hat einen **separaten Status** sowie ein nachgewiesenes Kursdatum. `FDISKPlatzhalter` markiert ausdrücklich, ob ein vorläufiger/fiktiver FDISK-Eintrag für die Anmeldung dokumentiert wurde – dieser ist **kein** Erste-Hilfe-Nachweis und zählt nicht als BSW-Kriterium.
+- Admin → Übersicht: Mitglieder, Status GAB, BSW, Mindestalter, BSW-Dienst und Erste Hilfe / FDISK. Teilnehmer → Mein Ausbildungsstand: Fortschrittsbalken, offene Pflichtmodule, Ausbildungscheckliste, bestätigte Ausbildungen, BSW-Freigabe.
+- Persönliche Nachrichten können Teilnehmer und Ausbilder/Verwaltung nach Anmeldung aneinander senden. Die Funktion ist ein Postfach, kein ausgereiftes Chat-Thread-System.
+
+**Noch offen:** Ein eigenständiger externer **API-Zugang für die zukünftige Brandsicherheitswachen-Diensteinteilung** ist absichtlich nicht öffentlich freigeschaltet. Zuerst muss die fremde App feststehen und eine sichere Maschinen-Authentifizierung implementiert werden, die ausschließlich minimal notwendige Statusdaten liefert (Standesbuchnummer, Name, GAB ja/nein, BSW-Modul ja/nein, Mindestalter ja/nein, Freigabe ja/nein). Das Geburtsdatum und andere Personendaten sollen nicht unnötig übertragen werden.
+
+**Ebenfalls offen:** Cloudflare Worker + VAPID-Secrets und mobile Push-Zustellung sind erst nach realer Einrichtung / End-to-End-Test vollständig betriebsbereit. JavaScript-Syntax und lokale BSW-Bedingungstests ersetzen keinen Live-Endpunkttest.
+
+---
 
 ## V1.3 – Kursprojekt-Freigaben, Ausbilderrechte, Qualitätsmeldungen, Bewertungen, Mitgliedsbearbeitung
 
