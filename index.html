@@ -69,6 +69,10 @@ async function initInvite(){
   const params=new URLSearchParams(location.hash.slice(1));
   inviteToken=params.get('invite')||'';
   if(!inviteToken)return;
+  // Die Einladung benutzt eine eigene, nicht vom PWA-Cache abhängige Seite.
+  // Alte E-Mail-Links bleiben damit weiterhin verwendbar.
+  location.replace('./einladung.html#invite='+encodeURIComponent(inviteToken));
+  return;
   // Das Fragment enthält ein einmaliges Geheimnis; niemals protokollieren.
   if(!/^[a-fA-F0-9]{64}$/.test(inviteToken)){
     $('loginForm').classList.add('hidden');
