@@ -126,7 +126,34 @@ function areaOptions(sel){return ['Grundausbildung','Erweiterte Ausbildung'].map
 function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+(c&&safeLinks(c.Links)?'<div class="btnline"><button class="smallbtn" data-linkcourse="'+h(c.ID)+'">Kursunterlagen anzeigen</button></div>':'')+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
 function terms(){let courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');return '<section class="panel"><h2>Ausbildungstermin anlegen</h2><form data-form="term"><div class="grid"><div><label>Kurs</label><select name="KursID" required>'+option(courses,x=>x.Titel+' ('+x.Bereich+')')+'</select></div><div><label>Turnus</label><select name="TurnusID" required>'+option(turnus,x=>x.Bezeichnung+' ('+x.Bereich+')')+'</select></div><div><label>Beginn</label><input type="datetime-local" name="Beginn" required></div><div><label>Ende</label><input type="datetime-local" name="Ende" required></div><div class="wide"><label>Ort</label><input name="Ort" placeholder="z. B. Lehrsaal, Übungshof"></div></div><div class="btnline"><button class="primary">Termin erstellen</button></div></form></section><section class="panel"><h2>Geplante und durchgeführte Termine</h2>'+termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>'}
 function turnusse(){return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid"><div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div></div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section><section class="panel"><h2>Turnusse</h2><div class="items">'+STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div></div>').join('')+'</div></section>'}
-function members(){return '<section class="panel"><h2>Mitglied in einen Turnus aufnehmen</h2><form data-form="member"><div class="grid"><div><label>Vorname</label><input name="Vorname" required></div><div><label>Nachname</label><input name="Nachname" required></div><div><label>E-Mail (für Teilnehmerzugang)</label><input name="Email" type="email"></div><div><label>Telefon</label><input name="Telefon" type="tel"></div><div class="wide"><label>Turnus</label><select name="TurnusID" required>'+option(STATE.turnusse,x=>x.Bezeichnung)+'</select></div></div><label class="inline-check" style="margin-top:16px"><input type="checkbox" name="SofortEinladen" value="JA"> <span>Teilnehmerzugang gleich per E-Mail einladen</span></label><p class="small muted">Für die Einladung ist eine gültige E-Mail-Adresse erforderlich.</p><div class="btnline"><button class="primary">Mitglied aufnehmen</button></div></form><p class="small muted">Nach dem Anlegen werden passende Checklisten automatisch erstellt. Optional kannst du beim Aufnehmen direkt eine E-Mail-Einladung mit Passwortvergabe senden.</p></section><section class="panel"><h2>Mitgliederübersicht ('+STATE.mitglieder.length+')</h2><div class="tablewrap"><table><thead><tr><th>Name</th><th>Turnus</th><th>Kontakt</th><th>Checkliste</th><th>Zugang</th></tr></thead><tbody>'+STATE.mitglieder.map(m=>{const cs=STATE.checks.filter(x=>x.MitgliedID===m.ID);return '<tr><td><b>'+h(name(m))+'</b></td><td>'+h(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'–')+'</td><td>'+h(m.Email||'')+'<br>'+h(m.Telefon||'')+'</td><td>'+cs.filter(c=>c.Status==='Erledigt').length+'/'+cs.length+' erledigt</td><td>'+(m.Email?(STATE.benutzer.some(u=>u.Email.toLowerCase()===m.Email.toLowerCase()&&u.Aktiv==='JA')?'<span class="tag ok">Zugang aktiv</span>':'<button class="smallbtn" data-invite-member="'+h(m.ID)+'">Zugang einladen</button>'):'<span class="muted small">E-Mail fehlt</span>')+'</td></tr>'}).join('')+'</tbody></table></div></section>'}
+function members(){
+ const edit=FORM==='member'&&EDIT?by(STATE.mitglieder,EDIT):null;
+ const options=STATE.turnusse.filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(t.ID===edit?.TurnusID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
+ const form='<section class="panel"><h2>'+(edit?'Mitglied bearbeiten':'Mitglied in einen Turnus aufnehmen')+'</h2>'+
+ '<form data-form="member"><div class="grid"><div><label>Vorname</label><input name="Vorname" required maxlength="100" value="'+h(edit?.Vorname||'')+'"></div>'+
+ '<div><label>Nachname</label><input name="Nachname" required maxlength="100" value="'+h(edit?.Nachname||'')+'"></div>'+
+ '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
+ '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
+ '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
+ (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
+ '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
+ (edit?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+'</div></form>'+
+ '<p class="small muted">Beim Entfernen bleiben Ausbildungsnachweise archiviert und der Teilnehmerzugang wird gesperrt. Bearbeiten eines deaktivierten Mitglieds reaktiviert den Mitgliedseintrag.</p></section>';
+ const rows=STATE.mitglieder.map(m=>{
+   const cs=STATE.checks.filter(c=>c.MitgliedID===m.ID),active=m.Aktiv==='JA';
+   const access=STATE.benutzer.some(u=>u.Email.toLowerCase()===String(m.Email||'').toLowerCase()&&u.Aktiv==='JA');
+   return '<tr><td><b>'+h(name(m))+'</b><span class="tag '+(active?'ok':'bad')+'">'+(active?'Aktiv':'Deaktiviert')+'</span></td>'+
+   '<td>'+h(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'–')+'</td>'+
+   '<td>'+h(m.Email||'')+'<br>'+h(m.Telefon||'')+'</td>'+
+   '<td>'+cs.filter(c=>c.Status==='Erledigt').length+'/'+cs.length+' erledigt</td>'+
+   '<td><div class="btnline"><button class="smallbtn" type="button" data-edit="member" data-id="'+h(m.ID)+'">Bearbeiten</button>'+
+   (active?'<button class="smallbtn" type="button" data-remove-member="'+h(m.ID)+'">Entfernen</button>':'')+
+   (active&&m.Email&&!access?'<button class="smallbtn" type="button" data-invite-member="'+h(m.ID)+'">Zugang einladen</button>':'')+
+   '</div></td></tr>';
+ }).join('');
+ return form+'<section class="panel"><h2>Mitgliederübersicht ('+STATE.mitglieder.length+')</h2><div class="tablewrap"><table>'+
+ '<thead><tr><th>Name</th><th>Turnus</th><th>Kontakt</th><th>Checkliste</th><th>Aktionen</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
 function selectStatus(current){return ['Offen','Erledigt','Nicht erforderlich'].map(x=>'<option value="'+h(x)+'" '+(current===x?'selected':'')+'>'+h(x)+'</option>').join('')}
 function checkRows(subset){return subset.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID),member=by(STATE.mitglieder,ch.MitgliedID);if(!item||!member)return '';return '<form class="item" data-form="check" data-id="'+h(ch.ID)+'"><div class="row between"><div><b>'+h(name(member))+'</b><div class="detail">'+h(item.Titel)+' · '+h(item.Zustaendig)+'</div></div>'+status(ch.Status)+'</div><div class="grid"><div><label>Status</label><select name="Status">'+selectStatus(ch.Status)+'</select></div><div><label>Notiz</label><input name="Kommentar" maxlength="500" value="'+h(ch.Kommentar)+'"></div></div><div class="btnline"><button class="smallbtn">Status speichern</button></div></form>'}).join('')}
 function checks(){return '<section class="panel"><h2>Neuen Checklistenpunkt erstellen</h2><form data-form="checkItem"><div class="grid"><div><label>Bezeichnung</label><input name="Titel" required placeholder="z. B. Bekleidung ausgegeben"></div><div><label>Ausbildungsbereich</label><select name="Bereich"><option value="Alle">Alle</option>'+areaOptions()+'</select></div><div class="wide"><label>Zuständige Stelle</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><div class="btnline"><button class="primary">Punkt erstellen</button></div></form></section><section class="panel"><h2>Offene Aufgaben ('+STATE.checks.filter(x=>x.Status==='Offen').length+')</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status==='Offen'))+'</div></section><section class="panel"><h2>Alle Checklisten-Einträge</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
@@ -213,13 +240,22 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
  if(x.dataset.term){TERM=x.dataset.term;render();return}
  if(x.dataset.closeTerm){TERM=null;render();return}
  if(x.dataset.linkcourse){VIEW='courses';render();return}
+ if(x.dataset.removeMember){
+  const m=by(STATE.mitglieder,x.dataset.removeMember);
+  if(!m)return;
+  if(!confirm('Mitglied „'+name(m)+'“ aus der aktiven Liste entfernen?\nDer Teilnehmerzugang wird gesperrt. Ausbildungsnachweise bleiben gespeichert.'))return;
+  x.disabled=true;
+  try{const result=await api('removeMember',{ID:m.ID});FORM='';EDIT=null;tip(result.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
  if(x.dataset.inviteMember){
   const m=by(STATE.mitglieder,x.dataset.inviteMember);
   if(!m||!m.Email){tip('Mitglied oder E-Mail-Adresse fehlt.',true);return}
@@ -249,6 +285,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='term')await doSave('saveTermin',data);
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
+  if(EDIT)data.ID=EDIT;
   const invite=data.SofortEinladen==='JA',email=String(data.Email||'').trim();
   if(invite&&!email){tip('Für die Zugangseinladung muss eine E-Mail-Adresse eingetragen sein.',true);return;}
   const saved=await api('saveMember',data);
