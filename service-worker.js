@@ -1,5 +1,5 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v2.2';
+const CACHE='ga-shell-v2.3';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png','./feuerwehrauto-safe-v2-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
@@ -23,29 +23,37 @@ self.addEventListener('fetch',event=>{
   }).catch(()=>caches.match(event.request)));
 });
 
-/* Echte System-Pushnachrichten werden auch verarbeitet, wenn die App geschlossen ist. */
+/* System-Push auch bei geschlossener App und gezieltes Öffnen der Nachricht. */
 self.addEventListener('push',event=>{
  let data={};
  try{data=event.data?event.data.json():{}}catch{data={title:'Grundausbildung',body:'Neue Mitteilung'};}
  const title=String(data.title||'Grundausbildung').slice(0,90);
+ // Bisherige Cloudflare-Version sendet die Benachrichtigungs-ID im Tag.
+ const raw=String(data.id||String(data.tag||'').replace(/^grundausbildung-/,''));
+ const id=/^[a-f0-9-]{8,90}$/i.test(raw)?raw:'';
+ const target='./'+(id?'?notification='+encodeURIComponent(id):'');
  event.waitUntil(self.registration.showNotification(title,{
   body:String(data.body||'Du hast eine neue Mitteilung.').slice(0,180),
   icon:'./feuerwehrauto-safe-v2-192.png',
   badge:'./feuerwehrauto-safe-v2-192.png',
-  tag:'grundausbildung-'+String(data.id||'meldung').slice(0,75),
-  data:{url:'./'}
+  tag:id?'grundausbildung-'+id:'grundausbildung-mitteilung',
+  data:{id,url:target}
  }));
 });
 self.addEventListener('notificationclick',event=>{
  event.notification.close();
  event.waitUntil((async()=>{
-   const target=new URL('./',self.location.href).href;
-   const clientsList=await clients.matchAll({type:'window',includeUncontrolled:true});
-   for(const client of clientsList){
-     if(client.url.startsWith(target)){
-       if('focus' in client)return client.focus();
-     }
+   const info=event.notification.data||{};
+   const id=/^[a-f0-9-]{8,90}$/i.test(String(info.id||''))?String(info.id):'';
+   const base=new URL('./',self.location.href);
+   const dest=new URL('./'+(id?'?notification='+encodeURIComponent(id):''),base);
+   const list=await clients.matchAll({type:'window',includeUncontrolled:true});
+   for(const client of list){
+     if(!client.url.startsWith(base.href))continue;
+     // Bereits geöffnete App: Nachricht anzeigen, ohne Benutzersitzung zu verlieren.
+     if(id&&client.postMessage)client.postMessage({type:'ga-open-notification',id});
+     if('focus' in client)return client.focus();
    }
-   if(clients.openWindow)return clients.openWindow(target);
+   if(clients.openWindow)return clients.openWindow(dest.href);
  })());
 });
