@@ -23,7 +23,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.2</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.3</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -435,7 +435,21 @@ function members(){
 function selectStatus(current){return ['Offen','Erledigt','Nicht erforderlich'].map(x=>'<option value="'+h(x)+'" '+(current===x?'selected':'')+'>'+h(x)+'</option>').join('')}
 function checkRows(subset){return subset.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID),member=by(STATE.mitglieder,ch.MitgliedID);if(!item||!member)return '';return '<form class="item" data-form="check" data-id="'+h(ch.ID)+'"><div class="row between"><div><b>'+h(name(member))+'</b><div class="detail">'+h(item.Titel)+' · '+h(item.Zustaendig)+'</div></div>'+status(ch.Status)+'</div><div class="grid"><div><label>Status</label><select name="Status">'+selectStatus(ch.Status)+'</select></div><div><label>Notiz</label><input name="Kommentar" maxlength="500" value="'+h(ch.Kommentar)+'"></div></div><div class="btnline"><button class="smallbtn">Status speichern</button></div></form>'}).join('')}
 function checks(){return '<section class="panel"><h2>Neuen Checklistenpunkt erstellen</h2><form data-form="checkItem"><div class="grid"><div><label>Bezeichnung</label><input name="Titel" required placeholder="z. B. Bekleidung ausgegeben"></div><div><label>Ausbildungsbereich</label><select name="Bereich"><option value="Alle">Alle</option>'+areaOptions()+'</select></div><div class="wide"><label>Zuständige Stelle</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><div class="btnline"><button class="primary">Punkt erstellen</button></div></form></section><section class="panel"><h2>Offene Aufgaben ('+STATE.checks.filter(x=>x.Status==='Offen').length+')</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status==='Offen'))+'</div></section><section class="panel"><h2>Alle Checklisten-Einträge</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
-function users(){return '<section class="panel"><h2>Benutzer per E-Mail einladen</h2><form data-form="user"><div class="grid"><div><label>Anzeigename</label><input name="Name" required></div><div><label>E-Mail-Adresse</label><input type="email" name="Email" required></div><div><label>Rolle</label><select name="Rolle"><option>Teilnehmer</option><option>Ausbilder</option><option>Fachverwaltung</option><option>Administrator</option></select></div><div><label>Zuständigkeitsbereich (für Fachverwaltung)</label><select name="Bereich"><option value="">Ohne Bereich</option><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><p class="small muted">Nach dem Speichern wird eine E-Mail mit einem persönlichen Einmal-Link versendet (7 Tage gültig). Die eingeladene Person vergibt selbst ihr Passwort. Teilnehmer bitte zuerst mit derselben E-Mail unter Mitglieder anlegen.</p><div class="btnline"><button class="primary">Einladungs-E-Mail versenden</button></div></form></section><section class="panel"><h2>Bestehende Zugänge</h2><div class="tablewrap"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Bereich</th><th>Status</th></tr></thead><tbody>'+STATE.benutzer.map(u=>'<tr><td>'+h(u.Name)+'</td><td>'+h(u.Email)+'</td><td>'+h(u.Rolle)+'</td><td>'+h(u.Bereich)+'</td><td>'+(u.Aktiv==='JA'?'Aktiv':'Einladung offen')+'</td></tr>').join('')+'</tbody></table></div></section>'}
+function users(){
+ const invite='<section class="panel"><h2>Neuen Benutzer einladen</h2><form data-form="user"><div class="grid">'+
+ '<div><label>Anzeigename</label><input name="Name" required maxlength="140"></div>'+
+ '<div><label>E-Mail-Adresse</label><input type="email" name="Email" required></div>'+
+ '<div><label>Rolle</label><select name="Rolle"><option>Teilnehmer</option><option>Ausbilder</option><option>Fachverwaltung</option><option>Administrator</option></select></div>'+
+ '<div><label>Zuständigkeitsbereich (Fachverwaltung)</label><select name="Bereich"><option value="">Ohne Bereich</option><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div>'+
+ '<p class="small muted">Der Benutzer legt sein eigenes Passwort über den einmaligen E-Mail-Link fest (7 Tage gültig). Teilnehmer zuerst mit derselben E-Mail unter Mitglieder anlegen.</p>'+
+ '<div class="btnline"><button class="primary">Einladung versenden</button></div></form></section>';
+ const rows=(STATE.benutzer||[]).map(u=>'<tr><td>'+h(u.Name)+'</td><td>'+h(u.Email)+'</td><td>'+h(u.Rolle)+'</td><td>'+h(u.Bereich)+'</td>'+
+ '<td>'+(u.Aktiv==='JA'?'<span class="tag ok">Aktiv</span>':'<span class="tag warn">Einladung offen / inaktiv</span>')+'</td>'+
+ '<td>'+(u.Aktiv==='JA'?'<button type="button" class="smallbtn" data-reset-password="'+h(u.ID)+'">Passwort zurücksetzen</button>':'<span class="small muted">Zuerst aktivieren</span>')+'</td></tr>').join('');
+ return invite+'<section class="panel"><h2>Zugänge verwalten</h2>'+
+ '<p class="small muted">Passwörter sind nicht auslesbar. Bei vergessenem Passwort einen einmaligen Reset-Link an die gespeicherte E-Mail-Adresse senden. Dieser ist 30 Minuten gültig.</p>'+
+ '<div class="tablewrap"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Bereich</th><th>Status</th><th>Passwort</th></tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
 function messages(){
  const admin=role()==='Administrator';
  const recipientMembers=STATE.mitglieder.filter(m=>m.Aktiv==='JA'&&m.Email).slice().sort((a,b)=>name(a).localeCompare(name(b),'de'));
@@ -560,7 +574,7 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -595,6 +609,16 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
   try{const result=await api('removeMember',{ID:m.ID});FORM='';EDIT=null;tip(result.message);await reload();}
   catch(err){tip(err.message,true)}finally{x.disabled=false}
   return;
+ }
+ if(x.dataset.resetPassword){
+   const user=(STATE.benutzer||[]).find(u=>u.ID===x.dataset.resetPassword);
+   if(!user||user.Aktiv!=='JA'){tip('Nur aktive Zugänge können zurückgesetzt werden.',true);return;}
+   if(!confirm('Passwort-Zurücksetzung an '+user.Email+' senden?\nDer Benutzer vergibt sein neues Passwort selbst.'))return;
+   x.disabled=true;
+   try{const result=await api('resetPassword',{BenutzerID:user.ID});tip(result.message);await reload();}
+   catch(err){tip(err.message,true)}
+   finally{x.disabled=false;}
+   return;
  }
  if(x.dataset.inviteMember){
   const m=by(STATE.mitglieder,x.dataset.inviteMember);
