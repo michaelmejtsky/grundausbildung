@@ -8,6 +8,7 @@
 - **Google-Datenbank (bereits erstellt):** https://docs.google.com/spreadsheets/d/1DZPggVf8T2F-GFIT_57kbqWQcSCF1TA6s5GV01iQXJc/edit
 - **Geplante Installations-/Einladungsadresse:** https://michaelmejtsky.github.io/grundausbildung/
 - **GitHub Pages Einstellungen:** https://github.com/michaelmejtsky/grundausbildung/settings/pages
+- **Apps-Script-Web-App (/exec; Bereitstellung vorhanden):** https://script.google.com/macros/s/AKfycbw0t9edW1egW27B1dHhen2I73GZji3JfQ8aBSFAjghd5gZXSTu24r7E_iMvTqBe3hhT/exec
 
 Die GitHub Pages-Adresse funktioniert erst nach erfolgreicher Pages-Veröffentlichung. In GitHub Free muss das Repository dafür ggf. öffentlich sein; bei bestimmten kostenpflichtigen Tarifen kann ein privates Repo GitHub Pages bereitstellen. **Eine Pages-Seite ist unabhängig von der Repo-Sichtbarkeit öffentlich erreichbar.** Keine Passwörter, Mitgliederlisten oder sonstigen vertraulichen Daten auf GitHub ablegen.
 
@@ -41,13 +42,14 @@ Eine einfache direkte `fetch()`-Anbindung von GitHub an Apps Script ist wegen CO
 - **Bereitstellen → Neue Bereitstellung → Web-App**.
 - **Ausführen als:** Ich (Skripteigentümer).
 - **Zugriff:** für die Verbindung über den Worker muss die Web-App ohne Google-Anmeldung erreichbar sein (je nach Workspace-Richtlinien `Jeder`). Das bedeutet ausdrücklich **nicht**, dass die Daten ohne Anmeldung gelesen werden können: `doPost` verlangt einen geheimen Worker-Schlüssel; die eigentlichen Funktionen verlangen außerdem eine passende Sitzung/Rolle. Vor Echtdaten durchprüfen.
-- Nach Bereitstellung die **/exec-URL** kopieren. Nicht den Editor-Link oder `/dev` verwenden.
+- **Bereitstellung vom 23.10.2026 wurde gemeldet.** Die `/exec`-URL steht bereits oben und ist im Worker-Code eingetragen. **Wichtig:** Falls `doPost` bzw. die Einladungsfunktionen nach der Bereitstellung in `Code.gs` geändert wurden, unbedingt in Apps Script eine **neue Version derselben Bereitstellung** veröffentlichen; sonst läuft unter der `/exec`-Adresse noch der alte Code. 
+- Die URL allein beweist noch nicht, dass der Zugriff oder der aktuelle Stand funktioniert.
 
 ### 4. Cloudflare Worker einrichten
 
 - In Cloudflare → **Workers & Pages** → Worker anlegen, Inhalt aus `cloudflare-worker.js` einfügen und bereitstellen.
-- Worker-Variable `GA_SCRIPT_URL` = die oben kopierte Apps-Script-/exec-URL.
-- Worker-**Secret** `GA_WORKER_SECRET` = der in Schritt 2 einmalig erzeugte Schlüssel.
+- Die Apps-Script-URL ist in der Datei `cloudflare-worker.js` **bereits eingetragen**. Die optionale Worker-Variable `GA_SCRIPT_URL` ist nur nötig, wenn die Zieladresse später überschrieben werden soll.
+- Worker-**Secret** `GA_WORKER_SECRET` = der in Schritt 2 einmalig erzeugte Schlüssel. Den Wert **nie im GitHub-Repository speichern**.
 - Worker neu veröffentlichen und dessen HTTPS-Adresse kopieren, z. B. `https://grundausbildung-api.<account>.workers.dev`.
 - Die Worker-Adresse ist **kein Geheimnis**; das Secret bleibt nur serverseitig.
 - Der Worker akzeptiert Browseranfragen nur vom Ursprung `https://michaelmejtsky.github.io`; die Backend-Aktionen haben zusätzliche Rollen- und Tokenprüfungen.
