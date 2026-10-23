@@ -213,7 +213,7 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -228,6 +228,15 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
   try{const result=await api('inviteUser',{Name:name(m),Email:m.Email,Rolle:'Teilnehmer',Bereich:''});tip(result?.message||'Einladung versendet.');await reload();}
   catch(err){tip(err.message,true)}finally{x.disabled=false}
   return;
+ }
+ if(x.dataset.pushEnable||x.dataset.pushDisable||x.dataset.testPush){
+   x.disabled=true;
+   try{
+     const result=x.dataset.pushEnable?await gaEnablePush():x.dataset.pushDisable?await gaDisablePush():await api('testPush');
+     tip(result?.message||'Push-Einstellung aktualisiert.');
+     await reload();
+   }catch(err){tip(err.message,true);}finally{x.disabled=false;}
+   return;
  }
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
@@ -253,6 +262,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='checkItem')await doSave('saveChecklistItem',data);
  else if(type==='check'){data.ID=form.dataset.id;await doSave('setCheck',data)}
  else if(type==='user')await doSave('inviteUser',data);
+ else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }finally{if(btn)btn.disabled=false}
