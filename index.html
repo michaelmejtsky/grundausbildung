@@ -121,12 +121,13 @@ function navs(){
  ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
  ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
- ['reviews','Kursbewertungen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
+ ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
  ['courses','Kurskatalog'],['projects','Kursprojekte'],
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
  ['attendance','Durchführung'],['reports','Mängel & Ideen'],
- ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[])
+ ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[]),
+ ...(can.FrageboegenBearbeiten?[['questionnaires','Fragebögen']]:[])
  ]:r==='Teilnehmer'?[
  ['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],
  ['ratings','Kurs bewerten'],['messages','Nachrichten']
@@ -137,12 +138,12 @@ function title(){return ({
  overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
- reviews:'Kursbewertungen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
+ reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
  attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -301,6 +302,24 @@ function ratings(){
  '<section class="panel"><h2>Bereits abgegeben</h2><div class="items">'+
  (done.length?done.map(x=>'<div class="item"><b>'+h(by(STATE.kurse,x.KursID)?.Titel||'Kurs')+'</b><div class="detail">'+h(x.Sterne)+' / 5 Sterne</div></div>').join(''):'Noch keine Bewertungen.')+
  '</div></section>';
+}
+function questionnaires(){
+ if(!STATE.rechte?.FrageboegenBearbeiten)return '<section class="panel">Keine Berechtigung.</section>';
+ const forms=STATE.frageboegen||[];
+ const courseOpts=[{ID:'ALLGEMEIN',Titel:'Allgemeine Vorlage – gilt für alle Kurse'}].concat(STATE.kurse);
+ const blocks=courseOpts.map(c=>{
+ const configured=forms.find(x=>x.KursID===c.ID);
+ const fallback=gaQuestions(c.ID);
+ const questions=configured?(()=>{try{return JSON.parse(configured.FragenJSON)}catch{return fallback}})():fallback;
+ return '<form class="item" data-form="questionnaire"><input type="hidden" name="KursID" value="'+h(c.ID)+'">'+
+ '<div class="row between"><b>'+h(c.Titel)+'</b><span class="tag">'+(configured?'Eigener Fragebogen':'Allgemeine Vorlage')+'</span></div>'+
+ '<p class="small muted">Eine Frage pro Zeile. Maximal 15 Fragen, Bewertung jeweils von 1 bis 5.</p>'+
+ '<textarea name="Fragen" rows="9" required>'+h(questions.join('\n'))+'</textarea>'+
+ '<div class="btnline"><button class="primary">Fragebogen speichern</button></div></form>';
+ }).join('');
+ return '<section class="panel"><h2>Bewertungsfragebögen verwalten</h2>'+
+ '<p class="muted">Die allgemeine Vorlage gilt automatisch für alle Kurse ohne eigenen Fragebogen. Gespeicherte Kursfragebögen überschreiben die Vorlage. Bereits abgegebene Antworten bleiben unverändert.</p>'+
+ '<div class="items">'+blocks+'</div></section>';
 }
 function reviews(){
  if(!STATE.rechte?.BewertungenAnsehen)return '<section class="panel"><p>Keine Berechtigung für die Bewertungsübersicht.</p></section>';
@@ -594,6 +613,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='permissions')await doSave('setPermission',data);
  else if(type==='report')await doSave('submitReport',data);
  else if(type==='reportStatus')await doSave('setReportStatus',data);
+ else if(type==='questionnaire')await doSave('saveQuestionnaire',data);
  else if(type==='rating'){
   const questions=gaQuestions(by(STATE.termine,data.TerminID)?.KursID),answers={};
   questions.forEach((q,i)=>answers[String(i)]=Number(fd.get('Frage_'+i)));
