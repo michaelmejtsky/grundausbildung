@@ -604,3 +604,158 @@ function gaPushEinrichten(){
   if(!current.length)ScriptApp.newTrigger('gaPushJob_').timeBased().everyMinutes(5).create();
   SpreadsheetApp.getUi().alert('Push-Speicher eingerichtet. Versandprüfung alle 5 Minuten. Für echte Push-Nachrichten noch VAPID-Schlüssel im Cloudflare-Worker hinterlegen.');
 }
+
+
+/** Rollenrechte (nur Admin vergibt Rechte; beim Trainer grundsätzlich alles AUS). */
+const GA_RIGHTS=['KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen'];
+function gaPermissions_(user){
+ if(user.Rolle==='Administrator')return Object.fromEntries(GA_RIGHTS.map(k=>[k,true]));
+ if(user.Rolle!=='Ausbilder')return Object.fromEntries(GA_RIGHTS.map(k=>[k,false]));
+ const own=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===user.ID);
+ return Object.fromEntries(GA_RIGHTS.map(k=>[k,!!own&&gaBool_(own[k])]));
+}
+function gaCan_(user,right){return !!gaPermissions_(user)[right];}
+function gaRequireRight_(user,right){if(!gaCan_(user,right))throw new Error('Für diese Funktion fehlt die Berechtigung: '+right+'.');}
+function gaSetPermission_(actor,d){
+ gaRequire_(actor,['Administrator']);
+ const user=gaRows_('Benutzer').find(x=>x.ID===gaText_(d.BenutzerID,100)&&x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv));
+ if(!user)throw new Error('Bitte einen aktiven Ausbilder wählen.');
+ const values={};GA_RIGHTS.forEach(k=>values[k]=d[k]===true||d[k]==='JA'?'JA':'NEIN');
+ values.AktualisiertAm=gaNow_();
+ const old=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===user.ID);
+ if(old)gaReplace_('Berechtigungen',old.ID,values);
+ else gaAppend_('Berechtigungen',{ID:gaId_(),BenutzerID:user.ID,...values});
+ gaLog_(actor.ID,'BERECHTIGUNG','Benutzer',user.ID,values);
+ return {ok:true,message:'Ausbilderberechtigungen gespeichert.'};
+}
+
+/** Kursprojekte: Ausarbeitung -> Prüfung -> Genehmigung. */
+function gaProjectData_(d){
+ const type=gaChoice_(d.Typ,['Theorie','Praxis'],'Kursart');
+ const url=gaText_(d.PraesentationURL,1500);
+ if(url&&!/^https:\/\/[^\s]+$/i.test(url))throw new Error('Präsentationslink muss mit https:// beginnen.');
+ return {
+  Titel:gaNeed_(d.Titel,'Kurstitel',160),
+  Bereich:gaChoice_(d.Bereich,GA.AREAS,'Ausbildungsbereich'),Typ:type,
+  Inhalt:gaText_(d.Inhalt,8000),Lernziele:gaText_(d.Lernziele,4000),
+  PraesentationURL:url,WeitereLinks:gaLinks_(d.WeitereLinks)
+ };
+}
+function gaProjectComplete_(p){
+ if(!p.Inhalt||!p.Inhalt.trim())throw new Error('Ein Ausbildungsinhalt ist immer Pflicht.');
+ if(p.Typ==='Theorie'&&!p.PraesentationURL)throw new Error('Bei einem Theorie-Kurs ist eine Präsentation verpflichtend. Bei einer Praxisschulung reicht der Ausbildungsinhalt.');
+}
+function gaSaveProject_(u,d){
+ gaRequireRight_(u,'KurseGestalten');
+ const input=gaProjectData_(d),existing=d.ID?gaFind_('KursProjekte',gaText_(d.ID,100)):null;
+ if(d.ID&&!existing)throw new Error('Kursprojekt nicht gefunden.');
+ if(existing){
+  if(existing.Status==='Veröffentlicht'||existing.Status==='Zur Prüfung')throw new Error('Dieses Projekt ist zur Prüfung eingereicht oder bereits veröffentlicht.');
+  if(existing.ErstelltVon!==u.ID&&!gaCan_(u,'KurseFreigeben'))
+    throw new Error('Du kannst nur deine eigenen Kursprojekte bearbeiten.');
+  const status=gaChoice_(d.Status||existing.Status,['Neu','In Ausarbeitung','Zurück zur Bearbeitung'],'Projektstatus');
+  gaReplace_('KursProjekte',existing.ID,{...input,Status:status,GeaendertVon:u.ID,GeaendertAm:gaNow_()});
+  gaLog_(u.ID,'PROJEKT_BEARBEITEN','Kursprojekt',existing.ID,{Titel:input.Titel,Status:status});
+  return {ok:true,message:'Kursprojekt aktualisiert.'};
+ }
+ const status=gaChoice_(d.Status||'Neu',['Neu','In Ausarbeitung'],'Projektstatus');
+ const project={ID:gaId_(),KursID:'',...input,Status:status,ErstelltVon:u.ID,
+  ErstelltAm:gaNow_(),GeaendertVon:u.ID,GeaendertAm:gaNow_(),
+  GeprueftVon:'',GeprueftAm:'',Rueckmeldung:''};
+ gaAppend_('KursProjekte',project);
+ gaLog_(u.ID,'PROJEKT_ANLEGEN','Kursprojekt',project.ID,{Titel:input.Titel});
+ return {ok:true,message:'Neues Kursprojekt angelegt.'};
+}
+function gaSubmitProject_(u,d){
+ gaRequireRight_(u,'KurseGestalten');
+ const project=gaFind_('KursProjekte',gaText_(d.ID,100));
+ if(!project||!['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(project.Status))
+   throw new Error('Dieses Projekt kann gerade nicht eingereicht werden.');
+ if(project.ErstelltVon!==u.ID&&!gaCan_(u,'KurseFreigeben'))throw new Error('Nur eigene Projekte einreichen.');
+ gaProjectComplete_(project);
+ gaReplace_('KursProjekte',project.ID,{Status:'Zur Prüfung',GeaendertVon:u.ID,GeaendertAm:gaNow_(),Rueckmeldung:''});
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID)
+   .forEach(x=>gaNotify_(x.ID,'Aufgabe','Kurs wartet auf Freigabe',project.Titel,project.ID));
+ gaLog_(u.ID,'PROJEKT_EINREICHEN','Kursprojekt',project.ID,{Titel:project.Titel});
+ return {ok:true,message:'Projekt zur Prüfung eingereicht.'};
+}
+function gaReviewProject_(u,d){
+ gaRequireRight_(u,'KurseFreigeben');
+ const project=gaFind_('KursProjekte',gaText_(d.ID,100));
+ if(!project||project.Status!=='Zur Prüfung')throw new Error('Es liegt kein freizugebender Entwurf vor.');
+ const decision=gaChoice_(d.Entscheidung,['Freigeben','Zurückgeben'],'Entscheidung');
+ const notes=gaText_(d.Rueckmeldung,1500);
+ if(decision==='Zurückgeben'&&!notes)throw new Error('Bitte einen Grund für die Überarbeitung angeben.');
+ if(decision==='Zurückgeben'){
+  gaReplace_('KursProjekte',project.ID,{Status:'Zurück zur Bearbeitung',Rueckmeldung:notes,GeprueftVon:u.ID,GeprueftAm:gaNow_()});
+ }else{
+  gaProjectComplete_(project);
+  const links=[project.PraesentationURL,project.WeitereLinks].filter(Boolean).join('\n');
+  let courseId=project.KursID;
+  const changes={Titel:project.Titel,Bereich:project.Bereich,Inhalt:project.Inhalt,
+    Lernziele:project.Lernziele,Links:links,Aktiv:'JA'};
+  if(courseId){
+   const c=gaFind_('Kurse',courseId);if(!c)throw new Error('Verknüpfter Kurs fehlt.');
+   gaReplace_('Kurse',courseId,changes);
+  }else{
+   courseId=gaId_();gaAppend_('Kurse',{ID:courseId,...changes,ErstelltAm:gaNow_()});
+  }
+  gaReplace_('KursProjekte',project.ID,{KursID:courseId,Status:'Veröffentlicht',Rueckmeldung:notes,
+   GeprueftVon:u.ID,GeprueftAm:gaNow_()});
+ }
+ const owner=gaFind_('Benutzer',project.ErstelltVon);
+ if(owner&&gaBool_(owner.Aktiv))gaNotify_(owner.ID,'Aufgabe',decision==='Freigeben'?'Kurs freigegeben':'Kurs zur Überarbeitung zurückgegeben',project.Titel+(notes?' – '+notes:''),project.ID);
+ gaLog_(u.ID,'PROJEKT_'+(decision==='Freigeben'?'FREIGEBEN':'ZURUECKGEBEN'),'Kursprojekt',project.ID,{Rueckmeldung:notes});
+ return {ok:true,message:decision==='Freigeben'?'Kurs freigegeben und veröffentlicht.':'Projekt zur Überarbeitung zurückgegeben.'};
+}
+
+/** Qualitätssicherung: Ideen, Ausbildungsmängel und App-Mängel. */
+function gaSubmitReport_(u,d){
+ gaRequire_(u,['Administrator','Ausbilder']);
+ const val={Kategorie:gaChoice_(d.Kategorie,['Mangel App','Mangel Ausbildung','Idee Ausbildung','Idee App'],'Kategorie'),
+  Titel:gaNeed_(d.Titel,'Titel',180),Beschreibung:gaNeed_(d.Beschreibung,'Beschreibung',5000),
+  KursID:gaText_(d.KursID,100),Status:'Offen',ErstelltVon:u.ID,ErstelltAm:gaNow_(),
+  BearbeitetVon:'',BearbeitetAm:'',Rueckmeldung:''};
+ if(val.KursID&&!gaFind_('Kurse',val.KursID))throw new Error('Ausgewählter Kurs nicht vorhanden.');
+ val.ID=gaId_();gaAppend_('Meldungen',val);
+ gaLog_(u.ID,'MELDUNG_ANLEGEN','Meldung',val.ID,{Kategorie:val.Kategorie,Titel:val.Titel});
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'MeldungenBearbeiten')&&x.ID!==u.ID)
+   .forEach(x=>gaNotify_(x.ID,'Aufgabe','Neue '+val.Kategorie,val.Titel,val.ID));
+ return {ok:true,message:'Meldung erfasst.'};
+}
+function gaSetReportStatus_(u,d){
+ gaRequireRight_(u,'MeldungenBearbeiten');
+ const old=gaFind_('Meldungen',gaText_(d.ID,100));if(!old)throw new Error('Meldung nicht gefunden.');
+ const status=gaChoice_(d.Status,['Offen','In Bearbeitung','Erledigt','Abgelehnt'],'Status'),
+  note=gaText_(d.Rueckmeldung,1500);
+ gaReplace_('Meldungen',old.ID,{Status:status,Rueckmeldung:note,BearbeitetVon:u.ID,BearbeitetAm:gaNow_()});
+ const creator=gaFind_('Benutzer',old.ErstelltVon);
+ if(creator&&gaBool_(creator.Aktiv)&&creator.ID!==u.ID)
+  gaNotify_(creator.ID,'Aufgabe','Meldung aktualisiert',old.Titel+' – '+status,old.ID);
+ gaLog_(u.ID,'MELDUNG_STATUS','Meldung',old.ID,{Status:status});
+ return {ok:true,message:'Bearbeitungsstatus gespeichert.'};
+}
+
+/** Teilnehmerbewertungen nur für bestätigte Anwesenheiten, 1 pro Termin. */
+function gaSaveRating_(u,d){
+ gaRequire_(u,['Teilnehmer']);
+ const member=gaRows_('Mitglieder').find(m=>gaBool_(m.Aktiv)&&m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase());
+ if(!member)throw new Error('Kein aktives Mitgliedsprofil zugeordnet.');
+ const term=gaFind_('Termine',gaText_(d.TerminID,100));
+ if(!term||term.Status!=='Durchgeführt'||term.TurnusID!==member.TurnusID)
+  throw new Error('Der Kurs wurde noch nicht für deinen Turnus durchgeführt.');
+ const attendance=gaRows_('Teilnahmen').find(x=>x.TerminID===term.ID&&x.MitgliedID===member.ID&&gaBool_(x.Anwesend));
+ if(!attendance)throw new Error('Bewertungen sind nur nach bestätigter Anwesenheit erlaubt.');
+ const course=gaFind_('Kurse',term.KursID);
+ if(!course||!gaBool_(course.Aktiv))throw new Error('Kurs nicht veröffentlicht.');
+ const score=Number(d.Sterne);
+ if(!Number.isInteger(score)||score<1||score>5)throw new Error('Bitte eine Bewertung von 1 bis 5 Sternen vergeben.');
+ const comment=gaText_(d.Kommentar,2500);
+ const prev=gaOptionalRows_('Bewertungen').find(x=>x.TerminID===term.ID&&x.MitgliedID===member.ID);
+ if(prev)throw new Error('Du hast diesen Termin bereits bewertet.');
+ const entry={ID:gaId_(),TerminID:term.ID,KursID:course.ID,MitgliedID:member.ID,
+  Sterne:String(score),Kommentar:comment,ErstelltAm:gaNow_(),AktualisiertAm:gaNow_()};
+ gaAppend_('Bewertungen',entry);
+ gaLog_(u.ID,'BEWERTUNG','Termin',term.ID,{KursID:course.ID,Sterne:score});
+ return {ok:true,message:'Vielen Dank! Deine Kursbewertung wurde gespeichert.'};
+}
