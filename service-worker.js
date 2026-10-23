@@ -1,5 +1,5 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v1.3';
+const CACHE='ga-shell-v1.4';
 const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
@@ -21,4 +21,31 @@ self.addEventListener('fetch',event=>{
     }
     return response;
   }).catch(()=>caches.match(event.request)));
+});
+
+/* Echte System-Pushnachrichten werden auch verarbeitet, wenn die App geschlossen ist. */
+self.addEventListener('push',event=>{
+ let data={};
+ try{data=event.data?event.data.json():{}}catch{data={title:'Grundausbildung',body:'Neue Mitteilung'};}
+ const title=String(data.title||'Grundausbildung').slice(0,90);
+ event.waitUntil(self.registration.showNotification(title,{
+  body:String(data.body||'Du hast eine neue Mitteilung.').slice(0,180),
+  icon:'./icon-192.png',
+  badge:'./icon-192.png',
+  tag:'grundausbildung-'+String(data.id||'meldung').slice(0,75),
+  data:{url:'./'}
+ }));
+});
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();
+ event.waitUntil((async()=>{
+   const target=new URL('./',self.location.href).href;
+   const clientsList=await clients.matchAll({type:'window',includeUncontrolled:true});
+   for(const client of clientsList){
+     if(client.url.startsWith(target)){
+       if('focus' in client)return client.focus();
+     }
+   }
+   if(clients.openWindow)return clients.openWindow(target);
+ })());
 });
