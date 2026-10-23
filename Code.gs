@@ -226,7 +226,7 @@ function gaState_(u){
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
   benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
-  kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseFreigeben):[],
+  kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[],
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
@@ -671,8 +671,7 @@ function gaSaveProject_(u,d){
  if(d.ID&&!existing)throw new Error('Kursprojekt nicht gefunden.');
  if(existing){
   if(existing.Status==='Veröffentlicht'||existing.Status==='Zur Prüfung')throw new Error('Dieses Projekt ist zur Prüfung eingereicht oder bereits veröffentlicht.');
-  if(existing.ErstelltVon!==u.ID&&!gaCan_(u,'KurseFreigeben'))
-    throw new Error('Du kannst nur deine eigenen Kursprojekte bearbeiten.');
+  // Alle Ausbilder mit Gestaltungsrecht dürfen gemeinsam an noch offenen Projekten arbeiten.
   const status=gaChoice_(d.Status||existing.Status,['Neu','In Ausarbeitung','Zurück zur Bearbeitung'],'Projektstatus');
   gaReplace_('KursProjekte',existing.ID,{...input,Status:status,GeaendertVon:u.ID,GeaendertAm:gaNow_()});
   gaLog_(u.ID,'PROJEKT_BEARBEITEN','Kursprojekt',existing.ID,{Titel:input.Titel,Status:status});
@@ -691,7 +690,7 @@ function gaSubmitProject_(u,d){
  const project=gaFind_('KursProjekte',gaText_(d.ID,100));
  if(!project||!['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(project.Status))
    throw new Error('Dieses Projekt kann gerade nicht eingereicht werden.');
- if(project.ErstelltVon!==u.ID&&!gaCan_(u,'KurseFreigeben'))throw new Error('Nur eigene Projekte einreichen.');
+ // Gestaltungsberechtigte Ausbilder können gemeinsam ausgearbeitete Projekte einreichen.
  gaProjectComplete_(project);
  gaReplace_('KursProjekte',project.ID,{Status:'Zur Prüfung',GeaendertVon:u.ID,GeaendertAm:gaNow_(),Rueckmeldung:''});
  gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID)
