@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -18,7 +18,8 @@ const GA = Object.freeze({
     MitgliedChecks: ['ID','MitgliedID','PunktID','Status','Kommentar','GeaendertVon','GeaendertAm'],
     Nachrichten: ['ID','Titel','Text','TurnusID','VonBenutzerID','ErstelltAm'],
     Benachrichtigungen: ['ID','BenutzerID','Typ','Titel','Text','BezugID','ErstelltAm','GelesenAm','PushStatus'],
-    Protokoll: ['ID','Zeit','BenutzerID','Aktion','Entitaet','EntitaetID','Details']
+    Protokoll: ['ID','Zeit','BenutzerID','Aktion','Entitaet','EntitaetID','Details'],
+    Einladungen: ['ID','BenutzerID','Email','TokenHash','ExpiresAt','UsedAt','Status','ErstelltVon','ErstelltAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -95,7 +96,7 @@ function gaSystemPruefen() {
   SpreadsheetApp.getUi().alert(missing.length?'Fehlende Tabellen: '+missing.join(', '):
     'OK · '+names.length+' Tabellen; '+gaRows_('Benutzer').length+' Benutzer; '+gaRows_('Kurse').length+' Kurse; '+gaRows_('Mitglieder').length+' Mitglieder.');
 }
-function doGet(){return HtmlService.createHtmlOutputFromFile('Index').setTitle('Grundausbildung · FF St. Pölten').addMetaTag('viewport','width=device-width, initial-scale=1');}
+function doGet(){return HtmlService.createHtmlOutputFromFile('Bridge').setTitle('Grundausbildung · API').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}
 
 function gaId_(){return Utilities.getUuid();}
 function gaNow_(){return Utilities.formatDate(new Date(),Session.getScriptTimeZone()||'Europe/Vienna',"yyyy-MM-dd'T'HH:mm:ss");}
@@ -141,7 +142,7 @@ function gaLogin(email,password){
   const fail='f_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,email)).slice(0,50);
   if(Number(cache.get(fail)||0)>=8)throw new Error('Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.');
   const u=gaRows_('Benutzer').find(v=>v.Email.toLowerCase()===email&&gaBool_(v.Aktiv));
-  if(!u||!gaSame_(gaHash_(password,u.Salt),u.Hash)){
+  if(!u||!u.Hash||!u.Salt||!gaSame_(gaHash_(password,u.Salt),u.Hash)){
     cache.put(fail,String(Number(cache.get(fail)||0)+1),900);
     throw new Error('E-Mail oder Passwort ungültig.');
   }
@@ -151,7 +152,7 @@ function gaLogin(email,password){
   gaLog_(u.ID,'LOGIN','Benutzer',u.ID,{});
   return {token,user:gaPublicUser_(u),version:GA.VERSION};
 }
-function gaPublicUser_(u){return {ID:u.ID,Name:u.Name,Email:u.Email,Rolle:u.Rolle,Bereich:u.Bereich};}
+function gaPublicUser_(u){return {ID:u.ID,Name:u.Name,Email:u.Email,Rolle:u.Rolle,Bereich:u.Bereich,Aktiv:u.Aktiv};}
 function gaRequire_(u,roles){if(!roles.includes(u.Rolle))throw new Error('Keine Berechtigung für diese Funktion.');}
 function gaLock_(callback){const l=LockService.getScriptLock();l.waitLock(20000);try{return callback();}finally{l.releaseLock();}}
 function gaApi(method,data,token){
@@ -165,7 +166,7 @@ function gaApi(method,data,token){
   if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
-  if(method==='saveUser')return gaLock_(()=>gaSaveUser_(u,d));
+  if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
   if(method==='sendMessage')return gaLock_(()=>gaSendMessage_(u,d));
   if(method==='readNotification')return gaLock_(()=>gaReadNotification_(u,d));
   throw new Error('Unbekannte Aktion.');
@@ -268,3 +269,93 @@ function gaSendMessage_(u,d){gaRequire_(u,['Administrator']);const title=gaNeed_
   else gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)).forEach(x=>gaNotify_(x.ID,'Nachricht',title,message.slice(0,240),id));
   gaLog_(u.ID,'SENDEN','Nachricht',id,{TurnusID:turnusId});return {ok:true};}
 function gaReadNotification_(u,d){const n=gaFind_('Benachrichtigungen',d.ID);if(!n||n.BenutzerID!==u.ID)throw new Error('Benachrichtigung nicht gefunden.');gaReplace_('Benachrichtigungen',n.ID,{GelesenAm:gaNow_()});return {ok:true};}
+
+/**
+ * Einmalige Einladungen statt vom Admin vergebener Startpasswörter.
+ * Einladungstokens liegen NUR als SHA-256-Digest in der privaten Tabelle.
+ * Keine Zugangsdaten im GitHub-Repository speichern!
+ */
+function gaInviteDigest_(token) {
+  return Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token), Utilities.Charset.UTF_8)
+  );
+}
+function gaInviteLink_(token) {
+  const appUrl = PropertiesService.getScriptProperties().getProperty('GA_APP_URL') ||
+    'https://michaelmejtsky.github.io/grundausbildung/';
+  if(!/^https:\/\/[a-z0-9.-]+\/[\w./-]*\/?$/i.test(appUrl))
+    throw new Error('GA_APP_URL ist ungültig; nur HTTPS-App-Adressen sind erlaubt.');
+  const base=appUrl.split('#')[0];
+  return base + (base.includes('#') ? '' : '#') + 'invite=' + encodeURIComponent(token);
+}
+function gaInviteUser_(actor,d) {
+  gaRequire_(actor,['Administrator']);
+  const name=gaNeed_(d.Name,'Name',140);
+  const email=gaText_(d.Email,240).toLowerCase();
+  if(!gaEmail_(email))throw new Error('Bitte gültige E-Mail angeben.');
+  const role=gaChoice_(d.Rolle,GA.ROLES,'Rolle');
+  const bereich=role==='Fachverwaltung'?gaNeed_(d.Bereich,'Zuständigkeit',100):gaText_(d.Bereich,100);
+  if(role==='Teilnehmer'&&!gaRows_('Mitglieder').some(m=>gaBool_(m.Aktiv)&&m.Email.toLowerCase()===email))
+    throw new Error('Für Teilnehmer zuerst das Mitglied mit derselben E-Mail in der Mitgliederverwaltung anlegen.');
+  const others=gaRows_('Benutzer'),existing=others.find(x=>x.Email.toLowerCase()===email);
+  if(existing&&gaBool_(existing.Aktiv))throw new Error('Dieser Benutzer ist bereits aktiv.');
+  if(existing&&existing.Rolle!==role)throw new Error('Eine offene Einladung für eine andere Rolle besteht. Bitte Administrator prüfen lassen.');
+  if(existing) gaReplace_('Benutzer',existing.ID,{Name:name,Bereich:bereich});
+  else gaAppend_('Benutzer',{ID:gaId_(),Name:name,Email:email,Rolle:role,Bereich:bereich,Aktiv:'NEIN',Salt:'',Hash:'',ErstelltAm:gaNow_()});
+  const user=existing||gaRows_('Benutzer').find(x=>x.Email===email);
+  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
+  const invite={ID:gaId_(),BenutzerID:user.ID,Email:email,TokenHash:gaInviteDigest_(token),
+    ExpiresAt:String(Date.now()+7*24*60*60*1000),UsedAt:'',Status:'Offen',ErstelltVon:actor.ID,ErstelltAm:gaNow_()};
+  const all=gaRows_('Einladungen');
+  all.filter(i=>i.BenutzerID===user.ID&&i.Status==='Offen')
+    .forEach(i=>gaReplace_('Einladungen',i.ID,{Status:'Ersetzt'}));
+  gaAppend_('Einladungen',invite);
+  const link=gaInviteLink_(token);
+  try {
+    MailApp.sendEmail({
+      to:email,subject:'Feuerwehr St. Pölten – Einladung zur Ausbildungsplattform',
+      body:'Hallo '+name+',\n\n'+
+        'du wurdest zur Ausbildungsplattform der Feuerwehr St. Pölten eingeladen.\n'+
+        'Öffne diesen persönlichen Einladungslink und lege dein eigenes Passwort fest:\n\n'+
+        link+'\n\n'+
+        'Der Einladungslink ist einmalig nutzbar und 7 Tage gültig.\n'+
+        'Bitte den Link nicht weiterleiten.\n\n'+
+        'Feuerwehr St. Pölten – Ausbildung'
+    });
+  } catch(e) {
+    gaReplace_('Einladungen',invite.ID,{Status:'Versandfehler'});
+    gaLog_(actor.ID,'EINLADUNG_FEHLER','Benutzer',user.ID,{Email:email});
+    throw new Error('Einladung wurde angelegt, aber E-Mail-Versand ist fehlgeschlagen. Bitte Berechtigung/Sendekontingent prüfen.');
+  }
+  gaLog_(actor.ID,'EINLADUNG_GESENDET','Benutzer',user.ID,{Email:email,Rolle:role});
+  return {ok:true,message:'Einladung per E-Mail gesendet (7 Tage gültig).'};
+}
+function gaInviteCheck_(token){
+  token=String(token||'');
+  if(!/^[a-fA-F0-9]{64}$/.test(token))throw new Error('Ungültiger Einladungslink.');
+  const digest=gaInviteDigest_(token);
+  const item=gaRows_('Einladungen').find(i=>gaSame_(i.TokenHash,digest));
+  if(!item||item.Status!=='Offen'||Number(item.ExpiresAt)<Date.now())
+    throw new Error('Dieser Einladungslink ist ungültig, abgelaufen oder bereits verwendet. Bitte einen neuen anfordern.');
+  const user=gaFind_('Benutzer',item.BenutzerID);
+  if(!user||gaBool_(user.Aktiv))throw new Error('Einladung nicht mehr gültig.');
+  return {Name:user.Name,Email:user.Email,Rolle:user.Rolle,Bereich:user.Bereich};
+}
+function gaCheckInvite(token){return gaInviteCheck_(token);}
+function gaAcceptInvite(token,password){
+  return gaLock_(()=>{
+    const info=gaInviteCheck_(token);
+    password=String(password||'');
+    if(password.length<12||password.length>256)
+      throw new Error('Das Passwort muss 12 bis 256 Zeichen lang sein.');
+    const digest=gaInviteDigest_(token);
+    const item=gaRows_('Einladungen').find(i=>gaSame_(i.TokenHash,digest)&&i.Status==='Offen');
+    const user=gaFind_('Benutzer',item.BenutzerID);
+    if(user.Email!==info.Email)throw new Error('Einladung konnte nicht zugeordnet werden.');
+    const salt=gaId_()+gaId_();
+    gaReplace_('Benutzer',user.ID,{Salt:salt,Hash:gaHash_(password,salt),Aktiv:'JA'});
+    gaReplace_('Einladungen',item.ID,{Status:'Verwendet',UsedAt:gaNow_()});
+    gaLog_(user.ID,'EINLADUNG_ANGENOMMEN','Benutzer',user.ID,{});
+    return {ok:true};
+  });
+}
