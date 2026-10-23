@@ -156,7 +156,7 @@ function projects(){
  const r=STATE.rechte||{},canCreate=!!r.KurseGestalten,canApprove=!!r.KurseFreigeben;
  const project=FORM==='project'&&EDIT?by(STATE.kursProjekte,EDIT):null;
  const editable=project&&project.Status!=='Zur Prüfung'&&project.Status!=='Veröffentlicht'&&
-  (project.ErstelltVon===STATE.user.ID||canApprove);
+  (canCreate||canApprove);
  const form=canCreate&&(!project||editable)?'<section class="panel"><h2>'+h(project?'Kursprojekt bearbeiten':'Neues Ausbildungsprojekt')+'</h2>'+
  '<form data-form="project"><div class="grid">'+
  '<div><label>Kurstitel</label><input name="Titel" required maxlength="160" value="'+h(project?.Titel||'')+'"></div>'+
@@ -173,8 +173,8 @@ function projects(){
  '</div></form></section>':'';
  const projectsList=(STATE.kursProjekte||[]).slice().reverse().map(p=>{
   const isOwner=p.ErstelltVon===STATE.user.ID;
-  const amend=canCreate&&(isOwner||canApprove)&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
-  const submit=canCreate&&(isOwner||canApprove)&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
+  const amend=canCreate&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
+  const submit=canCreate&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(p.Status);
   const approve=canApprove&&p.Status==='Zur Prüfung';
   return '<div class="item"><div class="row between"><div><b>'+h(p.Titel)+'</b><div class="detail">'+h(p.Bereich)+' · '+h(p.Typ)+' · Status: '+h(p.Status)+'</div></div>'+status(p.Status)+'</div>'+
   (p.Rueckmeldung?'<div class="notice">Prüfvermerk: '+h(p.Rueckmeldung)+'</div>':'')+
