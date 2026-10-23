@@ -1,6 +1,31 @@
 # Grundausbildung – Feuerwehr St. Pölten Stadt
 
-**Stand: V1.2 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
+**Stand: V1.3 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
+
+
+
+## V1.3 – Kursprojekt-Freigaben, Ausbilderrechte, Qualitätsmeldungen, Bewertungen, Mitgliedsbearbeitung
+
+**GitHub-Stand: umgesetzt und JavaScript-Syntax geprüft.** Die neue Backend-Funktionalität ist erst aktiv, wenn die aktuelle `Code.gs` in das gebundene Google Apps Script übernommen und unter der **bestehenden /exec-Bereitstellung als neue Version** veröffentlicht wird. Die GitHub Pages Oberfläche aktualisiert sich unabhängig davon. Bis zum Backend-Update nicht mit neuen V1.3-Funktionen produktiv arbeiten.
+
+### Bedienung
+
+- **Mitglieder** → `Bearbeiten` übernimmt alle Felder; `Entfernen` deaktiviert das Mitglied, sperrt den verknüpften Teilnehmerzugang und dessen Push-Geräte, löscht jedoch keine Anwesenheits-, Checklisten- oder Bewertungsnachweise. Bearbeiten eines deaktivierten Eintrags kann ihn reaktivieren. Bei vorhandenem Login ist eine eigenständige Änderung der E-Mail gesperrt, damit nicht versehentlich ein falscher Account verknüpft wird.
+- **Ausbilderrechte (Admin)**: fünf getrennte Rechte pro aktivem Ausbilder: `KurseGestalten`, `KurseFreigeben`, `TerminePlanen`, `MeldungenBearbeiten` und `BewertungenAnsehen`. Ohne explizite Freigabe können Ausbilder keine neuen Kurse oder Termine veröffentlichen. Nur Administratoren dürfen Rechte vergeben.
+- **Kursprojekte**: Neue Entwürfe `Neu` / `In Ausarbeitung` → `Zur Prüfung` → `Veröffentlicht` oder `Zurück zur Bearbeitung` mit Rückmeldung. Einreichung setzt **Ausbildungsinhalt immer** voraus; bei `Theorie` zusätzlich einen **HTTPS-Präsentationslink**. Bei `Praxis` reicht der Ausbildungsinhalt. Veröffentlichung erfolgt erst nach Prüfung durch Admin oder eine Person mit `KurseFreigeben`; dann wird der Kurs im freigegebenen Katalog verfügbar.
+- **Mängel & Ideen**: Ausbilder melden `Mangel App`, `Mangel Ausbildung`, `Idee Ausbildung` oder `Idee App`. Filter für Kategorie/Status und Bearbeitung mit Rückmeldung für Admin bzw. Berechtigte.
+- **Kursbewertungen**: Teilnehmer sehen ihre bewertbaren Termine **erst nach bestätigter Anwesenheit** (durchgeführt und Anwesend=JA). Eine Bewertung pro Kurstermin, 1–5 Sterne und optionaler Kommentar; kein Duplikat. Admin bzw. berechtigte Ausbilder werten nach Kurs und Sternen aus. Nach der **ersten** bestätigten Anwesenheit erzeugt das Backend eine Bewertungserinnerung als In-App-/Push-Benachrichtigung. Die Push-Zustellung benötigt weiterhin den eingerichteten Worker, VAPID-Secrets und aktivierte Geräte.
+- **Push-Steuerung** ergänzt `Bewertungen` als vierte Kategorie, zusätzlich zu Nachrichten, Terminen und Aufgaben.
+
+### Aktualisierung ohne Datenverlust
+
+1. Bestehende Datenbank: Die vier neuen privaten Blätter `Berechtigungen`, `KursProjekte`, `Meldungen` und `Bewertungen` sowie `PushRegeln!G1 = Bewertungen` sind bereits angelegt. Bestehende Mitgliederdaten wurden dabei nicht verändert. Bitte nicht neu importieren und nicht freigeben.
+2. Das zu dieser Tabelle gehörende Apps Script öffnen. Den bisherigen Inhalt von **Code.gs** durch die aktuelle [GitHub-Code.gs](https://github.com/michaelmejtsky/grundausbildung/blob/main/Code.gs) ersetzen; speichern. **Skripteigenschaften wie GA_WORKER_SECRET keinesfalls löschen oder verändern.**
+3. Google-Tabelle neu laden. Menü `Grundausbildung → 1 · Tabellen prüfen/erstellen` ausführen (prüft Spalten, löscht keine Einträge). Berechtigungen nur bei Bedarf gewähren.
+4. Im Apps Script `Bereitstellen → Bereitstellungen verwalten → Bearbeiten → Version: Neue Version → Bereitstellen`. Die bestehende **/exec**-Adresse muss gleich bleiben. Falls die App noch die alte Version zeigt: mit neuem Login/Seitenaktualisierung testen; der Service Worker wurde auf `ga-shell-v1.5` erhöht.
+5. Prüfen: Mitglied bearbeiten/entfernen; Ausbilder ohne Rechte darf keinen Kurs veröffentlichen; Theorie-Projekt ohne Präsentation darf nicht zur Prüfung eingereicht werden; Kursbewertung ohne bestätigte Teilnahme muss abgelehnt werden. Noch keine realen Push-Erfolge zusagen, bevor die Zustellung auf Geräten getestet wurde.
+
+Hinweis: Bereits vor V1.3 existierende veröffentlichte Kursvorlagen bleiben aus Kompatibilitätsgründen verfügbar. Der neue Prüf-Workflow gilt für neu angelegte Kursprojekte. Direkte Admin-Manipulationen in Google Sheets oder Apps Script müssen weiterhin organisatorisch abgesichert werden.
 
 
 ## Neu in V1.2 – gezielte Nachrichten, Soforteinladung, Web-Push
