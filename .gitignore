@@ -6,3 +6,7 @@
 *.json.bak
 *.log
 .DS_Store
+.dev.vars
+.dev.vars.*
+.env
+.env.*
