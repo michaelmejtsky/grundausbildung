@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10283f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Grundausbildung"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="./icon.svg"><title>Grundausbildung | Feuerwehr</title>
+<style>
+:root{--navy:#10283f;--navy2:#193a59;--blue:#175eae;--bg:#f3f6f9;--card:#fff;--text:#193047;--muted:#6b7e90;--line:#dee6ef;--green:#187348;--red:#a33b39;--orange:#ae6d14}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:var(--blue);word-break:break-word}.hidden{display:none!important}
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(145deg,#0c243a,#24577f)}.login-card{max-width:430px;width:100%;background:white;border-radius:20px;box-shadow:0 14px 45px #07172955;padding:30px}.logo{width:52px;height:52px;background:#e7f1fd;color:#135c9c;border-radius:16px;display:grid;place-items:center;font-size:28px;margin-bottom:14px}.login-card h1{margin:0 0 6px;font-size:26px}.sub{color:var(--muted);font-size:14px;margin:0 0 20px}
+label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c536b}input:not([type=checkbox]),select,textarea{background:white;width:100%;border:1px solid #cbd6e1;border-radius:9px;padding:11px 12px;color:var(--text)}textarea{min-height:90px;resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid #a8cff4;border-color:#2b77c7}.primary,.secondary,.smallbtn{border:none;border-radius:10px;padding:11px 15px;font-weight:700}.primary{background:var(--blue);color:white}.primary:hover{background:#114d91}.secondary{background:#eaf0f6;color:var(--navy)}.smallbtn{background:#edf3f9;color:#1b5a95;font-size:12px;padding:7px 11px}.full{width:100%}.error{background:#ffefef;color:#9c1e29;padding:11px;border-radius:10px;margin:10px 0}.success{background:#eaf7ee;color:#136239;padding:11px;border-radius:10px;margin:10px 0}.muted{color:var(--muted)}.small{font-size:12px}.layout{display:grid;grid-template-columns:254px 1fr;min-height:100vh}.sidebar{background:var(--navy);padding:25px 16px;color:white;position:sticky;top:0;height:100vh;overflow:auto}.brand{font-weight:800;font-size:20px;line-height:1.12;padding:8px 11px 21px}.brand small{display:block;color:#a8c5dc;font-weight:500;font-size:12px;margin-top:7px}.menu{display:flex;flex-direction:column;gap:4px}.menu button{width:100%;border:0;background:transparent;color:#d6e4f0;text-align:left;padding:12px 13px;border-radius:10px;font-weight:600}.menu button.active,.menu button:hover{background:#2d5374;color:white}.sidebar-user{margin-top:25px;border-top:1px solid #486074;padding:15px 10px;font-size:12px;color:#e1edf7}.sidebar-user strong{display:block;margin-bottom:5px;font-size:14px}.sidebar-user button{margin-top:12px;color:white;background:none;border:1px solid #6a8195;border-radius:8px;padding:7px 12px}
+.main{min-width:0;padding:26px 34px;max-width:1500px;width:100%;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:22px}.top h1{font-size:29px;margin:0}.top p{color:var(--muted);margin:6px 0 0}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:14px;margin-bottom:18px}.metric{background:white;border:1px solid var(--line);border-radius:15px;padding:19px}.metric .n{font-size:31px;font-weight:850}.metric .k{font-size:13px;color:var(--muted);margin-top:5px}.panel{background:var(--card);border-radius:16px;border:1px solid var(--line);padding:21px;margin:15px 0;overflow:hidden}.panel h2{margin:0 0 13px;font-size:18px}.panel h3{font-size:15px;margin:14px 0 7px}.panel p{line-height:1.5}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.between{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}.grid .wide{grid-column:1/-1}.tag{display:inline-block;border-radius:999px;background:#edf2f8;color:#46617b;padding:5px 10px;font-size:12px;font-weight:700}.tag.ok{background:#e5f5ec;color:#167045}.tag.warn{background:#fff3de;color:#976211}.tag.bad{background:#fbeaea;color:#a74045}.tag.blue{background:#e8f0fc;color:#285fa2}.items{display:flex;flex-direction:column;gap:10px}.item{border:1px solid var(--line);padding:13px;border-radius:12px;background:white}.item b{display:block}.item .detail{color:var(--muted);font-size:13px;margin-top:4px}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th{text-align:left;background:#f0f4f8;color:#4a5e72}td,th{padding:11px;border-bottom:1px solid var(--line);vertical-align:top}td:last-child{min-width:100px}.inline-check{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:14px}.inline-check input{width:18px;height:18px}.btnline{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.notice{background:#eef5fd;border-left:3px solid #4685c7;border-radius:8px;padding:12px;color:#345473;font-size:13px}.pillcount{background:#cf4949;border-radius:999px;color:white;padding:2px 7px;font-size:11px}.url-list{padding-left:18px;margin:8px 0}.divider{border:0;border-top:1px solid var(--line);margin:18px 0}.msg{white-space:pre-wrap;overflow-wrap:anywhere}.toast{position:fixed;right:16px;bottom:18px;z-index:3;padding:12px 15px;background:#143e63;color:white;border-radius:10px;box-shadow:0 6px 30px #10203044;max-width:370px}.toast.err{background:#a43d44}.mobilebar{display:none}
+@media(max-width:840px){.layout{display:block}.sidebar{height:auto;position:relative;padding:8px 12px}.brand{font-size:18px;padding-bottom:9px}.menu{flex-direction:row;overflow:auto;padding-bottom:4px}.menu button{width:auto;white-space:nowrap;font-size:13px;padding:10px}.sidebar-user{display:none}.main{padding:18px 13px}.top h1{font-size:24px}.grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.panel{padding:16px}.mobilebar{display:flex;justify-content:space-between;align-items:center;padding:10px}.brand small{font-size:11px}}
+</style></head><body>
+<div id="login" class="login-wrap"><div class="login-card"><div class="logo">🚒</div><h1>Grundausbildung</h1><p class="sub">Ausbildungsplattform · Feuerwehr St. Pölten Stadt</p><form id="loginForm"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required><div id="loginError" class="hidden error"></div><button class="primary full" style="margin-top:20px" type="submit">Anmelden</button></form>
+<div id="invitePanel" class="hidden">
+  <div class="notice">Persönlicher Einladungslink</div>
+  <p id="inviteDescription" class="small muted">Einladung wird geprüft …</p>
+  <form id="inviteForm">
+    <label>Eigenes Passwort festlegen</label><input type="password" id="newPassword" required minlength="12" maxlength="256" autocomplete="new-password" placeholder="Mindestens 12 Zeichen">
+    <label>Passwort wiederholen</label><input type="password" id="confirmPassword" required minlength="12" maxlength="256" autocomplete="new-password">
+    <div id="inviteError" class="error hidden"></div>
+    <button class="primary full" style="margin-top:18px" type="submit">Passwort festlegen und Zugang aktivieren</button>
+  </form>
+</div>
+<button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
+<div id="backendInfo" class="small muted" style="margin-top:13px"></div>
+<p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<iframe id="gaBridgeFrame" title="Geschützte Datenverbindung" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0" tabindex="-1"></iframe>
+<script src="./config.js"></script>
+<script>
+'use strict';
+let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={};
+const $=id=>document.getElementById(id);
+const h=s=>String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const by=(arr,id)=>(arr||[]).find(x=>x.ID===id);
+const dt=v=>h(String(v||'').replace('T',' '));
+const name=m=>m?(m.Vorname+' '+m.Nachname):'–';
+const arr=x=>Array.isArray(x)?x:[];
+const option=(items,label,empty='Bitte auswählen')=>'<option value="">'+h(empty)+'</option>'+items.map(x=>'<option value="'+h(x.ID)+'">'+h(label(x))+'</option>').join('');
+const f=(name,value='')=>'<input name="'+h(name)+'" value="'+h(value)+'">';
+const safeLinks=s=>String(s||'').split(/\n/).map(x=>x.trim()).filter(x=>/^https:\/\//i.test(x)).map(x=>'<li><a target="_blank" rel="noopener noreferrer" href="'+h(x)+'">'+h(x)+'</a></li>').join('');
+const status=s=>'<span class="tag '+(s==='Erledigt'||s==='Durchgeführt'?'ok':s==='Nicht erforderlich'?'blue':s==='Offen'?'warn':'')+'">'+h(s||'Offen')+'</span>';
+
+/* GitHub Pages (Oberfläche) ↔ Apps Script (geschütztes Backend). */
+const BRIDGE=$('gaBridgeFrame');
+const PENDING=new Map();
+let READY=false, READY_RESOLVE;
+const readyPromise=new Promise(resolve=>{READY_RESOLVE=resolve;});
+let SEQ=0,inviteToken='';
+function bridgeOrigin(origin){
+  try{
+    const url=new URL(origin);
+    return url.protocol==='https:' &&
+      (url.hostname==='script.google.com'||url.hostname.endsWith('.googleusercontent.com'));
+  }catch(e){return false;}
+}
+window.addEventListener('message',event=>{
+  if(event.source!==BRIDGE.contentWindow||!bridgeOrigin(event.origin))return;
+  const msg=event.data||{};if(msg.source!=='GA_BRIDGE')return;
+  if(msg.ready){READY=true;READY_RESOLVE();return;}
+  const entry=PENDING.get(msg.requestId);if(!entry)return;
+  PENDING.delete(msg.requestId);clearTimeout(entry.timer);
+  if(msg.ok)entry.resolve(msg.value);
+  else entry.reject(new Error(msg.error||'Anfrage fehlgeschlagen'));
+});
+if(window.GA_BACKEND_URL && /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(window.GA_BACKEND_URL.trim())){
+  BRIDGE.src=window.GA_BACKEND_URL.trim();
+}else{
+  $('backendInfo').textContent='Die Verbindung ist noch nicht eingerichtet. Der Administrator muss zuerst die Apps-Script-Web-App bereitstellen.';
+}
+async function rpc(fn,...args){
+  if(!BRIDGE.src||!/^https:\/\/script\.google\.com\/macros\/s\//.test(BRIDGE.src))
+    throw new Error('Backend noch nicht verbunden. Bitte zuerst config.js im GitHub-Projekt einrichten.');
+  if(!READY) await Promise.race([readyPromise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Apps Script nicht erreichbar. Bitte Bereitstellung und Berechtigungen prüfen.')),25000))]);
+  return new Promise((resolve,reject)=>{
+    const requestId='g'+Date.now().toString(36)+'-'+(++SEQ);
+    const timer=setTimeout(()=>{
+      PENDING.delete(requestId);
+      reject(new Error('Zeitüberschreitung bei der Anfrage.'));
+    },45000);
+    PENDING.set(requestId,{resolve,reject,timer});
+    BRIDGE.contentWindow.postMessage({source:'GA_APP',requestId,method:fn,args},'*');
+  });
+}
+async function initInvite(){
+  const params=new URLSearchParams(location.hash.slice(1));
+  inviteToken=params.get('invite')||'';
+  if(!inviteToken)return;
+  $('loginForm').classList.add('hidden');$('invitePanel').classList.remove('hidden');
+  try{
+    const user=await rpc('gaCheckInvite',inviteToken);
+    $('inviteDescription').textContent='Hallo '+user.Name+'! Dein Zugang als '+user.Rolle+
+      ' ('+user.Email+') ist vorbereitet. Bitte ein eigenes Passwort mit mindestens 12 Zeichen wählen.';
+  }catch(e){
+    $('inviteError').textContent=e.message;$('inviteError').classList.remove('hidden');
+    $('inviteForm').classList.add('hidden');
+  }
+}
+$('inviteForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const pwd=$('newPassword').value,verify=$('confirmPassword').value;
+  if(pwd!==verify){
+    $('inviteError').textContent='Die Passwörter stimmen nicht überein.';
+    $('inviteError').classList.remove('hidden');return;
+  }
+  const button=event.target.querySelector('button');button.disabled=true;
+  try{
+    await rpc('gaAcceptInvite',inviteToken,pwd);
+    inviteToken='';
+    history.replaceState(null,'',location.pathname+location.search);
+    $('invitePanel').classList.add('hidden');$('loginForm').classList.remove('hidden');
+    $('inviteError').classList.add('hidden');
+    $('loginError').textContent='Dein Zugang ist aktiviert. Bitte jetzt anmelden.';
+    $('loginError').className='success';
+  }catch(e){
+    $('inviteError').textContent=e.message;$('inviteError').classList.remove('hidden');
+  }finally{button.disabled=false;}
+});
+let installPrompt=null;
+window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;});
+async function installApp(){
+  if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;return;}
+  alert('App installieren:\n\nAndroid (Chrome): Menü ⋮ → Zum Startbildschirm hinzufügen / App installieren.\n\niPhone (Safari): Teilen → Zum Home-Bildschirm.');
+}
+$('installApp').addEventListener('click',installApp);
+$('installAppTop').addEventListener('click',installApp);
+if('serviceWorker' in navigator&&location.protocol==='https:'){
+  navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+}
+initInvite();
+function tip(msg,error=false){let e=$('toast');e.textContent=msg;e.className='toast'+(error?' err':'');clearTimeout(tip.timer);tip.timer=setTimeout(()=>e.classList.add('hidden'),5000);}
+async function api(action,payload={}){return rpc('gaApi',action,payload,TOKEN)}
+async function reload(){STATE=await api('state');render();}
+function role(){return STATE?.user?.Rolle}
+function navs(){const r=role();const base=r==='Administrator'?[['overview','Übersicht'],['courses','Kurse'],['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],['users','Zugänge'],['messages','Nachrichten']]:r==='Ausbilder'?[['courses','Kurse & Unterlagen'],['attendance','Durchführung']]:r==='Teilnehmer'?[['mine','Mein Ausbildungsstand'],['myterms','Meine Termine'],['messages','Nachrichten']]:[['tasks','Meine Aufgaben']];return base.concat([['notifications','Benachrichtigungen']]);}
+function title(){return ({overview:'Übersicht',courses:'Kurse & Unterlagen',terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',users:'Benutzerzugänge',messages:'Nachrichten',attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen'})[VIEW]||'Grundausbildung';}
+function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():notifications();}
+function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
+function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
+function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+(role()==='Administrator'?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Bearbeiten</button></div>':'')+'</div>'}
+function courses(){const edit=FORM==='course'&&EDIT?by(STATE.kurse,EDIT):null;const form=role()==='Administrator'?'<section class="panel"><h2>'+(edit?'Kurs bearbeiten':'Neuen Kurs anlegen')+'</h2><form data-form="course"><div class="grid"><div><label>Kurstitel</label><input name="Titel" required maxlength="160" value="'+h(edit?.Titel||'')+'"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions(edit?.Bereich)+'</select></div><div class="wide"><label>Kursinhalt</label><textarea name="Inhalt">'+h(edit?.Inhalt||'')+'</textarea></div><div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit?.Lernziele||'')+'</textarea></div><div class="wide"><label>Links zu Google-Präsentationen, Drive oder PDF (je Zeile ein HTTPS-Link)</label><textarea name="Links" placeholder="https://docs.google.com/presentation/d/...">'+h(edit?.Links||'')+'</textarea></div></div><div class="btnline"><button class="primary" type="submit">'+(edit?'Änderung speichern':'Kurs speichern')+'</button>'+(edit?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+'</div></form></section>':'';return form+'<section class="panel"><h2>Kurskatalog ('+STATE.kurse.length+')</h2><div class="items">'+(STATE.kurse.length?STATE.kurse.map(courseCard).join(''):'Noch keine Kurse vorhanden.')+'</div></section>'}
+function areaOptions(sel){return ['Grundausbildung','Erweiterte Ausbildung'].map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
+function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+(c&&safeLinks(c.Links)?'<div class="btnline"><button class="smallbtn" data-linkcourse="'+h(c.ID)+'">Kursunterlagen anzeigen</button></div>':'')+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
+function terms(){let courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');return '<section class="panel"><h2>Ausbildungstermin anlegen</h2><form data-form="term"><div class="grid"><div><label>Kurs</label><select name="KursID" required>'+option(courses,x=>x.Titel+' ('+x.Bereich+')')+'</select></div><div><label>Turnus</label><select name="TurnusID" required>'+option(turnus,x=>x.Bezeichnung+' ('+x.Bereich+')')+'</select></div><div><label>Beginn</label><input type="datetime-local" name="Beginn" required></div><div><label>Ende</label><input type="datetime-local" name="Ende" required></div><div class="wide"><label>Ort</label><input name="Ort" placeholder="z. B. Lehrsaal, Übungshof"></div></div><div class="btnline"><button class="primary">Termin erstellen</button></div></form></section><section class="panel"><h2>Geplante und durchgeführte Termine</h2>'+termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>'}
+function turnusse(){return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid"><div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div></div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section><section class="panel"><h2>Turnusse</h2><div class="items">'+STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div></div>').join('')+'</div></section>'}
+function members(){return '<section class="panel"><h2>Mitglied in einen Turnus aufnehmen</h2><form data-form="member"><div class="grid"><div><label>Vorname</label><input name="Vorname" required></div><div><label>Nachname</label><input name="Nachname" required></div><div><label>E-Mail (für Teilnehmerzugang)</label><input name="Email" type="email"></div><div><label>Telefon</label><input name="Telefon" type="tel"></div><div class="wide"><label>Turnus</label><select name="TurnusID" required>'+option(STATE.turnusse,x=>x.Bezeichnung)+'</select></div></div><div class="btnline"><button class="primary">Mitglied aufnehmen</button></div></form><p class="small muted">Nach dem Anlegen werden passende Checklisten automatisch erstellt. Der Login wird separat unter „Zugänge“ angelegt.</p></section><section class="panel"><h2>Mitgliederübersicht ('+STATE.mitglieder.length+')</h2><div class="tablewrap"><table><thead><tr><th>Name</th><th>Turnus</th><th>Kontakt</th><th>Checkliste</th></tr></thead><tbody>'+STATE.mitglieder.map(m=>{const cs=STATE.checks.filter(x=>x.MitgliedID===m.ID);return '<tr><td><b>'+h(name(m))+'</b></td><td>'+h(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'–')+'</td><td>'+h(m.Email||'')+'<br>'+h(m.Telefon||'')+'</td><td>'+cs.filter(c=>c.Status==='Erledigt').length+'/'+cs.length+' erledigt</td></tr>'}).join('')+'</tbody></table></div></section>'}
+function selectStatus(current){return ['Offen','Erledigt','Nicht erforderlich'].map(x=>'<option value="'+h(x)+'" '+(current===x?'selected':'')+'>'+h(x)+'</option>').join('')}
+function checkRows(subset){return subset.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID),member=by(STATE.mitglieder,ch.MitgliedID);if(!item||!member)return '';return '<form class="item" data-form="check" data-id="'+h(ch.ID)+'"><div class="row between"><div><b>'+h(name(member))+'</b><div class="detail">'+h(item.Titel)+' · '+h(item.Zustaendig)+'</div></div>'+status(ch.Status)+'</div><div class="grid"><div><label>Status</label><select name="Status">'+selectStatus(ch.Status)+'</select></div><div><label>Notiz</label><input name="Kommentar" maxlength="500" value="'+h(ch.Kommentar)+'"></div></div><div class="btnline"><button class="smallbtn">Status speichern</button></div></form>'}).join('')}
+function checks(){return '<section class="panel"><h2>Neuen Checklistenpunkt erstellen</h2><form data-form="checkItem"><div class="grid"><div><label>Bezeichnung</label><input name="Titel" required placeholder="z. B. Bekleidung ausgegeben"></div><div><label>Ausbildungsbereich</label><select name="Bereich"><option value="Alle">Alle</option>'+areaOptions()+'</select></div><div class="wide"><label>Zuständige Stelle</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><div class="btnline"><button class="primary">Punkt erstellen</button></div></form></section><section class="panel"><h2>Offene Aufgaben ('+STATE.checks.filter(x=>x.Status==='Offen').length+')</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status==='Offen'))+'</div></section><section class="panel"><h2>Alle Checklisten-Einträge</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
+function users(){return '<section class="panel"><h2>Benutzer per E-Mail einladen</h2><form data-form="user"><div class="grid"><div><label>Anzeigename</label><input name="Name" required></div><div><label>E-Mail-Adresse</label><input type="email" name="Email" required></div><div><label>Rolle</label><select name="Rolle"><option>Teilnehmer</option><option>Ausbilder</option><option>Fachverwaltung</option><option>Administrator</option></select></div><div><label>Zuständigkeitsbereich (für Fachverwaltung)</label><select name="Bereich"><option value="">Ohne Bereich</option><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div></div><p class="small muted">Nach dem Speichern wird eine E-Mail mit einem persönlichen Einmal-Link versendet (7 Tage gültig). Die eingeladene Person vergibt selbst ihr Passwort. Teilnehmer bitte zuerst mit derselben E-Mail unter Mitglieder anlegen.</p><div class="btnline"><button class="primary">Einladungs-E-Mail versenden</button></div></form></section><section class="panel"><h2>Bestehende Zugänge</h2><div class="tablewrap"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Bereich</th><th>Status</th></tr></thead><tbody>'+STATE.benutzer.map(u=>'<tr><td>'+h(u.Name)+'</td><td>'+h(u.Email)+'</td><td>'+h(u.Rolle)+'</td><td>'+h(u.Bereich)+'</td><td>'+(u.Aktiv==='JA'?'Aktiv':'Einladung offen')+'</td></tr>').join('')+'</tbody></table></div></section>'}
+function messages(){const admin=role()==='Administrator';const compose=admin?'<section class="panel"><h2>Nachricht verfassen</h2><form data-form="message"><div class="grid"><div class="wide"><label>Betreff</label><input name="Titel" required></div><div><label>Empfänger</label><select name="TurnusID"><option value="">Alle Teilnehmer</option>'+STATE.turnusse.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('')+'</select></div><div class="wide"><label>Nachricht</label><textarea name="Text" required></textarea></div></div><div class="btnline"><button class="primary">Nachricht einstellen</button></div></form></section>':'';return compose+'<section class="panel"><h2>Nachrichten</h2><div class="items">'+STATE.nachrichten.slice().reverse().map(n=>'<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b><small class="muted">'+dt(n.ErstelltAm)+'</small></div><p class="msg">'+h(n.Text)+'</p></div>').join('')+'</div></section>'}
+function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(STATE.kurse,term.KursID),ms=STATE.mitglieder.filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA'),trainers=STATE.benutzer.filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));let previous=STATE.teilnahmen.filter(x=>x.TerminID===term.ID);return '<section class="panel"><div class="row between"><h2>'+h(c?.Titel||'Kurs')+'</h2><button class="secondary" data-close-term="1">Zurück</button></div><p class="muted">'+dt(term.Beginn)+' · '+h(term.Ort)+'</p>'+(c?courseCard(c):'')+'<hr class="divider"><h2>Anwesenheit bestätigen</h2><form data-form="attendance"><h3>Teilnehmer</h3>'+ms.map(m=>{let old=previous.find(t=>t.MitgliedID===m.ID);return '<label class="inline-check"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(old?.Anwesend==='JA'?'checked':'')+'> '+h(name(m))+'</label>'}).join('')+'<h3>Durchführende Ausbilder</h3>'+trainers.map(t=>{let old=previous[0]?.AusbilderIDs?.split(',')||[];return '<label class="inline-check"><input type="checkbox" name="trainer" value="'+h(t.ID)+'" '+(old.includes(t.ID)||(!previous.length&&t.ID===STATE.user.ID)?'checked':'')+'> '+h(t.Name)+'</label>'}).join('')+'<div class="notice">Mit Bestätigung werden Anwesenheit, Ausbilder, Datum und der bestätigende Benutzer protokolliert. Eine erneute Bestätigung korrigiert den Datensatz mit neuem Protokolleintrag.</div><div class="btnline"><button class="primary">Ausbildung verbindlich bestätigen</button></div></form></section>'}return '<section class="panel"><h2>Ausbildung auswählen</h2><p class="muted">Öffne den Termin, sieh die Unterlagen und bestätige anschließend die Anwesenheit.</p><div class="items">'+STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)).map(t=>{let c=by(STATE.kurse,t.KursID);return '<div class="item"><div class="row between"><div><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(t.Beginn)+' · '+h(t.Ort)+'</div></div><button class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div></div>'}).join('')+'</div></section>'}
+function mine(){const m=STATE.meMember;if(!m)return '<section class="panel"><h2>Teilnehmerprofil noch nicht zugeordnet</h2><p>Bitte den Administrator bitten, deine E-Mail beim Mitgliedseintrag zu hinterlegen.</p></section>';const total=STATE.checks.length,done=STATE.checks.filter(x=>x.Status==='Erledigt'||x.Status==='Nicht erforderlich').length;return '<div class="cards">'+metric(done+' / '+total,'Verwaltungsaufgaben abgeschlossen')+metric(STATE.teilnahmen.filter(t=>t.Anwesend==='JA').length,'Absolvierte Termine')+metric(STATE.termine.filter(t=>t.Status==='Geplant').length,'Anstehende Kurstermine')+'</div><section class="panel"><h2>Meine Checkliste</h2><div class="items">'+STATE.checks.map(ch=>{const item=by(STATE.checklistenpunkte,ch.PunktID);return '<div class="item"><div class="row between"><b>'+h(item?.Titel||'Aufgabe')+'</b>'+status(ch.Status)+'</div>'+(ch.Kommentar?'<p class="muted">'+h(ch.Kommentar)+'</p>':'')+'</div>'}).join('')+'</div></section><section class="panel"><h2>Absolvierte Ausbildungen</h2><div class="items">'+STATE.teilnahmen.filter(t=>t.Anwesend==='JA').map(t=>{let term=by(STATE.termine,t.TerminID),c=term&&by(STATE.kurse,term.KursID);return '<div class="item"><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(term?.Beginn)+' · '+status('Erledigt')+'</div></div>'}).join('')+'</div></section>'}
+function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
+function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
+function notifications(){return '<section class="panel"><h2>Benachrichtigungen</h2><p class="small muted">Diese Einträge erscheinen in der App. System-Push im Hintergrund ist in Version 1.0 noch nicht aktiviert.</p><div class="items">'+(STATE.benachrichtigungen.length?STATE.benachrichtigungen.map(n=>'<div class="item"><div class="row between"><b>'+h(n.Titel)+'</b>'+(n.GelesenAm?'<span class="tag">Gelesen</span>':'<span class="tag blue">Neu</span>')+'</div><p class="msg">'+h(n.Text)+'</p><div class="detail">'+dt(n.ErstelltAm)+'</div>'+(!n.GelesenAm?'<div class="btnline"><button class="smallbtn" data-read="'+h(n.ID)+'">Als gelesen markieren</button></div>':'')+'</div>').join(''):'Noch keine Benachrichtigungen.')+'</div></section>'}
+async function doSave(method,data){try{await api(method,data);FORM='';EDIT=null;tip('Erfolgreich gespeichert.');await reload();}catch(e){tip(e.message,true)}}
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
+async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
+$('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read]');if(!x)return;
+ if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
+ if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
+ if(x.dataset.cancel){FORM='';EDIT=null;render();return}
+ if(x.dataset.term){TERM=x.dataset.term;render();return}
+ if(x.dataset.closeTerm){TERM=null;render();return}
+ if(x.dataset.linkcourse){VIEW='courses';render();return}
+ if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
+});
+$('app').addEventListener('submit',async e=>{const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const fd=new FormData(form),type=form.dataset.form,data=Object.fromEntries(fd.entries());const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
+ try{if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',data)}
+ else if(type==='term')await doSave('saveTermin',data);
+ else if(type==='turnus')await doSave('saveTurnus',data);
+ else if(type==='member')await doSave('saveMember',data);
+ else if(type==='checkItem')await doSave('saveChecklistItem',data);
+ else if(type==='check'){data.ID=form.dataset.id;await doSave('setCheck',data)}
+ else if(type==='user')await doSave('inviteUser',data);
+ else if(type==='message')await doSave('sendMessage',data);
+ else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
+ }finally{if(btn)btn.disabled=false}
+});
+</script></body></html>
