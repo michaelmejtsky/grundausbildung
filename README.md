@@ -1,3 +1,11 @@
+## V1.5.3 – Passwort zurücksetzen und korrigiertes App-Symbol
+
+- Admin → **Zugänge**: Für aktive Benutzer **Passwort zurücksetzen** wählen. Nur die hinterlegte E-Mail bekommt einen einmaligen 30-Minuten-Link zur selbstständigen Passwortänderung. Passwörter sind nicht auslesbar. Bestehende Anmeldesitzungen werden bei der Passwortänderung ungültig.
+- Bestehende Einladung: unverändert 7 Tage und einmalig gültig. Zurücksetzung funktioniert über dieselbe sichere Aktivierungsseite auch bei bereits aktiven Benutzern.
+- Nach Aktualisieren der bestehenden Apps-Script-Web-App mit GitHub-`Code.gs` V1.5.3 bitte **neu anmelden**: das erweiterte Sitzungsformat macht vorherige Sitzungen ungültig.
+- Neues **Feuerwehrauto-Homescreen-Icon** mit größerem Innenabstand in separaten 192px/512px PNG-Dateien. Geräte mit bereits installierter App: alte Homescreen-Verknüpfung entfernen und neu installieren, falls altes Icon bleibt.
+- Für Web-Push: Cloudflare Worker muss aktuelle `cloudflare-worker.js` Version aus GitHub erhalten. In **Workers & Pages → grundausbildung → Settings → Variables and Secrets** VAPID_PUBLIC_KEY (Text), VAPID_PRIVATE_JWK (Secret) und VAPID_SUBJECT (Text, `mailto:`) hinterlegen. Werte paarweise lokal erzeugen über `push-einrichten.html`, Private Key niemals ins GitHub-Repo. Vorherige `GA_WORKER_SECRET` und die Apps-Script-Bereitstellungsadresse unverändert lassen. In der Google-Tabelle Menü „Push-Speicher und Trigger einrichten“ einmal ausführen; danach pro Mobilgerät Push aktivieren und Test schicken. Hintergrundzustellung erst nach echtem End-to-End-Test als funktionierend betrachten.
+
 
 ## V1.5.2 – Ausbildungsstufen und Bewertungsfragebögen
 - **Stufenfolge:** Grundausbildung (GAB) → Erweiterte Ausbildung. Motivierte GAB-Teilnehmer dürfen bereits während der GAB an erweiterten Ausbildungsangeboten teilnehmen. Nach bestätigter GAB mit allen definierten Pflichtmodulen wird die **aktuell angezeigte Ausbildungsstufe automatisch** zur Erweiterten Ausbildung. Die vorhandene Turnuszuordnung und bestätigte Kursnachweise bleiben unverändert; ein Wechsel in einen anderen konkreten Turnus ist eine separate Verwaltungsaktion.
