@@ -10,7 +10,7 @@ const GA = Object.freeze({
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
-    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm','Geburtsdatum','Dienstnummer','Standesbuchnummer'],
+    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm','Geburtsdatum','Standesbuchnummer'],
     Kurse: ['ID','Titel','Bereich','Inhalt','Lernziele','Links','Aktiv','ErstelltAm'],
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
@@ -286,7 +286,7 @@ function gaSaveMember_(u,d){
   const email=gaText_(d.Email,240).toLowerCase();
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
-    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Dienstnummer:gaText_(d.Dienstnummer,35),Standesbuchnummer:gaText_(d.Standesbuchnummer,35)};
+    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35)};
   const rows=gaRows_('Mitglieder');
   if(val.Dienstnummer&&rows.some(m=>m.ID!==d.ID&&m.Dienstnummer===val.Dienstnummer))throw new Error('Diese Dienstnummer wird bereits verwendet.');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
@@ -811,7 +811,7 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances){
  const advanced=q.GABAnerkannt==='JA',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
  const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
  const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
- return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Dienstnummer:m.Dienstnummer||'',Standesbuchnummer:m.Standesbuchnummer||'',
+ return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Standesbuchnummer:m.Standesbuchnummer||'',
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
