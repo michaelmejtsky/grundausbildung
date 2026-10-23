@@ -30,7 +30,8 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('Grundausbildung')
     .addItem('1 · Tabellen prüfen/erstellen','gaEinrichten')
     .addItem('2 · Ersten Administrator einrichten','gaErstenAdminEinrichten')
-    .addItem('3 · Systemprüfung','gaSystemPruefen').addToUi();
+    .addItem('3 · Systemprüfung','gaSystemPruefen')
+    .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten').addToUi();
 }
 
 function gaSheet_() {
@@ -96,7 +97,7 @@ function gaSystemPruefen() {
   SpreadsheetApp.getUi().alert(missing.length?'Fehlende Tabellen: '+missing.join(', '):
     'OK · '+names.length+' Tabellen; '+gaRows_('Benutzer').length+' Benutzer; '+gaRows_('Kurse').length+' Kurse; '+gaRows_('Mitglieder').length+' Mitglieder.');
 }
-function doGet(){return HtmlService.createHtmlOutputFromFile('Bridge').setTitle('Grundausbildung · API').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}
+function doGet(){return ContentService.createTextOutput('Grundausbildung API – Oberfläche über GitHub Pages öffnen.');}
 
 function gaId_(){return Utilities.getUuid();}
 function gaNow_(){return Utilities.formatDate(new Date(),Session.getScriptTimeZone()||'Europe/Vienna',"yyyy-MM-dd'T'HH:mm:ss");}
@@ -358,4 +359,49 @@ function gaAcceptInvite(token,password){
     gaLog_(user.ID,'EINLADUNG_ANGENOMMEN','Benutzer',user.ID,{});
     return {ok:true};
   });
+}
+
+
+/** Cloudflare Worker sendet POST mit serverseitigem gemeinsamen Geheimnis.
+ * Keine Geheimnisse in GitHub/config.js oder als URL-Parameter speichern!
+ * Die Weiterleitung gibt keine CORS-Freigaben direkt an Browser.
+ */
+function doPost(e){
+  const response=(obj)=>ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+  try{
+    if(!e||!e.postData||!e.postData.contents)throw new Error('Keine Anfrage.');
+    const q=JSON.parse(e.postData.contents);
+    const secret=PropertiesService.getScriptProperties().getProperty('GA_WORKER_SECRET');
+    if(!secret||secret.length<48||typeof q.gatewayKey!=='string'||!gaSame_(q.gatewayKey,secret))
+      throw new Error('Zugriff auf API nicht gestattet.');
+    const args=Array.isArray(q.args)?q.args:[];
+    let result;
+    switch(q.method){
+      case 'gaLogin':result=gaLogin(args[0],args[1]);break;
+      case 'gaApi':result=gaApi(args[0],args[1],args[2]);break;
+      case 'gaCheckInvite':result=gaCheckInvite(args[0]);break;
+      case 'gaAcceptInvite':result=gaAcceptInvite(args[0],args[1]);break;
+      default:throw new Error('Unbekannte Aktion.');
+    }
+    return response({ok:true,value:result});
+  }catch(err){
+    return response({ok:false,error:String(err&&err.message||'Serverfehler')});
+  }
+}
+
+/** Einmalig im Apps-Script-Editor ausführen und den Schlüssel
+ * anschließend im Cloudflare Worker als verschlüsselte Variable speichern.
+ * Der Schlüssel wird nicht in Tabellen/GitHub abgelegt.
+ */
+function gaWorkerSchluesselEinrichten(){
+  const ui=SpreadsheetApp.getUi();
+  const store=PropertiesService.getScriptProperties();
+  if(store.getProperty('GA_WORKER_SECRET')){
+    ui.alert('Es existiert bereits ein Worker-Schlüssel. Nicht neu erstellen, sonst bricht die Verbindung ab.');
+    return;
+  }
+  const key=[gaId_(),gaId_(),gaId_()].join('').replace(/-/g,'');
+  store.setProperty('GA_WORKER_SECRET',key);
+  ui.alert('WICHTIG: Einmaliger Cloudflare-Worker-Schlüssel. Jetzt sicher kopieren und als Worker-Secret GA_WORKER_SECRET speichern. Er wird in diesem Dialog angezeigt und danach nicht erneut.\\n\\n'+key);
 }
