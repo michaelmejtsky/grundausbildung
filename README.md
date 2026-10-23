@@ -1,6 +1,39 @@
 # Grundausbildung – Feuerwehr St. Pölten Stadt
 
-**Stand: V1.1 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
+**Stand: V1.2 Pilot / 23.10.2026** · Eigenständige Anwendung · Frühere Apps unverändert
+
+
+## Neu in V1.2 – gezielte Nachrichten, Soforteinladung, Web-Push
+
+**Live-Installation braucht zwei Updates und die VAPID-Konfiguration.** GitHub Pages veröffentlicht nur das Frontend automatisch. Der im Google-App-Script-Editor bereits installierte Code wird nicht durch den GitHub-Commit aktualisiert.
+
+### 1. Google Apps Script aktualisieren (Pflicht)
+
+1. Die Datei [Code.gs](https://github.com/michaelmejtsky/grundausbildung/blob/main/Code.gs) aus dem Repository vollständig in **Erweiterungen → Apps Script** der bestehenden Grundausbildung-Tabelle übernehmen und speichern. Bestehende Skripteigenschaften, Schlüssel und Tabellen nicht löschen.
+2. Die verbundene Google-Tabelle neu laden und **Grundausbildung → 5 · Push-Speicher und Trigger einrichten** einmal ausführen. Dies erzeugt/prüft die privaten Tabellen `PushGeraete` und `PushRegeln` und richtet einen Trigger zur Verarbeitung wartender Push-Nachrichten alle 5 Minuten ein. Fehlende OAuth-Berechtigungen erlauben.
+3. Im Apps-Script-Editor **Bereitstellen → Bereitstellungen verwalten → vorhandene Web-App bearbeiten → Version: Neue Version → Bereitstellen**. **Keine neue /exec-URL erzeugen**, sonst zeigt Cloudflare noch auf die alte Bereitstellung.
+
+Die beiden Sheets `PushGeraete` und `PushRegeln` wurden außerdem bereits direkt in der privaten Google-Datenbasis vorbereitet. Sie dürfen nicht öffentlich freigegeben werden.
+
+### 2. Cloudflare Worker bereitstellen und VAPID konfigurieren (für Hintergrund-Push)
+
+1. Beim bestehenden Cloudflare Worker `grundausbildung` unter **Deployments** kontrollieren, ob der Commit mit dem neuen `cloudflare-worker.js` bereitgestellt wurde. Wenn nötig eine neue Bereitstellung aus dem verbundenen GitHub-Repository auslösen. `GA_WORKER_SECRET` unverändert lassen.
+2. Öffne die GitHub-Pages-Seite [Push-Schlüssel lokal erzeugen](https://michaelmejtsky.github.io/grundausbildung/push-einrichten.html). Die Werte werden **lokal** im Browser erzeugt, nicht ins Repo hochgeladen.
+3. Unter **Cloudflare → Worker grundausbildung → Settings → Variables and Secrets** diese drei Werte hinterlegen:
+   - `VAPID_PRIVATE_JWK` — **Secret**, Inhalt aus Feld 2 der Generatorseite. Niemals in GitHub.
+   - `VAPID_PUBLIC_KEY` — **Textvariable**, Inhalt aus Feld 1 der Generatorseite.
+   - `VAPID_SUBJECT` — **Textvariable**, z. B. `mailto:DEINE_MAIL@DOMAIN.AT` mit der tatsächlichen E-Mail-Adresse.
+4. Worker-Einstellungen speichern und bei Bedarf neu deployen. **Nicht** den privaten VAPID-Key im Chat verschicken. Nach einer Schlüsselrotation müssen sich registrierte Geräte neu für Push anmelden.
+
+### 3. Verwenden
+
+- **Administrator → Mitglieder:** optional das Kontrollkästchen `Teilnehmerzugang gleich per E-Mail einladen` nutzen. Bestehende Mitglieder können über `Zugang einladen` in der Mitgliederliste eingeladen werden. Die Person vergibt ihr Passwort selbst.
+- **Administrator → Nachrichten:** entweder `Alle Teilnehmer`, `Gesamter Turnus` oder `Einzelnes Mitglied` auswählen. Persönliche Nachrichten sind nur für den jeweiligen Teilnehmer und Administrator sichtbar.
+- **Administrator → Push-Steuerung:** für jeden aktiven Benutzer per Kontrollkästchen bestimmen, ob er **Nachrichten**, **Termine** und/oder **Aufgaben** als Hintergrund-Push bekommen darf. Das verändert nicht den In-App-Zugriff auf normale Mitteilungen.
+- **Jeder Benutzer → Benachrichtigungen → Push aktivieren:** auf jedem gewünschten Gerät separat zustimmen. Auf **iPhone/iPad** erst als App zum Home-Bildschirm hinzufügen, von dort starten und danach Push erlauben. Ein Administrator kann die Systemfreigabe auf dem fremden Gerät nicht erzwingen. Danach `Push-Steuerung → Test-Push` nutzen.
+
+**Technische Hinweise:** Die Push-Empfängerregeln sind serverseitig wirksam. Push-Endpunkte und Verschlüsselungsdaten bleiben nur in der privaten Google-Tabelle. Die Worker-Zustellung ist zeitgestempelt HMAC-signiert und auf bekannte Push-Service-Hosts beschränkt. End-to-End-Zustellung und Mobile-Berechtigungen müssen nach Konfiguration auf einem echten Gerät getestet werden. Bis dahin sind nur In-App-Benachrichtigungen sicher verfügbar.
+
 
 ## Projektlinks
 
