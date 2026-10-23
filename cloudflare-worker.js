@@ -28,13 +28,47 @@ const PUSH_MAX_BATCH=12;
 const PUSH_MAX_BYTES=4096;
 const PUSH_DOMAINS=['fcm.googleapis.com','updates.push.services.mozilla.com','push.services.mozilla.com','web.push.apple.com'];
 const te=new TextEncoder();
-function pushConfigured(env){
+/**
+ * Sichere VAPID-Diagnose: Liefert nur Wahr/Falsch-Werte, niemals Schlüssel.
+ * Damit ist erkennbar, ob eine Variable fehlt, falsch formatiert ist oder
+ * öffentlicher/privater Schlüssel nicht zum selben Schlüsselpaar gehören.
+ */
+function pushConfigurationChecks(env){
+ const pub=String(env.VAPID_PUBLIC_KEY||'');
+ const raw=String(env.VAPID_PRIVATE_JWK||'');
+ const subject=String(env.VAPID_SUBJECT||'');
+ const checks={
+  publicKeyPresent:pub.length>0,
+  publicKeyValid:false,
+  privateKeyPresent:raw.length>0,
+  privateKeyValid:false,
+  subjectPresent:subject.length>0,
+  subjectValid:/^mailto:[^@\s]+@[^@\s]+\.[^@\s]+$/.test(subject),
+  keyPairMatches:false
+ };
+ let publicBytes=null,privateJwk=null;
  try{
-  const k=JSON.parse(env.VAPID_PRIVATE_JWK||'{}'),publicKey=String(env.VAPID_PUBLIC_KEY||'');
-  return Boolean(env.VAPID_SUBJECT&&/^mailto:[^@\s]+@[^@\s]+\.[^@\s]+$/.test(env.VAPID_SUBJECT)&&
-   k.kty==='EC'&&k.crv==='P-256'&&k.x&&k.y&&k.d&&
-   /^[A-Za-z0-9_-]{86,88}$/.test(publicKey)&&pushB64ToBytes(publicKey).length===65);
- }catch{return false;}
+  publicBytes=pushB64ToBytes(pub);
+  checks.publicKeyValid=/^[A-Za-z0-9_-]{86,88}$/.test(pub)&&
+    publicBytes.length===65&&publicBytes[0]===4;
+ }catch{}
+ try{
+  privateJwk=JSON.parse(raw);
+  checks.privateKeyValid=privateJwk&&privateJwk.kty==='EC'&&privateJwk.crv==='P-256'&&
+    ['x','y','d'].every(k=>typeof privateJwk[k]==='string'&&
+     /^[A-Za-z0-9_-]+$/.test(privateJwk[k])&&pushB64ToBytes(privateJwk[k]).length===32);
+ }catch{}
+ if(checks.publicKeyValid&&checks.privateKeyValid){
+  try{
+   const x=pushB64ToBytes(privateJwk.x),y=pushB64ToBytes(privateJwk.y);
+   checks.keyPairMatches=x.every((v,i)=>v===publicBytes[i+1])&&
+     y.every((v,i)=>v===publicBytes[i+33]);
+  }catch{}
+ }
+ return checks;
+}
+function pushConfigured(env){
+ return Object.values(pushConfigurationChecks(env)).every(Boolean);
 }
 function pushB64ToBytes(s){
  const x=String(s||'').replace(/-/g,'+').replace(/_/g,'/');
@@ -192,8 +226,12 @@ export default {
     if(!type.startsWith('application/json'))return reply({ok:false,error:'Ungültiger Inhaltstyp.'},415);
     if(Number(request.headers.get('content-length')||0)>120000)return reply({ok:false,error:'Anfrage ist zu groß.'},413);
     const json=await request.json();
-    if(json?.method==='gaPushInfo'&&Array.isArray(json.args)&&json.args.length===0)
-      return reply({ok:true,value:{configured:pushConfigured(env),publicKey:pushConfigured(env)?env.VAPID_PUBLIC_KEY:''}},200);
+    if(json?.method==='gaPushInfo'&&Array.isArray(json.args)&&json.args.length===0){
+      const checks=pushConfigurationChecks(env);
+      const configured=Object.values(checks).every(Boolean);
+      return reply({ok:true,value:{configured,publicKey:configured?env.VAPID_PUBLIC_KEY:'',
+        diagnosticVersion:2,checks}},200);
+    }
     if(!json||!['gaLogin','gaApi','gaCheckInvite','gaAcceptInvite'].includes(json.method)||!Array.isArray(json.args))
       return reply({ok:false,error:'Ungültige Anfrage.'},400);
     const controller=new AbortController();
