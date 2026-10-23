@@ -23,7 +23,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.3</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.4.1</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -144,7 +144,33 @@ function title(){return ({
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
  const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
-function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
+function overview(){
+ const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
+ const qs=STATE.qualifikationen||[];
+ const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;
+ const good=qs.filter(x=>x.BSWDienstMoeglich).length;
+ const completed=qs.filter(x=>x.GABAbgeschlossen).length;
+ const aidPending=qs.filter(x=>x.ErsteHilfeStatus!=='Bestätigt').length;
+ const placeholder=qs.filter(x=>x.FDISKPlatzhalter==='JA').length;
+ const summary='<div class="cards">'+metric(active.length,'Aktive Mitglieder')+
+ metric(completed,'GAB abgeschlossen')+metric(good,'BSW-dienstberechtigt')+
+ metric(aidPending,'Erste Hilfe ausständig')+metric(placeholder,'FDISK-Platzhalter')+
+ metric(future,'Künftige Termine')+'</div>';
+ const rows=qs.map(q=>'<tr><td><b>'+h(q.Name)+'</b><div class="small muted">'+h(q.Standesbuchnummer||'Ohne Standesbuchnummer')+'</div></td>'+
+ '<td>'+gaStatusBadge(q.GABAbgeschlossen,'Fertig','Offen')+'</td>'+
+ '<td>'+gaStatusBadge(q.BSWModulAbgeschlossen,'Fertig','Offen')+'</td>'+
+ '<td>'+gaStatusBadge(q.Alter16,'Ja','Nein / offen')+'</td>'+
+ '<td>'+gaStatusBadge(q.BSWDienstMoeglich,'Ja','Nein')+'</td>'+
+ '<td>'+h(q.Fortschritt)+' %</td>'+
+ '<td>'+h(q.ErsteHilfeStatus)+'<div class="small muted">'+(q.FDISKPlatzhalter==='JA'?'FDISK-Platzhalter':'FDISK: '+h(q.FDISKEintragDatum||'kein Eintrag'))+'</div></td></tr>').join('');
+ return summary+'<section class="panel"><h2>Ausbildungs- und Qualifikationsübersicht</h2>'+
+ '<p class="muted">Die BSW-Berechtigung ist nur bei bestätigter GAB, abgeschlossenem BSW-Modul und erreichtem 16. Geburtstag positiv. Ein FDISK-Platzhalter ist kein Kursnachweis.</p>'+
+ '<div class="tablewrap"><table><thead><tr><th>Mitglied</th><th>GAB</th><th>BSW-Modul</th><th>16 Jahre</th><th>BSW-Dienst</th><th>Fortschritt</th><th>Erste Hilfe / FDISK</th></tr></thead>'+
+ '<tbody>'+rows+'</tbody></table></div></section>'+
+ '<section class="panel"><h2>Nächste Ausbildungstermine</h2>'+
+ termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+
+ '</section>';
+}
 function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
 function courses(){
  const cards=STATE.kurse.filter(c=>c.Aktiv==='JA');
@@ -295,12 +321,13 @@ function qualifications(){
  gaStatusBadge(q.BSWModulAbgeschlossen,'Modul BSW abgeschlossen','Modul BSW offen')+
  gaStatusBadge(q.Alter16,'16 Jahre erreicht','Unter 16 / unbekannt')+
  gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst: JA','BSW-Dienst: NEIN')+'</div>'+
- '<div class="detail">Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+'</div>'+
+ '<div class="detail">Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+' · FDISK-Platzhalter: '+h(q.FDISKPlatzhalter==='JA'?'Ja':'Nein')+'</div>'+
  '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'"><div class="grid">'+
  '<div><label>Geburtsdatum</label><input type="date" name="Geburtsdatum" value="'+h(q.Geburtsdatum)+'"></div>'+
  '<div><label>Erste Hilfe</label><select name="ErsteHilfeStatus"><option '+(q.ErsteHilfeStatus==='Ausständig'?'selected':'')+'>Ausständig</option><option '+(q.ErsteHilfeStatus==='Bestätigt'?'selected':'')+'>Bestätigt</option></select></div>'+
  '<div><label>Erste-Hilfe-Kursdatum (tatsächlich)</label><input type="date" name="ErsteHilfeBestaetigtAm" value="'+h(q.ErsteHilfeBestaetigtAm)+'"></div>'+
- '<div><label>FDISK-Eintragungsdatum</label><input type="date" name="FDISKEintragDatum" value="'+h(q.FDISKEintragDatum)+'"></div>'+
+ '<div><label>FDISK-Eintragungsdatum (dokumentiert)</label><input type="date" name="FDISKEintragDatum" value="'+h(q.FDISKEintragDatum)+'"></div>'+
+ '<div class="wide"><label class="inline-check"><input type="checkbox" name="FDISKPlatzhalter" value="JA" '+(q.FDISKPlatzhalter==='JA'?'checked':'')+'> FDISK-Platzhalterdatum für Kursanmeldung hinterlegt (kein echter Erste-Hilfe-Nachweis)</label></div>'+
  '<div><label>GAB abgeschlossen und bestätigt</label><select name="GABFreigabe"><option value="NEIN">Nein</option><option value="JA" '+(q.GABFreigabe==='JA'?'selected':'')+'>Ja</option></select></div>'+
  '<div><label>Bereits absolvierte GAB anerkennen (nur erweiterte Ausbildung)</label><select name="GABAnerkannt"><option value="NEIN">Nein</option><option value="JA" '+(q.GABAnerkannt==='JA'?'selected':'')+'>Ja</option></select></div>'+
  '</div><div class="btnline"><button class="primary">Qualifikation speichern</button></div></form></div>').join('');
@@ -374,21 +401,36 @@ function messages(){
 }
 function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(STATE.kurse,term.KursID),ms=STATE.mitglieder.filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA'),trainers=STATE.benutzer.filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));let previous=STATE.teilnahmen.filter(x=>x.TerminID===term.ID);return '<section class="panel"><div class="row between"><h2>'+h(c?.Titel||'Kurs')+'</h2><button class="secondary" data-close-term="1">Zurück</button></div><p class="muted">'+dt(term.Beginn)+' · '+h(term.Ort)+'</p>'+(c?courseCard(c):'')+'<hr class="divider"><h2>Anwesenheit bestätigen</h2><form data-form="attendance"><h3>Teilnehmer</h3>'+ms.map(m=>{let old=previous.find(t=>t.MitgliedID===m.ID);return '<label class="inline-check"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(old?.Anwesend==='JA'?'checked':'')+'> '+h(name(m))+'</label>'}).join('')+'<h3>Durchführende Ausbilder</h3>'+trainers.map(t=>{let old=previous[0]?.AusbilderIDs?.split(',')||[];return '<label class="inline-check"><input type="checkbox" name="trainer" value="'+h(t.ID)+'" '+(old.includes(t.ID)||(!previous.length&&t.ID===STATE.user.ID)?'checked':'')+'> '+h(t.Name)+'</label>'}).join('')+'<div class="notice">Mit Bestätigung werden Anwesenheit, Ausbilder, Datum und der bestätigende Benutzer protokolliert. Eine erneute Bestätigung korrigiert den Datensatz mit neuem Protokolleintrag.</div><div class="btnline"><button class="primary">Ausbildung verbindlich bestätigen</button></div></form></section>'}return '<section class="panel"><h2>Ausbildung auswählen</h2><p class="muted">Öffne den Termin, sieh die Unterlagen und bestätige anschließend die Anwesenheit.</p><div class="items">'+STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)).map(t=>{let c=by(STATE.kurse,t.KursID);return '<div class="item"><div class="row between"><div><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(t.Beginn)+' · '+h(t.Ort)+'</div></div><button class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div></div>'}).join('')+'</div></section>'}
 function mine(){
- const own=STATE.meMember;if(!own)return '<section class="panel">Teilnehmerprofil nicht zugeordnet.</section>';
- const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===own.ID)||{};
+ const member=STATE.meMember;
+ if(!member)return '<section class="panel"><h2>Teilnehmerprofil fehlt</h2><p>Bitte den Administrator bitten, deine E-Mail beim Mitgliedseintrag zu hinterlegen.</p></section>';
+ const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===member.ID)||{};
  const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
- const qualifications='<section class="panel"><h2>Meine Ausbildungsfreigaben</h2><div class="row">'+
+ const qualification='<section class="panel"><h2>Meine Ausbildungsfreigaben</h2><div class="row">'+
  gaStatusBadge(q.GABAbgeschlossen,'GAB abgeschlossen','GAB ausständig')+
- gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul abgeschlossen','BSW-Modul ausständig')+
- gaStatusBadge(q.Alter16,'16 Jahre erreicht','Alter noch nicht erfüllt')+
- gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst möglich','Noch nicht BSW-dienstberechtigt')+'</div>'+
- '<h3>Ausbildungsfortschritt: '+done+' / '+total+' Pflichtmodule ('+h(q.Fortschritt||0)+' %)</h3>'+
+ gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul abgeschlossen','BSW-Modul offen')+
+ gaStatusBadge(q.Alter16,'16 Jahre erreicht','Alter nicht bestätigt')+
+ gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst möglich','BSW-Dienst derzeit nicht möglich')+
+ '</div><h3>Fortschritt: '+done+' / '+total+' Pflichtmodule ('+h(q.Fortschritt||0)+' %)</h3>'+
  '<progress max="100" value="'+h(q.Fortschritt||0)+'" style="width:100%;height:24px"></progress>'+
+ (!total?'<p class="small muted">Die Pflichtmodule wurden noch nicht vollständig definiert. Der Fortschrittswert ist daher vorläufig.</p>':'')+
  '<p class="muted">Erste Hilfe: '+h(q.ErsteHilfeStatus||'Ausständig')+
- ' · In FDISK eingetragen am: '+h(q.FDISKEintragDatum||'Noch nicht dokumentiert')+'</p>'+
- '<h3>Offene GAB-Kurse</h3><p>'+h((q.OffeneGABKurse||[]).join(', ')||'Keine laut aktueller Pflichtliste')+'</p>'+
- '<h3>Offene BSW-Kurse</h3><p>'+h((q.OffeneBSWKurse||[]).join(', ')||'Keine laut aktueller Pflichtliste')+'</p></section>';
- return qualifications;
+ (q.FDISKPlatzhalter==='JA'?' · FDISK-Platzhalter hinterlegt (kein Nachweis)':' · FDISK: '+h(q.FDISKEintragDatum||'nicht dokumentiert'))+'</p>'+
+ '<h3>Offene GAB-Kurse</h3><p>'+h((q.OffeneGABKurse||[]).join(', ')||'Keine in der aktuellen Pflichtliste')+'</p>'+
+ '<h3>Offene BSW-Kurse</h3><p>'+h((q.OffeneBSWKurse||[]).join(', ')||'Keine in der aktuellen Pflichtliste')+'</p></section>';
+ const checks=(STATE.checks||[]),doneChecks=checks.filter(x=>['Erledigt','Nicht erforderlich'].includes(x.Status)).length;
+ const checklist='<section class="panel"><h2>Meine Verwaltungscheckliste ('+doneChecks+' / '+checks.length+')</h2>'+
+ '<div class="items">'+(checks.length?checks.map(ch=>{
+  const item=by(STATE.checklistenpunkte,ch.PunktID);
+  return '<div class="item"><div class="row between"><b>'+h(item?.Titel||'Aufgabe')+'</b>'+status(ch.Status)+'</div>'+
+   (ch.Kommentar?'<p class="muted">'+h(ch.Kommentar)+'</p>':'')+'</div>';
+ }).join(''):'Keine offenen Punkte hinterlegt.')+'</div></section>';
+ const completed=(STATE.teilnahmen||[]).filter(t=>t.Anwesend==='JA');
+ const courses='<section class="panel"><h2>Meine bestätigten Ausbildungen ('+completed.length+')</h2>'+
+ '<div class="items">'+(completed.length?completed.map(t=>{
+  const term=by(STATE.termine,t.TerminID),course=term&&by(STATE.kurse,term.KursID);
+  return '<div class="item"><b>'+h(course?.Titel||'Kurs')+'</b><div class="detail">'+dt(term?.Beginn)+' · Bestätigt teilgenommen</div></div>';
+ }).join(''):'Noch keine bestätigte Teilnahme.')+'</div></section>';
+ return qualification+checklist+courses;
 }
 function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
