@@ -27,7 +27,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <script src="./config.js"></script>
 <script>
 'use strict';
-let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={};
+let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 const $=id=>document.getElementById(id);
 const h=s=>String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -69,6 +69,16 @@ async function initInvite(){
   const params=new URLSearchParams(location.hash.slice(1));
   inviteToken=params.get('invite')||'';
   if(!inviteToken)return;
+  // Das Fragment enthält ein einmaliges Geheimnis; niemals protokollieren.
+  if(!/^[a-fA-F0-9]{64}$/.test(inviteToken)){
+    $('loginForm').classList.add('hidden');
+    $('invitePanel').classList.remove('hidden');
+    $('inviteDescription').textContent='Der Einladungslink ist unvollständig oder ungültig.';
+    $('inviteError').textContent='Bitte den vollständigen Link aus der Einladungs-E-Mail öffnen oder einen neuen anfordern.';
+    $('inviteError').classList.remove('hidden');
+    $('inviteForm').classList.add('hidden');
+    return;
+  }
   $('loginForm').classList.add('hidden');$('invitePanel').classList.remove('hidden');
   try{
     const user=await rpc('gaCheckInvite',inviteToken);
