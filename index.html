@@ -119,7 +119,7 @@ function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
  const base=admin?[
  ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
- ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['checks','Checklisten'],
+ ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
@@ -135,14 +135,14 @@ function navs(){
 }
 function title(){return ({
  overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',
- terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',checks:'Checklisten',
+ terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
  attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){const open=STATE.checks.filter(x=>x.Status==='Offen').length;const future=STATE.termine.filter(x=>x.Beginn>=new Date().toISOString().slice(0,16)).length;return '<div class="cards">'+metric(STATE.mitglieder.length,'Mitglieder')+metric(STATE.turnusse.length,'Turnusse')+metric(STATE.kurse.length,'Kurse')+metric(future,'Künftige Termine')+metric(open,'Offene Checklisten')+'</div><section class="panel"><h2>Nächste Ausbildungstermine</h2>'+termCards(STATE.termine.filter(x=>x.Status==='Geplant').slice().sort((a,b)=>a.Beginn.localeCompare(b.Beginn)).slice(0,8))+'</section><div class="notice">Die App-Benachrichtigungszentrale ist aktiv. Echte Push-Nachrichten außerhalb der App werden erst nach Einrichtung eines Push-Dienstes ausgelöst.</div>'}
 function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
@@ -291,6 +291,7 @@ function members(){
  '<div><label>Nachname</label><input name="Nachname" required maxlength="100" value="'+h(edit?.Nachname||'')+'"></div>'+
  '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
  '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
+ '<div><label>Geburtsdatum (für BSW-Freigabe)</label><input type="date" name="Geburtsdatum" value="'+h(edit?.Geburtsdatum||'')+'"></div>'+
  '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
