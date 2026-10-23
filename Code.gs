@@ -10,7 +10,7 @@ const GA = Object.freeze({
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
-    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm'],
+    Mitglieder: ['ID','Vorname','Nachname','Email','Telefon','TurnusID','Aktiv','ErstelltAm','Geburtsdatum'],
     Kurse: ['ID','Titel','Bereich','Inhalt','Lernziele','Links','Aktiv','ErstelltAm'],
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
@@ -26,7 +26,7 @@ const GA = Object.freeze({
     KursProjekte: ['ID','KursID','Titel','Bereich','Typ','Inhalt','Lernziele','PraesentationURL','WeitereLinks','Status','ErstelltVon','ErstelltAm','GeaendertVon','GeaendertAm','GeprueftVon','GeprueftAm','Rueckmeldung'],
     Meldungen: ['ID','Kategorie','Titel','Beschreibung','KursID','Status','ErstelltVon','ErstelltAm','BearbeitetVon','BearbeitetAm','Rueckmeldung'],
     Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm'],
-    QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm'],
+    QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt'],
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
     Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm']
   },
@@ -286,7 +286,7 @@ function gaSaveMember_(u,d){
   const email=gaText_(d.Email,240).toLowerCase();
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
-    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA'};
+    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum)};
   const rows=gaRows_('Mitglieder');
   if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
     throw new Error('Diese Mitglieds-E-Mail ist bereits vergeben.');
