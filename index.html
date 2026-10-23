@@ -28,6 +28,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={};
+let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 const $=id=>document.getElementById(id);
 const h=s=>String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const by=(arr,id)=>(arr||[]).find(x=>x.ID===id);
@@ -196,6 +197,70 @@ function rights(){
   '<div class="row between"><b>'+h(u.Name)+'</b><button class="smallbtn" type="submit">Berechtigungen speichern</button></div>'+
   permissions.map(([k,l])=>'<label class="inline-check"><input type="checkbox" name="'+k+'" value="JA" '+(u[k]?'checked':'')+'> '+h(l)+'</label>').join('')+'</form>'
  ).join(''):'Keine aktiven Ausbilder vorhanden. Zuerst über „Zugänge“ einladen.')+'</div></section>';
+}
+function reports(){
+ const admin=role()==='Administrator',manager=admin||!!STATE.rechte?.MeldungenBearbeiten;
+ const cats=['Mangel App','Mangel Ausbildung','Idee Ausbildung','Idee App'],
+  statuses=['Offen','In Bearbeitung','Erledigt','Abgelehnt'];
+ const submit=admin||role()==='Ausbilder'?
+ '<section class="panel"><h2>Idee oder Mangel melden</h2><form data-form="report"><div class="grid">'+
+ '<div><label>Kategorie</label><select name="Kategorie">'+cats.map(x=>'<option>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Betroffener Kurs (optional)</label><select name="KursID"><option value="">Allgemein</option>'+STATE.kurse.map(c=>'<option value="'+h(c.ID)+'">'+h(c.Titel)+'</option>').join('')+'</select></div>'+
+ '<div class="wide"><label>Kurzer Titel</label><input name="Titel" required maxlength="180"></div>'+
+ '<div class="wide"><label>Beschreibung</label><textarea name="Beschreibung" required maxlength="5000" placeholder="Was sollte geändert oder verbessert werden?"></textarea></div>'+
+ '</div><div class="btnline"><button class="primary">Meldung absenden</button></div></form></section>':'';
+ let reports=STATE.meldungen||[];
+ if(REPORT_FILTER.category)reports=reports.filter(x=>x.Kategorie===REPORT_FILTER.category);
+ if(REPORT_FILTER.status)reports=reports.filter(x=>x.Status===REPORT_FILTER.status);
+ return submit+'<section class="panel"><h2>'+(manager?'Meldungsliste':'Meine Meldungen')+'</h2>'+
+ '<div class="grid"><div><label>Nach Kategorie filtern</label><select data-report-category><option value="">Alle Kategorien</option>'+
+ cats.map(x=>'<option value="'+h(x)+'" '+(REPORT_FILTER.category===x?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Nach Status filtern</label><select data-report-status><option value="">Alle Status</option>'+
+ statuses.map(x=>'<option value="'+h(x)+'" '+(REPORT_FILTER.status===x?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div></div>'+
+ '<p class="muted small">'+reports.length+' Meldungen angezeigt</p><div class="items">'+
+ (reports.length?reports.slice().reverse().map(m=>'<div class="item"><div class="row between"><b>'+h(m.Titel)+'</b><span class="tag">'+h(m.Status)+'</span></div>'+
+ '<div class="detail">'+h(m.Kategorie)+' · '+dt(m.ErstelltAm)+(m.KursID?' · '+h(by(STATE.kurse,m.KursID)?.Titel||'Kurs'):'')+'</div>'+
+ '<p class="msg">'+h(m.Beschreibung)+'</p>'+
+ (manager?'<form data-form="reportStatus"><input type="hidden" name="ID" value="'+h(m.ID)+'"><div class="grid">'+
+ '<div><label>Status</label><select name="Status">'+statuses.map(x=>'<option '+(x===m.Status?'selected':'')+'>'+h(x)+'</option>').join('')+'</select></div>'+
+ '<div><label>Rückmeldung</label><input name="Rueckmeldung" maxlength="1500" value="'+h(m.Rueckmeldung||'')+'"></div></div>'+
+ '<div class="btnline"><button class="smallbtn">Bearbeitung speichern</button></div></form>':
+ (m.Rueckmeldung?'<p class="notice">'+h(m.Rueckmeldung)+'</p>':''))+'</div>').join(''):'Keine Meldungen in dieser Auswahl.')+
+ '</div></section>';
+}
+function ratings(){
+ if(role()!=='Teilnehmer')return '';
+ const pending=STATE.offeneBewertungen||[],done=STATE.eigeneBewertungen||[];
+ const pendingHtml=pending.map(t=>'<form class="item" data-form="rating">'+
+ '<input type="hidden" name="TerminID" value="'+h(t.ID)+'">'+
+ '<b>'+h(by(STATE.kurse,t.KursID)?.Titel||'Ausbildung')+'</b>'+
+ '<p class="detail">'+dt(t.Beginn)+' · '+h(t.Ort||'')+'</p>'+
+ '<label>Wie war der Kurs?</label><select name="Sterne" required><option value="">Bitte bewerten</option>'+
+ [5,4,3,2,1].map(n=>'<option value="'+n+'">'+('★'.repeat(n))+' ('+n+'/5)</option>').join('')+'</select>'+
+ '<label>Deine Anmerkung (freiwillig)</label><textarea name="Kommentar" maxlength="2500" placeholder="Was war gut? Was könnte verbessert werden?"></textarea>'+
+ '<div class="btnline"><button class="primary">Kursbewertung absenden</button></div></form>').join('');
+ return '<section class="panel"><h2>Jetzt Kurs bewerten</h2><p class="muted">Eine Bewertung ist erst möglich, wenn ein Ausbilder deine Anwesenheit als teilgenommen bestätigt hat. Du kannst jeden Kurstermin einmal bewerten.</p>'+
+ '<div class="items">'+(pendingHtml||'Aktuell keine offenen Kursbewertungen.')+'</div></section>'+
+ '<section class="panel"><h2>Meine abgegebenen Bewertungen</h2><div class="items">'+
+ (done.length?done.slice().reverse().map(x=>'<div class="item"><b>'+h(by(STATE.kurse,x.KursID)?.Titel||'Ausbildung')+'</b><div class="detail">'+h('★'.repeat(Number(x.Sterne)||0))+' · '+dt(x.ErstelltAm)+'</div><p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Du hast noch keinen Kurs bewertet.')+
+ '</div></section>';
+}
+function reviews(){
+ if(!STATE.rechte?.BewertungenAnsehen)return '<section class="panel"><p>Keine Berechtigung für die Bewertungsübersicht.</p></section>';
+ const courses=STATE.kurse||[],all=STATE.bewertungen||[];
+ let filtered=all.filter(x=>(!REVIEW_FILTER.course||x.KursID===REVIEW_FILTER.course)&&
+ (!REVIEW_FILTER.score||String(x.Sterne)===REVIEW_FILTER.score));
+ const avg=filtered.length?(filtered.reduce((sum,r)=>sum+(Number(r.Sterne)||0),0)/filtered.length).toFixed(1):'–';
+ return '<section class="panel"><h2>Auswertung Kursbewertungen</h2><div class="cards">'+metric(filtered.length,'Bewertungen')+metric(avg,'Durchschnitt (von 5)')+'</div>'+
+ '<div class="grid"><div><label>Nach Kurs filtern</label><select data-review-course><option value="">Alle Kurse</option>'+
+ courses.map(c=>'<option value="'+h(c.ID)+'" '+(REVIEW_FILTER.course===c.ID?'selected':'')+'>'+h(c.Titel)+'</option>').join('')+'</select></div>'+
+ '<div><label>Nach Sternen filtern</label><select data-review-score><option value="">Alle Sterne</option>'+
+ [5,4,3,2,1].map(n=>'<option value="'+n+'" '+(REVIEW_FILTER.score===String(n)?'selected':'')+'>'+n+' Sterne</option>').join('')+'</select></div></div>'+
+ '<div class="items" style="margin-top:16px">'+
+ (filtered.length?filtered.slice().reverse().map(x=>'<div class="item"><b>'+h(by(courses,x.KursID)?.Titel||'Kurs')+'</b>'+
+ '<div class="detail">'+h('★'.repeat(Number(x.Sterne)||0))+' · '+dt(x.ErstelltAm)+'</div>'+
+ '<p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Noch keine Bewertungen zu dieser Auswahl.')+
+ '</div></section>';
 }
 function areaOptions(sel){return ['Grundausbildung','Erweiterte Ausbildung'].map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
 function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+(c&&safeLinks(c.Links)?'<div class="btnline"><button class="smallbtn" data-linkcourse="'+h(c.ID)+'">Kursunterlagen anzeigen</button></div>':'')+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
