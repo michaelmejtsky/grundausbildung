@@ -167,6 +167,7 @@ function gaApi(method,data,token){
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
+  if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
   if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
@@ -231,18 +232,57 @@ function gaSaveTermin_(u,d){gaRequire_(u,['Administrator']);const course=gaFind_
   if(d.ID){gaReplace_('Termine',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Termin',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Termine',val);gaLog_(u.ID,'ANLEGEN','Termin',val.ID,val);
   gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);gaPushQueue_(5);return {ok:true};}
-function gaSaveMember_(u,d){gaRequire_(u,['Administrator']);if(!gaFind_('Turnusse',d.TurnusID))throw new Error('Bitte einen gültigen Turnus wählen.');
-  const email=gaText_(d.Email,240).toLowerCase();if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
-  const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA'};
-  const rows=gaRows_('Mitglieder');if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))throw new Error('Diese Mitglieds-E-Mail existiert bereits.');
-  if(d.ID){gaReplace_('Mitglieder',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Mitglied',d.ID,{Vorname:val.Vorname,Nachname:val.Nachname});return {ok:true};}
+function gaSaveMember_(u,d){
+  gaRequire_(u,['Administrator']);
+  const turnus=gaFind_('Turnusse',d.TurnusID);
+  if(!turnus||!gaBool_(turnus.Aktiv))throw new Error('Bitte einen gültigen aktiven Turnus wählen.');
+  const email=gaText_(d.Email,240).toLowerCase();
+  if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
+  const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
+    Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA'};
+  const rows=gaRows_('Mitglieder');
+  if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
+    throw new Error('Diese Mitglieds-E-Mail ist bereits vergeben.');
+  if(d.ID){
+    const existing=rows.find(m=>m.ID===d.ID);
+    if(!existing)throw new Error('Mitglied wurde nicht gefunden.');
+    if(String(existing.Email||'').toLowerCase()!==email&&
+       gaRows_('Benutzer').some(x=>x.Rolle==='Teilnehmer'&&x.Email.toLowerCase()===String(existing.Email||'').toLowerCase())){
+      throw new Error('Dieses Mitglied hat bereits einen Teilnehmerzugang. Die E-Mail kann erst geändert werden, wenn der alte Zugang durch den Administrator getrennt wurde.');
+    }
+    gaReplace_('Mitglieder',d.ID,val);
+    const checks=gaRows_('MitgliedChecks');
+    gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich))
+      .filter(i=>!checks.some(ch=>ch.MitgliedID===d.ID&&ch.PunktID===i.ID))
+      .forEach(i=>gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:d.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()}));
+    gaLog_(u.ID,'BEARBEITEN','Mitglied',d.ID,{Vorher:existing.Vorname+' '+existing.Nachname,
+      Nachher:val.Vorname+' '+val.Nachname,TurnusVorher:existing.TurnusID,TurnusNachher:val.TurnusID});
+    return {ok:true,message:'Mitglied aktualisiert. Bestehende Ausbildungsnachweise bleiben erhalten.'};
+  }
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Mitglieder',val);
-  const turnus=gaFind_('Turnusse',val.TurnusID);gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich)).forEach(i=>{
-    gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:val.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()});
-  });
-  gaRows_('Benutzer').filter(x=>x.Rolle==='Fachverwaltung'&&gaBool_(x.Aktiv)&&gaRows_('Checklistenpunkte').some(i=>i.Zustaendig===x.Bereich)).forEach(x=>
+  gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich)).forEach(i=>
+    gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:val.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()}));
+  const candidates=gaRows_('Checklistenpunkte');
+  gaRows_('Benutzer').filter(x=>x.Rolle==='Fachverwaltung'&&gaBool_(x.Aktiv)&&candidates.some(i=>i.Zustaendig===x.Bereich)).forEach(x=>
     gaNotify_(x.ID,'Aufgabe','Neues Mitglied: '+val.Vorname+' '+val.Nachname,'Offene Checklistenpunkte prüfen.',val.ID));
-  gaLog_(u.ID,'ANLEGEN','Mitglied',val.ID,{Vorname:val.Vorname,Nachname:val.Nachname,TurnusID:val.TurnusID});return {ok:true};}
+  gaLog_(u.ID,'ANLEGEN','Mitglied',val.ID,{Vorname:val.Vorname,Nachname:val.Nachname,TurnusID:val.TurnusID});
+  return {ok:true,message:'Mitglied aufgenommen.'};
+}
+function gaRemoveMember_(u,d){
+  gaRequire_(u,['Administrator']);
+  const member=gaFind_('Mitglieder',gaText_(d.ID,100));
+  if(!member)throw new Error('Mitglied nicht gefunden.');
+  if(!gaBool_(member.Aktiv))return {ok:true,message:'Mitglied ist bereits deaktiviert.'};
+  gaReplace_('Mitglieder',member.ID,{Aktiv:'NEIN'});
+  const linked=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&
+    x.Email.toLowerCase()===String(member.Email||'').toLowerCase());
+  linked.forEach(x=>{
+    gaReplace_('Benutzer',x.ID,{Aktiv:'NEIN'});
+    gaOptionalRows_('PushGeraete').filter(g=>g.BenutzerID===x.ID&&gaBool_(g.Aktiv)).forEach(g=>gaReplace_('PushGeraete',g.ID,{Aktiv:'NEIN',AktualisiertAm:gaNow_()}));
+  });
+  gaLog_(u.ID,'DEAKTIVIEREN','Mitglied',member.ID,{Name:member.Vorname+' '+member.Nachname,ZugangGesperrt:linked.length>0});
+  return {ok:true,message:'Mitglied aus der aktiven Liste entfernt. Teilnehmerzugang gesperrt; Ausbildungsnachweise erhalten.'};
+}
 function gaSaveChecklistItem_(u,d){gaRequire_(u,['Administrator']);const val={Titel:gaNeed_(d.Titel,'Checklistenpunkt',160),Bereich:gaChoice_(d.Bereich,['Alle'].concat(GA.AREAS),'Bereich'),Zustaendig:gaNeed_(d.Zustaendig,'Zuständigkeit',100),Aktiv:'JA'};
   if(d.ID){gaReplace_('Checklistenpunkte',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Checklistenpunkt',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Checklistenpunkte',val);
