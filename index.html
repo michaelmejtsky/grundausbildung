@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#10283f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Grundausbildung"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="./icon.svg"><title>Grundausbildung | Feuerwehr</title>
+<meta name="theme-color" content="#10283f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Grundausbildung"><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/png" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png"><title>Grundausbildung | Feuerwehr</title>
 <style>
 :root{--navy:#10283f;--navy2:#193a59;--blue:#175eae;--bg:#f3f6f9;--card:#fff;--text:#193047;--muted:#6b7e90;--line:#dee6ef;--green:#187348;--red:#a33b39;--orange:#ae6d14}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:var(--blue);word-break:break-word}.hidden{display:none!important}
@@ -24,7 +24,6 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
 <div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
-<iframe id="gaBridgeFrame" title="Geschützte Datenverbindung" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0" tabindex="-1"></iframe>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -40,47 +39,30 @@ const f=(name,value='')=>'<input name="'+h(name)+'" value="'+h(value)+'">';
 const safeLinks=s=>String(s||'').split(/\n/).map(x=>x.trim()).filter(x=>/^https:\/\//i.test(x)).map(x=>'<li><a target="_blank" rel="noopener noreferrer" href="'+h(x)+'">'+h(x)+'</a></li>').join('');
 const status=s=>'<span class="tag '+(s==='Erledigt'||s==='Durchgeführt'?'ok':s==='Nicht erforderlich'?'blue':s==='Offen'?'warn':'')+'">'+h(s||'Offen')+'</span>';
 
-/* GitHub Pages (Oberfläche) ↔ Apps Script (geschütztes Backend). */
-const BRIDGE=$('gaBridgeFrame');
-const PENDING=new Map();
-let READY=false, READY_RESOLVE;
-const readyPromise=new Promise(resolve=>{READY_RESOLVE=resolve;});
-let SEQ=0,inviteToken='';
-function bridgeOrigin(origin){
-  try{
-    const url=new URL(origin);
-    return url.protocol==='https:' &&
-      (url.hostname==='script.google.com'||url.hostname.endsWith('.googleusercontent.com'));
-  }catch(e){return false;}
-}
-window.addEventListener('message',event=>{
-  if(event.source!==BRIDGE.contentWindow||!bridgeOrigin(event.origin))return;
-  const msg=event.data||{};if(msg.source!=='GA_BRIDGE')return;
-  if(msg.ready){READY=true;READY_RESOLVE();return;}
-  const entry=PENDING.get(msg.requestId);if(!entry)return;
-  PENDING.delete(msg.requestId);clearTimeout(entry.timer);
-  if(msg.ok)entry.resolve(msg.value);
-  else entry.reject(new Error(msg.error||'Anfrage fehlgeschlagen'));
-});
-if(window.GA_BACKEND_URL && /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(window.GA_BACKEND_URL.trim())){
-  BRIDGE.src=window.GA_BACKEND_URL.trim();
-}else{
-  $('backendInfo').textContent='Die Verbindung ist noch nicht eingerichtet. Der Administrator muss zuerst die Apps-Script-Web-App bereitstellen.';
+/* GitHub Pages (Oberfläche) → Cloudflare Worker → Apps Script (Datenbank). */
+if(!window.GA_API_URL){
+  $('backendInfo').textContent='Die App wird eingerichtet. Der Administrator muss noch die Verbindung zum Backend in config.js hinterlegen.';
 }
 async function rpc(fn,...args){
-  if(!BRIDGE.src||!/^https:\/\/script\.google\.com\/macros\/s\//.test(BRIDGE.src))
-    throw new Error('Backend noch nicht verbunden. Bitte zuerst config.js im GitHub-Projekt einrichten.');
-  if(!READY) await Promise.race([readyPromise,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Apps Script nicht erreichbar. Bitte Bereitstellung und Berechtigungen prüfen.')),25000))]);
-  return new Promise((resolve,reject)=>{
-    const requestId='g'+Date.now().toString(36)+'-'+(++SEQ);
-    const timer=setTimeout(()=>{
-      PENDING.delete(requestId);
-      reject(new Error('Zeitüberschreitung bei der Anfrage.'));
-    },45000);
-    PENDING.set(requestId,{resolve,reject,timer});
-    BRIDGE.contentWindow.postMessage({source:'GA_APP',requestId,method:fn,args},'*');
-  });
+  const url=String(window.GA_API_URL||'');
+  if(!/^https:\/\/[a-z0-9.-]+(?:\/[\w./-]*)?$/i.test(url))
+    throw new Error('Die Verbindung zum Backend ist noch nicht konfiguriert. Bitte Administrator kontaktieren.');
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),50000);
+  try{
+    const response=await fetch(url,{
+      method:'POST',mode:'cors',cache:'no-store',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({method:fn,args}),
+      signal:controller.signal
+    });
+    const data=await response.json();
+    if(!data.ok)throw new Error(data.error||'Anfrage fehlgeschlagen');
+    return data.value;
+  }catch(e){
+    if(e.name==='AbortError')throw new Error('Zeitüberschreitung. Bitte Internetverbindung prüfen.');
+    throw e;
+  }finally{clearTimeout(timer);}
 }
 async function initInvite(){
   const params=new URLSearchParams(location.hash.slice(1));
