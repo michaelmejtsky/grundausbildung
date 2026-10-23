@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.3',
+  VERSION: '1.5.4',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -287,7 +287,9 @@ function gaNotify_(userId,type,title,message,reference){
   const allowed=gaPushRule_(userId)[category];
   const hasDevice=gaOptionalRows_('PushGeraete').some(x=>x.BenutzerID===userId&&gaBool_(x.Aktiv));
   const pushStatus=!allowed?'Vom Administrator deaktiviert':hasDevice?'Wartend':'Kein Gerät registriert';
-  gaAppend_('Benachrichtigungen',{ID:gaId_(),BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
+  const id=gaId_();
+  gaAppend_('Benachrichtigungen',{ID:id,BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
+  return id;
 }
 function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaRows_('Mitglieder').filter(m=>m.TurnusID===turnusId&&gaBool_(m.Aktiv)).map(m=>m.Email.toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
 function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);
@@ -417,7 +419,7 @@ function gaSendMessage_(u,d){
   const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.has(x.Email.toLowerCase()));
   const id=gaId_();
   gaAppend_('Nachrichten',{ID:id,Titel:title,Text:message,TurnusID:target,VonBenutzerID:u.ID,ErstelltAm:gaNow_()});
-  users.forEach(x=>gaNotify_(x.ID,'Nachricht',title,message.slice(0,240),id));
+  users.forEach(x=>gaNotify_(x.ID,'Nachricht',title,message,id));
   gaLog_(u.ID,'SENDEN','Nachricht',id,{EmpfaengerArt:mode,ZielID:target,Empfaenger:users.length});
   gaPushQueue_(5);
   return {ok:true,message:'Nachricht gespeichert. '+users.length+' aktive Teilnehmer benachrichtigt.'};
@@ -649,16 +651,28 @@ function gaRemovePush_(user,d){
   return {ok:true};
 }
 function gaTestPush_(user){
-  gaNotify_(user.ID,'Nachricht','Grundausbildung – Test-Push','Dein Gerät kann Benachrichtigungen empfangen.','');
-  const result=gaPushQueue_(5);
-  return {ok:true,message:'Test-Benachrichtigung erstellt. '+result};
+  const devices=gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===user.ID&&gaBool_(x.Aktiv));
+  if(!devices.length)throw new Error('Noch kein Push-Gerät registriert. Zuerst unter Benachrichtigungen auf „Push aktivieren“ tippen.');
+  if(!gaPushRule_(user.ID).Nachrichten)throw new Error('Die Push-Art „Nachrichten“ ist für deinen Benutzer deaktiviert. Bitte unter Push-Steuerung freigeben.');
+  // Nur die neu erzeugte Testnachricht senden, nicht alte Warteschlangen-Einträge.
+  const id=gaNotify_(user.ID,'Nachricht','Grundausbildung – Test-Benachrichtigung',
+    'Dies ist eine echte Testnachricht der Grundausbildungsplattform. Öffne sie, um den vollständigen Text in der App zu lesen.','');
+  gaPushQueue_(1,id);
+  const item=gaFind_('Benachrichtigungen',id);
+  const status=String(item&&item.PushStatus||'Unbekannt');
+  const accepted=/^Gesendet [(][0-9]+[)]$/.test(status);
+  return {ok:accepted,pushStatus:status,
+    message:accepted?'✅ Test-Push vom Push-Dienst angenommen ('+status+'). Bitte nun am Handy auf die Mitteilung tippen.':
+      '❌ Test-Push nicht erfolgreich: '+status+'. Prüfe Geräteanmeldung und Push-Steuerung. Die Testnachricht bleibt in der App sichtbar.'};
 }
-function gaPushQueue_(limit){
+function gaPushQueue_(limit,onlyNotificationId){
   const key=PropertiesService.getScriptProperties().getProperty('GA_WORKER_SECRET');
   if(!key||key.length<48)return 'Push-Server nicht eingerichtet.';
   const url='https://grundausbildung.michael-mejtsky.workers.dev/internal/push';
   const devices=gaOptionalRows_('PushGeraete').filter(x=>gaBool_(x.Aktiv));
-  const pending=gaRows_('Benachrichtigungen').filter(n=>n.PushStatus==='Wartend').slice(0,Math.max(1,Math.min(10,limit||5)));
+  const pending=gaRows_('Benachrichtigungen').filter(n=>
+    n.PushStatus==='Wartend'&&(!onlyNotificationId||n.ID===onlyNotificationId))
+    .slice(0,Math.max(1,Math.min(10,limit||5)));
   for(const n of pending){
     const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':n.Typ==='Bewertung'?'Bewertungen':'Aufgaben'];
     const selected=devices.filter(x=>x.BenutzerID===n.BenutzerID);
@@ -680,9 +694,11 @@ function gaPushQueue_(limit){
         const good=(result.results||[]).filter(x=>x.ok).length;
         const gone=new Set((result.results||[]).filter(x=>x.gone).map(x=>x.id));
         devices.filter(d=>gone.has(d.ID)).forEach(d=>gaReplace_('PushGeraete',d.ID,{Aktiv:'NEIN',AktualisiertAm:gaNow_()}));
-        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:good?'Gesendet ('+good+')':'Nicht zugestellt'});
+        const failed=(result.results||[]).filter(x=>!x.ok);
+        const reason=failed.length?' (HTTP '+failed.map(x=>Number(x.status)||0).join(',').slice(0,65)+')':'';
+        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:good?'Gesendet ('+good+')':'Nicht zugestellt'+reason});
       }else{
-        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Fehlgeschlagen; Push-Konfiguration prüfen'});
+        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Fehlgeschlagen; Worker HTTP '+res.getResponseCode()});
       }
     }catch(err){
       gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Fehlgeschlagen; Verbindung prüfen'});
@@ -944,7 +960,7 @@ function gaSendDirect_(u,d){
  const item={ID:gaId_(),VonBenutzerID:u.ID,AnBenutzerID:recipient.ID,Titel:gaNeed_(d.Titel,'Betreff',160),
   Text:gaNeed_(d.Text,'Nachricht',3000),ErstelltAm:gaNow_(),GelesenAm:''};
  gaAppend_('Direktnachrichten',item);
- gaNotify_(recipient.ID,'Nachricht',item.Titel,'Du hast eine persönliche Nachricht.',item.ID);
+ gaNotify_(recipient.ID,'Nachricht',item.Titel,item.Text,item.ID);
  gaLog_(u.ID,'NACHRICHT','Benutzer',recipient.ID,{ID:item.ID});
  return {ok:true,message:'Persönliche Nachricht gesendet.'};
 }
