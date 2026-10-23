@@ -397,13 +397,33 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
  if(x.dataset.term){TERM=x.dataset.term;render();return}
  if(x.dataset.closeTerm){TERM=null;render();return}
  if(x.dataset.linkcourse){VIEW='courses';render();return}
+ if(x.dataset.submitProject){
+  x.disabled=true;
+  try{const r=await api('submitProject',{ID:x.dataset.submitProject});tip(r.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
+ if(x.dataset.approveProject||x.dataset.returnProject){
+  const isReturn=!!x.dataset.returnProject,id=x.dataset.approveProject||x.dataset.returnProject;
+  let note='';
+  if(isReturn){
+    const response=prompt('Welche Änderungen soll der Ausbilder vornehmen?');
+    if(response===null)return;
+    note=response.trim();
+    if(!note){tip('Bitte eine Rückmeldung eingeben.',true);return;}
+  }else if(!confirm('Dieses Kursprojekt verbindlich freigeben und veröffentlichen?'))return;
+  x.disabled=true;
+  try{const result=await api('reviewProject',{ID:id,Entscheidung:isReturn?'Zurückgeben':'Freigeben',Rueckmeldung:note});tip(result.message);await reload();}
+  catch(err){tip(err.message,true)}finally{x.disabled=false}
+  return;
+ }
  if(x.dataset.removeMember){
   const m=by(STATE.mitglieder,x.dataset.removeMember);
   if(!m)return;
@@ -434,11 +454,20 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
 $('app').addEventListener('change',e=>{
+ if(e.target.matches('[data-report-category]')){REPORT_FILTER.category=e.target.value;render();return;}
+ if(e.target.matches('[data-report-status]')){REPORT_FILTER.status=e.target.value;render();return;}
+ if(e.target.matches('[data-review-course]')){REVIEW_FILTER.course=e.target.value;render();return;}
+ if(e.target.matches('[data-review-score]')){REVIEW_FILTER.score=e.target.value;render();return;}
  const selector=e.target.closest('[data-recipient-mode]');if(!selector)return;
  const form=selector.closest('form');form.querySelectorAll('[data-recipient-target]').forEach(el=>{el.style.display=el.dataset.recipientTarget===selector.value?'block':'none';});
 });
 $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const fd=new FormData(form),type=form.dataset.form,data=Object.fromEntries(fd.entries());const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
  try{if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',data)}
+ else if(type==='project'){if(EDIT)data.ID=EDIT;await doSave('saveProject',data);}
+ else if(type==='permissions')await doSave('setPermission',data);
+ else if(type==='report')await doSave('submitReport',data);
+ else if(type==='reportStatus')await doSave('setReportStatus',data);
+ else if(type==='rating')await doSave('saveRating',data);
  else if(type==='term')await doSave('saveTermin',data);
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
