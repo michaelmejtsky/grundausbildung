@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.3.0',
+  VERSION: '1.4.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -25,7 +25,10 @@ const GA = Object.freeze({
     Berechtigungen: ['ID','BenutzerID','KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','AktualisiertAm'],
     KursProjekte: ['ID','KursID','Titel','Bereich','Typ','Inhalt','Lernziele','PraesentationURL','WeitereLinks','Status','ErstelltVon','ErstelltAm','GeaendertVon','GeaendertAm','GeprueftVon','GeprueftAm','Rueckmeldung'],
     Meldungen: ['ID','Kategorie','Titel','Beschreibung','KursID','Status','ErstelltVon','ErstelltAm','BearbeitetVon','BearbeitetAm','Rueckmeldung'],
-    Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm']
+    Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm'],
+    QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm'],
+    KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
+    Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -172,6 +175,11 @@ function gaApi(method,data,token){
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
   if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
+  if(method==='saveQualification')return gaLock_(()=>gaSaveQualification_(u,d));
+  if(method==='setCourseRequirement')return gaLock_(()=>gaSetCourseRequirement_(u,d));
+  if(method==='setAttendanceMember')return gaLock_(()=>gaSetAttendanceMember_(u,d));
+  if(method==='sendDirect')return gaLock_(()=>gaSendDirect_(u,d));
+  if(method==='readDirect')return gaLock_(()=>gaReadDirect_(u,d));
   if(method==='setPermission')return gaLock_(()=>gaSetPermission_(u,d));
   if(method==='saveProject')return gaLock_(()=>gaSaveProject_(u,d));
   if(method==='submitProject')return gaLock_(()=>gaSubmitProject_(u,d));
@@ -209,6 +217,10 @@ function gaState_(u){
  const ownAttendance=participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
  const ownRatings=participant&&own?ratings.filter(r=>r.MitgliedID===own.ID):[];
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
+ const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
+ const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att));
+ const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
   turnusse:admin||trainer?allTurnusse:participant&&own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
@@ -234,7 +246,12 @@ function gaState_(u){
   offeneBewertungen:participant&&own?ownAttendance.filter(t=>gaBool_(t.Anwesend)).map(t=>allTermine.find(term=>term.ID===t.TerminID)).filter(term=>
     term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
-  meMember:participant&&own?own:null
+  meMember:participant&&own?own:null,
+  qualifikationen,
+  kursAnforderungen:admin?reqs:[],
+  direktnachrichten,
+  nachrichtenEmpfaenger:admin||trainer?users.filter(x=>gaBool_(x.Aktiv)).map(gaPublicUser_):
+    gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&['Administrator','Ausbilder','Fachverwaltung'].includes(x.Rolle)).map(gaPublicUser_)
  };
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
