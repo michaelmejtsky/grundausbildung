@@ -295,7 +295,7 @@ function qualifications(){
  gaStatusBadge(q.BSWModulAbgeschlossen,'Modul BSW abgeschlossen','Modul BSW offen')+
  gaStatusBadge(q.Alter16,'16 Jahre erreicht','Unter 16 / unbekannt')+
  gaStatusBadge(q.BSWDienstMoeglich,'BSW-Dienst: JA','BSW-Dienst: NEIN')+'</div>'+
- '<div class="detail">Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+'</div>'+
+ '<div class="detail">Dienstnummer: '+h(q.Dienstnummer||'–')+' · Standesbuchnummer: '+h(q.Standesbuchnummer||'–')+'<br>Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · Fortschritt: '+h(q.Fortschritt)+' % · Erste Hilfe: '+h(q.ErsteHilfeStatus)+'</div>'+
  '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'"><div class="grid">'+
  '<div><label>Geburtsdatum</label><input type="date" name="Geburtsdatum" value="'+h(q.Geburtsdatum)+'"></div>'+
  '<div><label>Erste Hilfe</label><select name="ErsteHilfeStatus"><option '+(q.ErsteHilfeStatus==='Ausständig'?'selected':'')+'>Ausständig</option><option '+(q.ErsteHilfeStatus==='Bestätigt'?'selected':'')+'>Bestätigt</option></select></div>'+
@@ -320,6 +320,8 @@ function members(){
  '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
  '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
  '<div><label>Geburtsdatum (für BSW-Freigabe)</label><input type="date" name="Geburtsdatum" value="'+h(edit?.Geburtsdatum||'')+'"></div>'+
+ '<div><label>Dienstnummer</label><input name="Dienstnummer" maxlength="35" value="'+h(edit?.Dienstnummer||'')+'"></div>'+
+ '<div><label>Standesbuchnummer</label><input name="Standesbuchnummer" maxlength="35" value="'+h(edit?.Standesbuchnummer||'')+'"></div>'+
  '<div class="wide"><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Teilnehmerzugang gleich per E-Mail einladen</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern / reaktivieren':'Mitglied aufnehmen')+'</button>'+
