@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.2',
+  VERSION: '1.5.3',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -143,9 +143,14 @@ function gaSame_(a,b){a=String(a);b=String(b);let diff=a.length^b.length;for(let
 function gaTokenKey_(token){return 's_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token)).slice(0,52);}
 function gaSession_(token){
   if(!token||typeof token!=='string')throw new Error('Bitte anmelden.');
-  const uid=CacheService.getScriptCache().get(gaTokenKey_(token));
-  const u=uid&&gaFind_('Benutzer',uid);
-  if(!u||!gaBool_(u.Aktiv))throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+  const session=CacheService.getScriptCache().get(gaTokenKey_(token))||'';
+  const separator=session.lastIndexOf('|');
+  const id=separator<0?'':session.slice(0,separator);
+  const fingerprint=separator<0?'':session.slice(separator+1);
+  const u=id&&gaFind_('Benutzer',id);
+  // Nach Passwortänderung verlieren alle bisherigen Sitzungen ihre Gültigkeit.
+  if(!u||!gaBool_(u.Aktiv)||!u.Hash||
+     fingerprint!==u.Hash.slice(0,24))throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
   return u;
 }
 function gaLogin(email,password){
@@ -160,7 +165,7 @@ function gaLogin(email,password){
   }
   cache.remove(fail);
   const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
-  cache.put(gaTokenKey_(token),u.ID,21600);
+  cache.put(gaTokenKey_(token),u.ID+'|'+u.Hash.slice(0,24),21600);
   gaLog_(u.ID,'LOGIN','Benutzer',u.ID,{});
   return {token,user:gaPublicUser_(u),version:GA.VERSION};
 }
@@ -193,6 +198,7 @@ function gaApi(method,data,token){
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
   if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
+  if(method==='resetPassword')return gaLock_(()=>gaResetPassword_(u,d));
   if(method==='sendMessage')return gaLock_(()=>gaSendMessage_(u,d));
   if(method==='readNotification')return gaLock_(()=>gaReadNotification_(u,d));
   if(method==='registerPush')return gaLock_(()=>gaRegisterPush_(u,d));
@@ -479,15 +485,49 @@ function gaInviteUser_(actor,d) {
   gaLog_(actor.ID,'EINLADUNG_GESENDET','Benutzer',user.ID,{Email:email,Rolle:role});
   return {ok:true,message:'Einladung per E-Mail gesendet (7 Tage gültig).'};
 }
+function gaResetPassword_(actor,d){
+  gaRequire_(actor,['Administrator']);
+  const id=gaNeed_(d.BenutzerID,'Benutzer-ID',100);
+  const user=gaFind_('Benutzer',id);
+  if(!user||!gaBool_(user.Aktiv)||!gaEmail_(user.Email))
+    throw new Error('Für diesen Benutzer gibt es keinen aktiven Zugang.');
+  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
+  const link=gaInviteLink_(token);
+  const invite={ID:gaId_(),BenutzerID:user.ID,Email:user.Email,TokenHash:gaInviteDigest_(token),
+    ExpiresAt:String(Date.now()+30*60*1000),UsedAt:'',Status:'Passwortreset',
+    ErstelltVon:actor.ID,ErstelltAm:gaNow_()};
+  gaRows_('Einladungen')
+    .filter(x=>x.BenutzerID===user.ID&&x.Status==='Passwortreset')
+    .forEach(x=>gaReplace_('Einladungen',x.ID,{Status:'Ersetzt'}));
+  gaAppend_('Einladungen',invite);
+  try{
+    MailApp.sendEmail({
+      to:user.Email,
+      subject:'Feuerwehr St. Pölten – Passwort der Ausbildungsplattform zurücksetzen',
+      body:'Hallo '+user.Name+',\n\nfür deinen Zugang zur Ausbildungsplattform wurde eine Passwort-Zurücksetzung angefordert.\n'+
+        'Über diesen persönlichen Link kannst du selbst ein neues Passwort festlegen:\n\n'+link+
+        '\n\nDer Link ist nur einmal verwendbar und 30 Minuten gültig.\n'+
+        'Falls du keine Zurücksetzung angefordert hast, informiere bitte die Ausbildungsadministration.\n\nFeuerwehr St. Pölten – Ausbildung'
+    });
+  }catch(err){
+    gaReplace_('Einladungen',invite.ID,{Status:'Versandfehler'});
+    gaLog_(actor.ID,'PASSWORTRESET_VERSANDFEHLER','Benutzer',user.ID,{});
+    throw new Error('Der Reset-Link konnte nicht per E-Mail zugestellt werden. Mail-Berechtigung oder Kontingent prüfen.');
+  }
+  gaLog_(actor.ID,'PASSWORTRESET_ANGEFORDERT','Benutzer',user.ID,{});
+  return {ok:true,message:'Passwort-Zurücksetzungslink wurde an die hinterlegte E-Mail-Adresse gesendet (30 Minuten gültig).'};
+}
 function gaInviteCheck_(token){
   token=String(token||'');
   if(!/^[a-fA-F0-9]{64}$/.test(token))throw new Error('Ungültiger Einladungslink.');
   const digest=gaInviteDigest_(token);
   const item=gaRows_('Einladungen').find(i=>gaSame_(i.TokenHash,digest));
-  if(!item||item.Status!=='Offen'||Number(item.ExpiresAt)<Date.now())
-    throw new Error('Dieser Einladungslink ist ungültig, abgelaufen oder bereits verwendet. Bitte einen neuen anfordern.');
+  if(!item||!['Offen','Passwortreset'].includes(item.Status)||Number(item.ExpiresAt)<Date.now())
+    throw new Error('Dieser Einladungs- oder Reset-Link ist ungültig, abgelaufen oder bereits verwendet. Bitte einen neuen anfordern.');
   const user=gaFind_('Benutzer',item.BenutzerID);
-  if(!user||gaBool_(user.Aktiv))throw new Error('Einladung nicht mehr gültig.');
+  if(!user||(item.Status==='Offen'&&gaBool_(user.Aktiv))||
+     (item.Status==='Passwortreset'&&!gaBool_(user.Aktiv)))
+    throw new Error('Dieser Link ist für den aktuellen Zugangsstatus nicht gültig.');
   return {Name:user.Name,Email:user.Email,Rolle:user.Rolle,Bereich:user.Bereich};
 }
 function gaCheckInvite(token){return gaInviteCheck_(token);}
@@ -498,13 +538,15 @@ function gaAcceptInvite(token,password){
     if(password.length<12||password.length>256)
       throw new Error('Das Passwort muss 12 bis 256 Zeichen lang sein.');
     const digest=gaInviteDigest_(token);
-    const item=gaRows_('Einladungen').find(i=>gaSame_(i.TokenHash,digest)&&i.Status==='Offen');
+    const item=gaRows_('Einladungen').find(i=>gaSame_(i.TokenHash,digest)&&
+      ['Offen','Passwortreset'].includes(i.Status));
     const user=gaFind_('Benutzer',item.BenutzerID);
     if(user.Email!==info.Email)throw new Error('Einladung konnte nicht zugeordnet werden.');
+    const isReset=item.Status==='Passwortreset';
     const salt=gaId_()+gaId_();
     gaReplace_('Benutzer',user.ID,{Salt:salt,Hash:gaHash_(password,salt),Aktiv:'JA'});
     gaReplace_('Einladungen',item.ID,{Status:'Verwendet',UsedAt:gaNow_()});
-    gaLog_(user.ID,'EINLADUNG_ANGENOMMEN','Benutzer',user.ID,{});
+    gaLog_(user.ID,isReset?'PASSWORTRESET_ABGESCHLOSSEN':'EINLADUNG_ANGENOMMEN','Benutzer',user.ID,{});
     return {ok:true};
   });
 }
