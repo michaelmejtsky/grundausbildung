@@ -47,8 +47,8 @@ Eine einfache direkte `fetch()`-Anbindung von GitHub an Apps Script ist wegen CO
 
 ### 4. Cloudflare Worker einrichten
 
-- In Cloudflare → **Workers & Pages** → Worker anlegen, Inhalt aus `cloudflare-worker.js` einfügen und bereitstellen.
-- Die Apps-Script-URL ist in der Datei `cloudflare-worker.js` **bereits eingetragen**. Die optionale Worker-Variable `GA_SCRIPT_URL` ist nur nötig, wenn die Zieladresse später überschrieben werden soll.
+- **Einfacherer GitHub-Weg (bereits vorbereitet):** In Cloudflare → **Workers & Pages** → Create → GitHub → Repository `michaelmejtsky/grundausbildung` auswählen. Projektname `grundausbildung-api`, **Build command leer**, **Deploy command `npx wrangler deploy`**, Preview builds für den ersten Test ausschalten, Cloudflare Access ausschalten und **Deploy** drücken. Die neue Datei `wrangler.jsonc` steuert dabei automatisch die Veröffentlichung von `cloudflare-worker.js` als Worker. Die Datei `index.html` bleibt für GitHub Pages gedacht.
+- Die Apps-Script-URL ist in der Datei `cloudflare-worker.js` **bereits eingetragen**. Die optionale Worker-Variable `GA_SCRIPT_URL` ist nur nötig, wenn die Zieladresse später überschrieben werden soll. GitHub-Builds übernehmen Änderungen am Worker-Code automatisch.
 - Worker-**Secret** `GA_WORKER_SECRET` = der in Schritt 2 einmalig erzeugte Schlüssel. Den Wert **nie im GitHub-Repository speichern**.
 - Worker neu veröffentlichen und dessen HTTPS-Adresse kopieren, z. B. `https://grundausbildung-api.<account>.workers.dev`.
 - Die Worker-Adresse ist **kein Geheimnis**; das Secret bleibt nur serverseitig.
