@@ -1,3 +1,21 @@
+## Cloudflare-Production-Variablen gegen Verlust bei Deploy absichern
+
+Die Produktionskonfiguration in `wrangler.jsonc` enthält jetzt `keep_vars: true` und eine Pflichtprüfung für die verschlüsselten Secrets `GA_WORKER_SECRET` und `VAPID_PRIVATE_JWK`. Wrangler kann damit **bei Nutzung genau dieser Wrangler-Datei** normale Dashboard-Variablen bei künftigen Deployments beibehalten und Deployments ohne die beiden erforderlichen Secrets verweigern. Cloudflare-Worker-Secrets selbst sollten laut Dokumentation bereits standardmäßig erhalten bleiben; falls sie trotzdem fehlen, Deployment-Historie und Production/Previews sowie Worker-Namen vergleichen. Eine nicht verwendete `wrangler.jsonc` schützt die Worker-Bereitstellung nicht.
+
+Wichtige Production-Bindings im Worker `grundausbildung` (kein Wert darf im GitHub-Repository stehen):
+
+| Name | Typ | Herkunft |
+| --- | --- | --- |
+| `GA_WORKER_SECRET` | Secret | Muss **exakt** der Skripteigenschaft `GA_WORKER_SECRET` im bestehenden Google Apps Script entsprechen |
+| `VAPID_PRIVATE_JWK` | Secret | Privater Teil des vorhandenen VAPID-Paars, nicht aus öffentlichen Informationen rekonstruierbar |
+| `VAPID_PUBLIC_KEY` | Text | Öffentlicher Teil **desselben** VAPID-Paars |
+| `VAPID_SUBJECT` | Text | `mailto:` + tatsächliche verantwortliche E-Mail-Adresse |
+| `GA_SCRIPT_URL` | Text, optional | Nur nötig, falls vom im Worker hinterlegten Apps-Script-Link abgewichen wird |
+
+Cloudflare: Workers & Pages → `grundausbildung` → Settings → Variables and Secrets → **Production**. Werte setzen → **Deploy**. Bei bereits aktivem Gerät nach Austausch des VAPID-Schlüsselpaares Push neu anmelden. Keine Secrets in Chats, Screenshots, Commits oder Browser-URLs kopieren. Nach dem Deployment in der App unter Benachrichtigungen → Cloudflare-Push prüfen → Push aktivieren → Test-Benachrichtigung senden.
+
+Prüfen, dass alle GitHub-/CI-Deploys **dieselbe `wrangler.jsonc`** benutzen. Für ältere oder manuelle Cloudflare-Editor-Deployments kann das Vorhandensein der GitHub-Datei allein die Variablen nicht schützen.
+
 ## V1.5.4 – Push-Test für alle und Nachrichten vollständig lesen
 
 - **Benachrichtigungen → Test-Benachrichtigung senden** ist für alle angemeldeten Benutzer zugänglich. Die Aktion verschickt eine eigene neue Testnachricht **sofort**, statt ältere Warteschlangeneinträge zuerst abzuarbeiten. Das Backend meldet transparent, ob der Push-Dienst den Versand akzeptiert hat oder ob kein Gerät registriert bzw. die Zustellung fehlgeschlagen ist. Die Annahme durch den Push-Dienst garantiert allein noch keine Anzeige durch das Betriebssystem.
