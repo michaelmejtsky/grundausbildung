@@ -533,7 +533,7 @@ function gaPushQueue_(limit){
   }
   return pending.length+' Nachricht(en) bearbeitet.';
 }
-function gaPushJob_(){gaPushQueue_(8);}
+function gaPushJob_(){gaLock_(()=>gaPushQueue_(8));}
 function gaPushEinrichten(){
   gaEinrichten();
   const current=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='gaPushJob_');
