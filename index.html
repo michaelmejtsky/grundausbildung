@@ -523,6 +523,8 @@ function notifications(){
  const controls='<section class="panel"><h2>Push-Benachrichtigungen</h2><p class="muted">'+h(help)+'</p>'+
  '<p class="small">Berechtigung: <b>'+h(permission)+'</b> · Registrierte Geräte: <b>'+h(STATE.pushGeraeteAnzahl||0)+'</b></p>'+
  '<p class="small">Vom Administrator erlaubt: '+h(allowed.join(', ')||'Keine')+'</p>'+
+ '<div class="btnline"><button class="secondary" type="button" data-push-check="1">Cloudflare-Push prüfen</button></div>'+
+ '<div id="pushCheckResult" class="notice" role="status">Status noch nicht geprüft.</div>'+
  '<div class="btnline"><button class="primary" type="button" data-push-enable="1" '+(!supported||permission==='denied'?'disabled':'')+'>Push aktivieren</button>'+
  '<button class="secondary" type="button" data-push-disable="1" '+(!supported?'disabled':'')+'>Auf diesem Gerät deaktivieren</button></div>'+
  '<p class="small muted">Wenn die Cloudflare-VAPID-Schlüssel noch fehlen, bleibt die Push-Zustellung deaktiviert. Nachrichten in der App funktionieren trotzdem.</p></section>';
@@ -574,7 +576,7 @@ async function doSave(method,data){try{const result=await api(method,data);FORM=
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW='overview';render();}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -628,6 +630,20 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
   try{const result=await api('inviteUser',{Name:name(m),Email:m.Email,Rolle:'Teilnehmer',Bereich:''});tip(result?.message||'Einladung versendet.');await reload();}
   catch(err){tip(err.message,true)}finally{x.disabled=false}
   return;
+ }
+ if(x.dataset.pushCheck){
+   const box=$('pushCheckResult');
+   x.disabled=true;
+   if(box)box.textContent='Cloudflare-Verbindung wird geprüft …';
+   try{
+     const result=await rpc('gaPushInfo');
+     if(box)box.textContent=result?.configured===true?
+       '✅ Cloudflare erkennt die Push-Schlüssel. Du kannst jetzt Push auf diesem Gerät aktivieren und anschließend einen Test senden.':
+       '⚠️ Der veröffentlichte Cloudflare-Worker erkennt die VAPID-Einstellungen nicht vollständig. Bitte das aktuelle Worker-Deployment sowie VAPID_PUBLIC_KEY, VAPID_PRIVATE_JWK und VAPID_SUBJECT prüfen.';
+   }catch(err){
+     if(box)box.textContent='❌ Push-Prüfung fehlgeschlagen: '+String(err.message||'Unbekannter Fehler');
+   }finally{x.disabled=false;}
+   return;
  }
  if(x.dataset.pushEnable||x.dataset.pushDisable||x.dataset.testPush){
    x.disabled=true;
