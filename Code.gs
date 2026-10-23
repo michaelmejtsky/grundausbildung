@@ -192,44 +192,50 @@ function gaApi(method,data,token){
   throw new Error('Unbekannte Aktion.');
 }
 function gaState_(u){
-  const admin=u.Rolle==='Administrator',trainer=u.Rolle==='Ausbilder',special=u.Rolle==='Fachverwaltung',participant=u.Rolle==='Teilnehmer';
-  const allTurnusse=gaRows_('Turnusse'), allKurse=gaRows_('Kurse'),allTermine=gaRows_('Termine'),
-    allMembers=gaRows_('Mitglieder'),allItems=gaRows_('Checklistenpunkte'),allChecks=gaRows_('MitgliedChecks');
-  const own=allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv));
-  let members=admin||trainer?allMembers:special?allMembers.map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[];
-  let terms=admin||trainer?allTermine:participant&&own?allTermine.filter(t=>t.TurnusID===own.TurnusID):[];
-  let courses=admin||trainer?allKurse:participant?allKurse.filter(c=>terms.some(t=>t.KursID===c.ID)):[];
-  let checks=admin?allChecks:special?allChecks.filter(ch=>allItems.some(it=>it.ID===ch.PunktID&&it.Zustaendig===u.Bereich)):
-    participant&&own?allChecks.filter(ch=>ch.MitgliedID===own.ID):[];
-  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
-  return {
-    version:GA.VERSION,user:gaPublicUser_(u),
-    turnusse:admin||trainer?allTurnusse:participant&&own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
-    kurse:courses,termine:terms,mitglieder:members,
-    checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
-    checks,
-    teilnahmen:admin||trainer?gaRows_('Teilnahmen'):participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[],
-    nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||n.TurnusID==='M:'+own.ID):[],
-    benachrichtigungen:notifications,
-    pushEigeneRegeln:gaPushRule_(u.ID),
-    pushGeraeteAnzahl:gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
-    pushRegeln:admin?gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID),Geraete:gaOptionalRows_('PushGeraete').filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-    benutzer:admin?gaRows_('Benutzer').map(gaPublicUser_):trainer?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
-    rechte:gaPermissions_(u),
-    kursProjekte:admin?gaOptionalRows_('KursProjekte'):trainer?gaOptionalRows_('KursProjekte').filter(x=>x.ErstelltVon===u.ID||gaCan_(u,'KurseFreigeben')):[],
-    berechtigungen:admin?gaRows_('Benutzer').filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x)})):[],
-    meldungen:admin||gaCan_(u,'MeldungenBearbeiten')?gaOptionalRows_('Meldungen'):
-      trainer?gaOptionalRows_('Meldungen').filter(x=>x.ErstelltVon===u.ID):[],
-    bewertungen:gaCan_(u,'BewertungenAnsehen')?gaOptionalRows_('Bewertungen'):[],
-    eigeneBewertungen:participant&&own?gaOptionalRows_('Bewertungen').filter(x=>x.MitgliedID===own.ID):[],
-    offeneBewertungen:participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID&&gaBool_(t.Anwesend)).filter(t=>{
-      const term=allTermine.find(x=>x.ID===t.TerminID);
-      return term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
-        !gaOptionalRows_('Bewertungen').some(r=>r.TerminID===term.ID&&r.MitgliedID===own.ID);
-    }).map(t=>allTermine.find(x=>x.ID===t.TerminID)).filter(Boolean):[],
-    // Ausgabe von Personenprofilen nur nach Login und rollenbasiert.
-    meMember:participant&&own?own:null
-  };
+ const admin=u.Rolle==='Administrator',trainer=u.Rolle==='Ausbilder',
+  special=u.Rolle==='Fachverwaltung',participant=u.Rolle==='Teilnehmer';
+ const allTurnusse=gaRows_('Turnusse'),allKurse=gaRows_('Kurse'),
+  allTermine=gaRows_('Termine'),allMembers=gaRows_('Mitglieder'),
+  allItems=gaRows_('Checklistenpunkte'),allChecks=gaRows_('MitgliedChecks');
+ const own=participant?allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv)):null;
+ const rightsRows=(admin||trainer)?gaOptionalRows_('Berechtigungen'):[];
+ const rights=gaPermissions_(u,rightsRows);
+ const users=(admin||trainer)?gaRows_('Benutzer'):[];
+ const projects=(admin||trainer)?gaOptionalRows_('KursProjekte'):[];
+ const reports=(admin||trainer)?gaOptionalRows_('Meldungen'):[];
+ const ratings=(participant||rights.BewertungenAnsehen)?gaOptionalRows_('Bewertungen'):[];
+ const devices=gaOptionalRows_('PushGeraete'),pushRulesRows=gaOptionalRows_('PushRegeln');
+ const ownTerm=participant&&own?allTermine.filter(t=>t.TurnusID===own.TurnusID):[];
+ const ownAttendance=participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
+ const ownRatings=participant&&own?ratings.filter(r=>r.MitgliedID===own.ID):[];
+ const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
+ return {
+  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
+  turnusse:admin||trainer?allTurnusse:participant&&own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
+  kurse:admin||trainer?allKurse:participant?allKurse.filter(c=>ownTerm.some(t=>t.KursID===c.ID)):[],
+  termine:admin||trainer?allTermine:ownTerm,
+  mitglieder:admin||trainer?allMembers:special?allMembers.filter(m=>gaBool_(m.Aktiv)).map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[],
+  checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
+  checks:admin?allChecks:special?allChecks.filter(ch=>allItems.some(it=>it.ID===ch.PunktID&&it.Zustaendig===u.Bereich)):
+    participant&&own?allChecks.filter(ch=>ch.MitgliedID===own.ID):[],
+  teilnahmen:admin||trainer?gaRows_('Teilnahmen'):ownAttendance,
+  nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||n.TurnusID==='M:'+own.ID):[],
+  benachrichtigungen:notifications,
+  pushEigeneRegeln:gaPushRule_(u.ID,pushRulesRows),
+  pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
+  pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
+   Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
+  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
+  kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseFreigeben):[],
+  berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
+  meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
+  bewertungen:rights.BewertungenAnsehen?ratings:[],
+  eigeneBewertungen:ownRatings,
+  offeneBewertungen:participant&&own?ownAttendance.filter(t=>gaBool_(t.Anwesend)).map(t=>allTermine.find(term=>term.ID===t.TerminID)).filter(term=>
+    term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
+    !ownRatings.some(r=>r.TerminID===term.ID)):[],
+  meMember:participant&&own?own:null
+ };
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
 function gaChoice_(v,allowed,name){if(!allowed.includes(v))throw new Error('Ungültiger Wert für '+name+'.');return v;}
@@ -522,13 +528,13 @@ function gaWorkerSchluesselEinrichten(){
  * Die Serverzustellung läuft ausschließlich signiert über den Cloudflare-Worker.
  */
 function gaOptionalRows_(name){return gaSheet_().getSheetByName(name)?gaRows_(name):[];}
-function gaPushRule_(userId){
-  const row=gaOptionalRows_('PushRegeln').find(x=>x.BenutzerID===userId);
+function gaPushRule_(userId,pushRows){
+  const row=(pushRows||gaOptionalRows_('PushRegeln')).find(x=>x.BenutzerID===userId);
   return {
     Nachrichten:row?gaBool_(row.Nachrichten):true,
     Termine:row?gaBool_(row.Termine):true,
     Aufgaben:row?gaBool_(row.Aufgaben):true,
-    Bewertungen:row?gaBool_(row.Bewertungen):true
+    Bewertungen:row&&String(row.Bewertungen).trim()?gaBool_(row.Bewertungen):true
   };
 }
 function gaSetPushRule_(actor,d){
@@ -622,10 +628,10 @@ function gaPushEinrichten(){
 
 /** Rollenrechte (nur Admin vergibt Rechte; beim Trainer grundsätzlich alles AUS). */
 const GA_RIGHTS=['KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen'];
-function gaPermissions_(user){
+function gaPermissions_(user,rightsRows){
  if(user.Rolle==='Administrator')return Object.fromEntries(GA_RIGHTS.map(k=>[k,true]));
  if(user.Rolle!=='Ausbilder')return Object.fromEntries(GA_RIGHTS.map(k=>[k,false]));
- const own=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===user.ID);
+ const own=(rightsRows||gaOptionalRows_('Berechtigungen')).find(x=>x.BenutzerID===user.ID);
  return Object.fromEntries(GA_RIGHTS.map(k=>[k,!!own&&gaBool_(own[k])]));
 }
 function gaCan_(user,right){return !!gaPermissions_(user)[right];}
