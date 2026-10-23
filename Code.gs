@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.4.0',
+  VERSION: '1.4.1',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -26,7 +26,7 @@ const GA = Object.freeze({
     KursProjekte: ['ID','KursID','Titel','Bereich','Typ','Inhalt','Lernziele','PraesentationURL','WeitereLinks','Status','ErstelltVon','ErstelltAm','GeaendertVon','GeaendertAm','GeprueftVon','GeprueftAm','Rueckmeldung'],
     Meldungen: ['ID','Kategorie','Titel','Beschreibung','KursID','Status','ErstelltVon','ErstelltAm','BearbeitetVon','BearbeitetAm','Rueckmeldung'],
     Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm'],
-    QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt'],
+    QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt','FDISKPlatzhalter'],
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
     Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm']
   },
@@ -219,7 +219,7 @@ function gaState_(u){
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
@@ -801,19 +801,19 @@ function gaSaveRating_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances){
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
  const complete=id=>terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
  const gab=rs.filter(r=>valid(r.PflichtGAB)),bsw=rs.filter(r=>valid(r.PflichtBSW));
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
- const advanced=q.GABAnerkannt==='JA',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
+ const advanced=q.GABAnerkannt==='JA'&&(turnusse||[]).some(t=>t.ID===m.TurnusID&&t.Bereich==='Erweiterte Ausbildung'),gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
  const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
  const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
  return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Standesbuchnummer:m.Standesbuchnummer||'',
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
-  ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',
+  ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
   GABAbgeschlossen:gabDone,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
   BSWDienstMoeglich:gabDone&&bswDone&&!!age16,
@@ -830,13 +830,16 @@ function gaSaveQualification_(u,d){
  if(status==='Bestätigt'&&!aid)throw new Error('Bestätigung der Ersten Hilfe braucht das tatsächliche Kursdatum.');
  const val={Geburtsdatum:birth,ErsteHilfeStatus:status,ErsteHilfeBestaetigtAm:status==='Bestätigt'?aid:'',
   FDISKEintragDatum:fdisk,GABFreigabe:d.GABFreigabe==='JA'?'JA':'NEIN',
-  GABAnerkannt:d.GABAnerkannt==='JA'?'JA':'NEIN',Notiz:gaText_(d.Notiz,700),
+  GABAnerkannt:d.GABAnerkannt==='JA'?'JA':'NEIN',FDISKPlatzhalter:d.FDISKPlatzhalter==='JA'?'JA':'NEIN',Notiz:gaText_(d.Notiz,700),
   GeprueftVon:u.ID,GeprueftAm:gaNow_()};
  if(val.GABAnerkannt==='JA'&&gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Erweiterte Ausbildung')
   throw new Error('GAB-Anerkennung ist nur bei erweiterter Ausbildung zulässig.');
  const existing=gaOptionalRows_('QualifikationMitglieder').find(x=>x.MitgliedID===m.ID);
  if(existing)gaReplace_('QualifikationMitglieder',existing.ID,val);
  else gaAppend_('QualifikationMitglieder',{ID:gaId_(),MitgliedID:m.ID,...val});
+ // Ein einziges maßgebliches Geburtsdatum im Mitgliedsstamm; sonst würde
+ // eine Änderung im Qualifikationsformular den Altersstatus nicht aktualisieren.
+ if(birth!==String(m.Geburtsdatum||''))gaReplace_('Mitglieder',m.ID,{Geburtsdatum:birth});
  gaLog_(u.ID,'QUALIFIKATION','Mitglied',m.ID,{GAB:val.GABFreigabe,GABAnerkannt:val.GABAnerkannt,ErsteHilfeStatus:status});
  return {ok:true,message:'Qualifikationsnachweise gespeichert.'};
 }
