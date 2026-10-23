@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10283f">
+<meta name="referrer" content="no-referrer">
+<title>Einladung annehmen · Grundausbildung</title>
+<link rel="icon" href="./feuerwehrauto-192.png" type="image/png">
+<link rel="manifest" href="./manifest.webmanifest">
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(140deg,#0c243a,#24577f);font:16px system-ui,-apple-system,"Segoe UI",Arial,sans-serif;display:grid;place-items:center;padding:18px;color:#193047}
+main{width:100%;max-width:460px;padding:28px;background:#fff;border-radius:20px;box-shadow:0 16px 54px #07172955}
+.logo{font-size:30px;width:60px;height:60px;display:grid;place-items:center;background:#e7f1fd;border-radius:16px}
+h1{font-size:25px;margin:17px 0 6px}p{line-height:1.5}.muted{color:#5e7286;font-size:14px}
+label{display:block;font-weight:700;font-size:14px;margin:16px 0 6px}
+input{width:100%;font:inherit;border:1px solid #cbd6e1;padding:12px;border-radius:10px}
+input:focus{outline:2px solid #8dbff2;border-color:#2b77c7}
+button,a.action{border:0;border-radius:10px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;display:inline-block;text-decoration:none}
+button.primary,a.action{background:#175eae;color:#fff}button:disabled{opacity:.7;cursor:wait}
+button.secondary{background:#eaf0f6;color:#10283f}
+.full{width:100%}.notice{padding:12px;background:#eaf3fb;border-radius:10px;font-size:14px}
+.error{padding:12px;background:#ffe9eb;color:#9c1e29;border-radius:10px;margin:12px 0;white-space:pre-wrap}
+.success{padding:12px;background:#e4f5eb;color:#145b39;border-radius:10px;margin:12px 0}
+.hidden{display:none!important}.toggle{font-size:13px;display:flex;align-items:center;gap:6px;margin-top:10px}.toggle input{width:auto}
+</style>
+</head>
+<body>
+<main>
+<div class="logo" aria-hidden="true">🚒</div>
+<h1>Grundausbildung</h1>
+<p class="muted">Feuerwehr St. Pölten Stadt · Zugang aktivieren</p>
+<div id="loading" class="notice" role="status">Dein persönlicher Einladungslink wird geprüft …</div>
+<div id="error" class="error hidden" role="alert"></div>
+<div id="ready" class="hidden">
+<p id="person" class="notice"></p>
+<form id="setup">
+<label for="password">Eigenes Passwort festlegen</label>
+<input id="password" type="password" name="password" minlength="12" maxlength="256" required autocomplete="new-password" placeholder="Mindestens 12 Zeichen">
+<label for="verify">Passwort wiederholen</label>
+<input id="verify" type="password" name="verify" minlength="12" maxlength="256" required autocomplete="new-password">
+<label class="toggle"><input id="show" type="checkbox"> Passwörter anzeigen</label>
+<p class="muted">Wähle mindestens 12 Zeichen. Das Passwort wird nicht per E-Mail verschickt.</p>
+<button id="submit" class="primary full" type="submit">Passwort festlegen und Zugang aktivieren</button>
+</form>
+</div>
+<div id="done" class="hidden">
+<div class="success">Dein Zugang wurde aktiviert. Du kannst dich jetzt mit deiner E-Mail-Adresse und deinem neuen Passwort anmelden.</div>
+<a href="./" class="action full" style="text-align:center">Zur Anmeldung</a>
+</div>
+<p class="muted"><a href="./">Zurück zur Anmeldeseite</a></p>
+</main>
+<script src="./config.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+let invitationToken='';
+const showError=msg=>{
+ $('loading').classList.add('hidden');
+ $('error').textContent=String(msg);
+ $('error').classList.remove('hidden');
+};
+async function api(method,...args){
+ const endpoint=String(window.GA_API_URL||'');
+ if(!/^https:\/\/[a-z0-9.-]+(?:\/[\w./-]*)?$/i.test(endpoint))
+  throw new Error('Die Serververbindung ist nicht eingerichtet. Bitte Administrator kontaktieren.');
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
+ try{
+  const response=await fetch(endpoint,{method:'POST',mode:'cors',cache:'no-store',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({method,args}),signal:controller.signal});
+  const data=await response.json();
+  if(!response.ok||!data.ok)throw new Error(data.error||'Serveranfrage fehlgeschlagen.');
+  return data.value;
+ }catch(error){
+  if(error.name==='AbortError')throw new Error('Zeitüberschreitung bei der Verbindung. Bitte nochmals versuchen.');
+  throw error;
+ }finally{clearTimeout(timer);}
+}
+async function start(){
+ const hash=new URLSearchParams(location.hash.slice(1));
+ const query=new URLSearchParams(location.search.slice(1));
+ invitationToken=hash.get('invite')||query.get('invite')||'';
+ if(!/^[a-fA-F0-9]{64}$/.test(invitationToken)){
+  showError('Einladungslink unvollständig. Bitte den gesamten Link aus der Einladungs-E-Mail öffnen oder den Administrator um eine neue Einladung bitten.');
+  return;
+ }
+ // Entfernt einen etwaigen URL-Query-Token aus der Adressleiste.
+ if(query.has('invite'))history.replaceState(null,'',location.pathname+'#invite='+encodeURIComponent(invitationToken));
+ try{
+  const person=await api('gaCheckInvite',invitationToken);
+  $('person').textContent='Hallo '+person.Name+'! Dein Zugang für '+person.Email+' ('+person.Rolle+') ist vorbereitet.';
+  $('loading').classList.add('hidden');
+  $('ready').classList.remove('hidden');
+  $('password').focus();
+ }catch(error){showError(error.message);}
+}
+$('show').addEventListener('change',()=>{
+ const type=$('show').checked?'text':'password';
+ $('password').type=type;$('verify').type=type;
+});
+$('setup').addEventListener('submit',async event=>{
+ event.preventDefault();
+ $('error').classList.add('hidden');
+ const pass=$('password').value,repeat=$('verify').value;
+ if(pass.length<12||pass.length>256){showError('Das Passwort muss 12 bis 256 Zeichen lang sein.');return;}
+ if(pass!==repeat){showError('Die beiden Passwörter stimmen nicht überein.');return;}
+ const btn=$('submit');btn.disabled=true;btn.textContent='Zugang wird aktiviert …';
+ try{
+  await api('gaAcceptInvite',invitationToken,pass);
+  invitationToken='';
+  history.replaceState(null,'',location.pathname);
+  $('password').value='';$('verify').value='';
+  $('ready').classList.add('hidden');$('error').classList.add('hidden');
+  $('done').classList.remove('hidden');
+ }catch(error){showError(error.message);}
+ finally{btn.disabled=false;btn.textContent='Passwort festlegen und Zugang aktivieren';}
+});
+start();
+</script>
+</body>
+</html>

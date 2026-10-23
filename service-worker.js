@@ -1,6 +1,6 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v1.8';
-const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
+const CACHE='ga-shell-v1.9';
+const CORE=['./','./index.html','./config.js','./manifest.webmanifest','./icon.svg','./feuerwehrauto-192.png','./icon.svg'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
 });
@@ -30,8 +30,8 @@ self.addEventListener('push',event=>{
  const title=String(data.title||'Grundausbildung').slice(0,90);
  event.waitUntil(self.registration.showNotification(title,{
   body:String(data.body||'Du hast eine neue Mitteilung.').slice(0,180),
-  icon:'./icon-192.png',
-  badge:'./icon-192.png',
+  icon:'./feuerwehrauto-192.png',
+  badge:'./feuerwehrauto-192.png',
   tag:'grundausbildung-'+String(data.id||'meldung').slice(0,75),
   data:{url:'./'}
  }));
