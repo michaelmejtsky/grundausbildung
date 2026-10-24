@@ -1066,8 +1066,11 @@ function gaReviewAidProof_(u,d){
      .some(x=>x.MitgliedID===member.ID&&x.ID!==proof.ID&&x.Status==='Bestätigt');
    if(!otherConfirmed){
      gaAidSetChecklist_(u,member.ID,false);
-     if(old)gaReplace_('QualifikationMitglieder',old.ID,{
-       ErsteHilfeStatus:'Ausständig',ErsteHilfeBestaetigtAm:''});
+     // Einen bereits unabhängig bestätigten Erste-Hilfe-Kurs nicht wegen
+     // eines neu eingereichten, abgelehnten PDFs automatisch aberkennen.
+     if(old&&(old.ErsteHilfeStatus!=='Bestätigt'||proof.Status==='Bestätigt'))
+       gaReplace_('QualifikationMitglieder',old.ID,{
+         ErsteHilfeStatus:'Ausständig',ErsteHilfeBestaetigtAm:''});
    }
  }
  gaLog_(u.ID,'EH_PDF_'+(action==='Bestätigt'?'BESTAETIGT':'ABGELEHNT'),
