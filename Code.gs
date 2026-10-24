@@ -1085,8 +1085,9 @@ function gaReviewAidProof_(u,d){
 function gaReadAidPdf_(u,d){
  const proof=gaFind_('ErsteHilfeNachweise',gaText_(d.ID,100));
  if(!proof)throw new Error('PDF-Nachweis nicht vorhanden.');
- const member=gaAidMember_(u,proof.MitgliedID);
- if(member.ID!==proof.MitgliedID)throw new Error('Keine Berechtigung für dieses PDF.');
+ const member=u.Rolle==='Administrator'?gaFind_('Mitglieder',proof.MitgliedID):
+   gaAidMember_(u,proof.MitgliedID);
+ if(!member||member.ID!==proof.MitgliedID)throw new Error('Keine Berechtigung für dieses PDF.');
  const pdfFile=DriveApp.getFileById(proof.DriveDateiID);
  if(pdfFile.getSize()>4*1024*1024)throw new Error('Das PDF ist zu groß zum Anzeigen.');
  const blob=pdfFile.getBlob();
