@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.4',
+  VERSION: '1.5.5',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -29,7 +29,8 @@ const GA = Object.freeze({
     QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt','FDISKPlatzhalter'],
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
     Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm'],
-    BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm']
+    BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm'],
+    ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -205,6 +206,11 @@ function gaApi(method,data,token){
   if(method==='removePush')return gaLock_(()=>gaRemovePush_(u,d));
   if(method==='setPushRule')return gaLock_(()=>gaSetPushRule_(u,d));
   if(method==='testPush')return gaLock_(()=>gaTestPush_(u));
+  if(method==='saveAidSettings')return gaSaveAidSettings_(u,d);
+  if(method==='submitAidProof')return gaLock_(()=>gaSubmitAidProof_(u,d));
+  if(method==='reviewAidProof')return gaLock_(()=>gaReviewAidProof_(u,d));
+  if(method==='resendAidEmail')return gaLock_(()=>gaResendAidEmail_(u,d));
+  if(method==='readAidPdf')return gaReadAidPdf_(u,d);
   throw new Error('Unbekannte Aktion.');
 }
 function gaState_(u){
@@ -214,6 +220,9 @@ function gaState_(u){
   allTermine=gaRows_('Termine'),allMembers=gaRows_('Mitglieder'),
   allItems=gaRows_('Checklistenpunkte'),allChecks=gaRows_('MitgliedChecks');
  const own=participant?allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv)):null;
+ const aidRows=admin||participant?gaOptionalRows_('ErsteHilfeNachweise'):[];
+ const aidRowsVisible=(admin?aidRows:own?aidRows.filter(x=>x.MitgliedID===own.ID):[])
+   .map(({DriveDateiID,EmailEmpfaenger,...r})=>admin?{...r,EmailEmpfaenger}:r);
  const rightsRows=(admin||trainer)?gaOptionalRows_('Berechtigungen'):[];
  const rights=gaPermissions_(u,rightsRows);
  const users=(admin||trainer)?gaRows_('Benutzer'):[];
@@ -258,6 +267,8 @@ function gaState_(u){
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
   meMember:participant&&own?own:null,
   qualifikationen,
+  ersteHilfeNachweise:aidRowsVisible,
+  ersteHilfeMail:admin?gaAidSettings_():null,
   kursAnforderungen:admin?reqs:[],
   direktnachrichten,
   nachrichtenEmpfaenger:admin||trainer?users.filter(x=>gaBool_(x.Aktiv)).map(gaPublicUser_):
