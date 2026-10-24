@@ -976,40 +976,53 @@ function gaSubmitAidProof_(u,d){
  const hours=Number(d.Stunden);
  if(!Number.isFinite(hours)||hours<0.5||hours>80||Math.round(hours*2)!==hours*2)
    throw new Error('Stunden in halben Schritten von 0,5 bis 80 eingeben.');
- const fileName=gaNeed_(d.Dateiname,'PDF-Dateiname',120)
-   .replace(/[^a-zA-Z0-9._ äöüÄÖÜß-]/g,'_');
- if(!/\.pdf$/i.test(fileName))throw new Error('Nur PDF-Dateien sind erlaubt.');
- const base64=String(d.PdfBase64||'');
- if(!base64||base64.length>5600000||base64.length%4!==0||
-   !/^[A-Za-z0-9+/]+={0,2}$/.test(base64))
-   throw new Error('Die PDF-Datei ist ungültig oder zu groß (maximal 4 MB).');
- let bytes;
- try{bytes=Utilities.base64Decode(base64);}
- catch(e){throw new Error('PDF-Daten konnten nicht gelesen werden.');}
- if(bytes.length<5||bytes.length>4*1024*1024||
-   bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes[4]!==45)
-   throw new Error('Es muss ein gültiges PDF mit maximal 4 MB sein.');
- const original=Utilities.newBlob(bytes,'application/pdf',fileName);
- const props=PropertiesService.getScriptProperties();
- const folderId=props.getProperty('GA_ERSTE_HILFE_FOLDER_ID');
- let folder;
- try{if(folderId)folder=DriveApp.getFolderById(folderId);}catch(e){}
- if(!folder){
-   folder=DriveApp.createFolder('Grundausbildung - Erste-Hilfe-Nachweise (privat)');
-   props.setProperty('GA_ERSTE_HILFE_FOLDER_ID',folder.getId());
+ const previousId=gaText_(d.ErsatzNachweisID,100);
+ const previous=previousId?gaFind_('ErsteHilfeNachweise',previousId):null;
+ if(previousId&&(!previous||previous.MitgliedID!==member.ID||
+   gaAidLatest_(member.ID)?.ID!==previous.ID))
+   throw new Error('Nur der neueste eigene Nachweis kann korrigiert werden.');
+ const raw=String(d.PdfBase64||'');
+ if(!raw&&!previous)throw new Error('Bitte eine PDF-Datei auswählen.');
+ let filename='',original,fileId='',newFile=null;
+ if(raw){
+   filename=gaNeed_(d.Dateiname,'PDF-Dateiname',120)
+     .replace(/[^a-zA-Z0-9._ äöüÄÖÜß-]/g,'_');
+   if(!/\.pdf$/i.test(filename))throw new Error('Nur PDF-Dateien sind erlaubt.');
+   if(raw.length>5600000||raw.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(raw))
+     throw new Error('PDF ungültig oder zu groß (maximal 4 MB).');
+   let bytes;
+   try{bytes=Utilities.base64Decode(raw);}
+   catch(e){throw new Error('PDF-Daten konnten nicht gelesen werden.');}
+   if(bytes.length<5||bytes.length>4*1024*1024||
+     bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes[4]!==45)
+     throw new Error('Bitte ein gültiges PDF mit maximal 4 MB hochladen.');
+   original=Utilities.newBlob(bytes,'application/pdf',filename);
+   const props=PropertiesService.getScriptProperties();
+   const folderId=props.getProperty('GA_ERSTE_HILFE_FOLDER_ID');
+   let folder;
+   try{if(folderId)folder=DriveApp.getFolderById(folderId);}catch(e){}
+   if(!folder){
+     folder=DriveApp.createFolder('Grundausbildung - Erste-Hilfe-Nachweise (privat)');
+     props.setProperty('GA_ERSTE_HILFE_FOLDER_ID',folder.getId());
+   }
+   newFile=folder.createFile(original);
+   newFile.setName(member.Nachname+'_'+member.Vorname+'_'+date+'_'+gaId_().slice(0,8)+'.pdf');
+   fileId=newFile.getId();
+ }else{
+   filename=previous.Dateiname;
+   fileId=previous.DriveDateiID;
+   original=DriveApp.getFileById(fileId).getBlob().setName(filename);
  }
- const file=folder.createFile(original);
- file.setName(member.Nachname+'_'+member.Vorname+'_'+date+'_'+gaId_().slice(0,8)+'.pdf');
  const proof={ID:gaId_(),MitgliedID:member.ID,Kursdatum:date,
-   Stunden:String(hours).replace('.',','),Dateiname:fileName,
-   DriveDateiID:file.getId(),Status:'Eingereicht',EingereichtVon:u.ID,
+   Stunden:String(hours).replace('.',','),Dateiname:filename,
+   DriveDateiID:fileId,Status:'Eingereicht',EingereichtVon:u.ID,
    EingereichtAm:gaNow_(),GeprueftVon:'',GeprueftAm:'',Pruefnotiz:'',
    EmailStatus:'Nicht gesendet',EmailGesendetAm:'',EmailEmpfaenger:''};
  try{gaAppend_('ErsteHilfeNachweise',proof);}
- catch(e){file.setTrashed(true);throw e;}
+ catch(e){if(newFile)newFile.setTrashed(true);throw e;}
  gaAidSetChecklist_(u,member.ID,true);
  gaLog_(u.ID,'EH_PDF_EINGEREICHT','Mitglied',member.ID,{
-   NachweisID:proof.ID,Datum:date,Stunden:hours,Dateiname:fileName});
+   NachweisID:proof.ID,Datum:date,Stunden:hours,Dateiname:filename,ErsatzNachweisID:previousId});
  const admins=gaRows_('Benutzer').filter(x=>x.Rolle==='Administrator'&&gaBool_(x.Aktiv)&&x.ID!==u.ID);
  admins.forEach(x=>gaNotify_(x.ID,'Aufgabe','Erste-Hilfe-Nachweis eingereicht',
    member.Vorname+' '+member.Nachname+': bitte PDF prüfen.',proof.ID));
@@ -1074,8 +1087,9 @@ function gaReadAidPdf_(u,d){
  if(!proof)throw new Error('PDF-Nachweis nicht vorhanden.');
  const member=gaAidMember_(u,proof.MitgliedID);
  if(member.ID!==proof.MitgliedID)throw new Error('Keine Berechtigung für dieses PDF.');
- const blob=DriveApp.getFileById(proof.DriveDateiID).getBlob();
- if(blob.getSize()>4*1024*1024)throw new Error('Das PDF ist zu groß zum Anzeigen.');
+ const pdfFile=DriveApp.getFileById(proof.DriveDateiID);
+ if(pdfFile.getSize()>4*1024*1024)throw new Error('Das PDF ist zu groß zum Anzeigen.');
+ const blob=pdfFile.getBlob();
  return {dateiname:proof.Dateiname,base64:Utilities.base64Encode(blob.getBytes())};
 }
 function gaResendAidEmail_(u,d){
