@@ -31,7 +31,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.4</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.5</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -430,7 +430,7 @@ function qualifications(){
  '<div><label>Ausbildungstermin</label><select name="TerminID" required>'+option(STATE.termine,t=>(by(STATE.kurse,t.KursID)?.Titel||'Kurs')+' · '+t.Beginn)+'</select></div>'+
  '<div><label>Teilgenommen?</label><select name="Anwesend"><option value="JA">Ja</option><option value="NEIN">Nein</option></select></div></div><div class="btnline"><button class="primary">Teilnahme speichern</button></div></form></section>';
  return '<section class="panel"><h2>Qualifikationsübersicht</h2><p>Für einen BSW-Dienst müssen <b>alle drei</b> Bedingungen erfüllt sein: GAB abgeschlossen, BSW-Modul absolviert und mindestens 16 Jahre alt. Eine bestehende GAB kann bei erweiterter Ausbildung ausdrücklich anerkannt werden.</p></section>'+
- attendance+'<section class="panel"><h2>Mitglieder und Nachweise</h2><div class="items">'+members+'</div></section>'+requirements;
+ aidPanel(true)+attendance+'<section class="panel"><h2>Mitglieder und Nachweise</h2><div class="items">'+members+'</div></section>'+requirements;
 }
 function members(){
  const edit=FORM==='member'&&EDIT?by(STATE.mitglieder,EDIT):null;
@@ -549,7 +549,7 @@ function mine(){
   const term=by(STATE.termine,t.TerminID),course=term&&by(STATE.kurse,term.KursID);
   return '<div class="item"><b>'+h(course?.Titel||'Kurs')+'</b><div class="detail">'+dt(term?.Beginn)+' · Bestätigt teilgenommen</div></div>';
  }).join(''):'Noch keine bestätigte Teilnahme.')+'</div></section>';
- return qualification+checklist+courses;
+ return aidPanel(false)+qualification+checklist+courses;
 }
 function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
@@ -807,4 +807,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script></body></html>
+</script><script src="./aid-ui.js"></script></body></html>
