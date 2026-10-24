@@ -43,3 +43,37 @@ function aidPanel(admin){
  return settings+upload+'<section class="panel"><h2>'+(admin?'Alle eingereichten Erste-Hilfe-Nachweise':'Meine Erste-Hilfe-Nachweise')+
  '</h2><div class="items">'+history+'</div></section>';
 }
+
+async function aidFileToBase64(file){
+ if(!file||file.size<5||file.size>4*1024*1024||!/\.pdf$/i.test(file.name))
+   throw new Error('Bitte ein PDF mit maximal 4 MB auswählen.');
+ const bytes=new Uint8Array(await file.arrayBuffer());
+ if(bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes[4]!==45)
+   throw new Error('Die ausgewählte Datei ist kein gültiges PDF.');
+ let result='';
+ for(let i=0;i<bytes.length;i+=8192)
+   result+=String.fromCharCode(...bytes.subarray(i,i+8192));
+ return btoa(result);
+}
+async function aidOpenPdf(id){
+ const viewer=window.open('','_blank');
+ if(viewer)viewer.document.body.textContent='PDF wird sicher geladen …';
+ try{
+   const info=await api('readAidPdf',{ID:id});
+   const binary=atob(info.base64);
+   const bytes=new Uint8Array(binary.length);
+   for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+   const blob=new Blob([bytes],{type:'application/pdf'});
+   const url=URL.createObjectURL(blob);
+   if(viewer&&!viewer.closed)viewer.location.replace(url);
+   else{
+     const link=document.createElement('a');
+     link.href=url;link.download=info.dateiname||'Erste-Hilfe-Nachweis.pdf';
+     document.body.appendChild(link);link.click();link.remove();
+   }
+   setTimeout(()=>URL.revokeObjectURL(url),120000);
+ }catch(error){
+   if(viewer&&!viewer.closed)viewer.close();
+   throw error;
+ }
+}
