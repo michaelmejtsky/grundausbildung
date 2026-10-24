@@ -33,11 +33,12 @@ function aidPanel(admin){
      '<button class="smallbtn" type="submit">Prüfung speichern</button></form>':'';
    const mail=admin?'<p class="small muted">E-Mail: '+h(p.EmailStatus||'Nicht gesendet')+(p.EmailGesendetAm?' · '+dt(p.EmailGesendetAm):'')+'</p>':'';
    const resend=admin&&cfg.Aktiv?'<button type="button" class="smallbtn" data-aid-resend="'+h(p.ID)+'">E-Mail erneut senden</button>':'';
+   const correct=latest?'<button type="button" class="smallbtn" data-aid-correct="'+h(p.ID)+'">Angaben bearbeiten</button>':'';
    return '<div class="item"><b>'+label+'Erste Hilfe · '+h(p.Kursdatum)+'</b>'+
     '<div class="detail">'+h(p.Stunden)+' Stunden · '+h(p.Dateiname)+' · Hochgeladen: '+dt(p.EingereichtAm)+'</div>'+
     '<p><span class="tag '+tone+'">'+h(p.Status)+'</span></p>'+
     (p.Pruefnotiz?'<p class="small muted">Prüfnotiz: '+h(p.Pruefnotiz)+'</p>':'')+mail+
-    '<div class="btnline"><button type="button" class="smallbtn" data-aid-pdf="'+h(p.ID)+'">PDF öffnen</button>'+resend+'</div>'+
+    '<div class="btnline"><button type="button" class="smallbtn" data-aid-pdf="'+h(p.ID)+'">PDF öffnen</button>'+correct+resend+'</div>'+
     verify+'</div>';
  }).join(''):'<div class="notice">Noch keine Erste-Hilfe-Bescheinigung hinterlegt.</div>';
  return settings+upload+'<section class="panel"><h2>'+(admin?'Alle eingereichten Erste-Hilfe-Nachweise':'Meine Erste-Hilfe-Nachweise')+
