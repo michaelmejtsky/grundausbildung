@@ -1,3 +1,22 @@
+## V1.5.5 – Erste-Hilfe-Bescheinigungen (PDF, Teilnehmer/Admin, E-Mail)
+
+- **Teilnehmer:** „Mein Ausbildungsstand“ → Erste-Hilfe-Nachweis: Kursdatum, Stunden (0,5–80 in 0,5-Schritten), PDF bis **4 MB** einreichen. Einreichungen und eigene PDFs bleiben im Profil lesbar. Die letzte Einreichung kann korrigiert werden (Datum/Stunden, PDF optional austauschen); alte Versionen bleiben erhalten.
+- **Administrator:** „Qualifikationen“ → Erste-Hilfe-Nachweise für jedes aktive Mitglied selbst hochladen, Daten korrigieren und Dokumente prüfen/bestätigen/mit Begründung ablehnen. Erst die Admin-Bestätigung setzt die Erste-Hilfe-Qualifikation auf „Bestätigt“. Die Checkliste „Bescheinigung abgegeben“ wird bereits bei Einreichung erledigt.
+- **E-Mail-Weiterleitung:** Unter „Qualifikationen → E-Mail-Weiterleitung“ als Admin eine **feste Empfängeradresse** wählen und die automatische Weiterleitung einschalten. Bei Teilnehmer-Uploads geht die E-Mail dann automatisch mit Name, Kontakt, Turnus, Standesbuchnummer, Kursdatum, Stundenausmaß **und PDF als Anhang** hinaus. Admin kann Versand bei eigenem Upload abwählen und einzelne gespeicherte Nachweise erneut senden. Versandstatus wird am Eintrag gezeigt. Ohne aktivierte Weiterleitung erfolgt kein E-Mail-Versand.
+- **Datenschutz:** PDFs werden privat in einem neu angelegten Google-Drive-Ordner des Apps-Script-Eigentümers gespeichert (Folder-ID in Script Properties `GA_ERSTE_HILFE_FOLDER_ID`); keine Freigabelinks. Ein Teilnehmer darf nur seine eigenen PDFs abrufen. Dokumentänderungen und Prüferentscheidungen werden protokolliert. Empfängeradresse und Versandkonfiguration werden ausschließlich serverseitig gespeichert.
+- **Datenbestand:** Eine neue Tabelle `ErsteHilfeNachweise` wird angelegt. Bestehende Stammdaten, Teilnahmen, Qualifikationen und Push-Registrierungen werden nicht überschrieben.
+
+**Zur Inbetriebnahme (alle Schritte erforderlich):**
+1. GitHub Pages aktualisiert `index.html`, `aid-ui.js` und `public/` automatisch, sofern das Repository wie bisher veröffentlicht wird.
+2. Die aktuelle [Code.gs](https://github.com/michaelmejtsky/grundausbildung/blob/main/Code.gs) **vollständig** ins **bestehende, an die Grundausbildungs-Tabelle gebundene Apps Script** übernehmen. Im Spreadsheet-Menü **Grundausbildung → 1 · Tabellen prüfen/erstellen** einmal ausführen; die neuen Drive-/E-Mail-Berechtigungen bei Bedarf bestätigen. **Kein neues Sheet oder Apps-Script-Projekt erstellen.**
+3. Im Apps Script die **bestehende** Web-App-Bereitstellung bearbeiten → **Neue Version** → Bereitstellen. Die vorhandene `/exec`-URL und Skripteigenschaften nicht ändern.
+4. Die geänderte [cloudflare-worker.js](https://github.com/michaelmejtsky/grundausbildung/blob/main/cloudflare-worker.js) beim **bestehenden Cloudflare-Worker** bereitstellen (oder die verbundene Pipeline laufen lassen), damit PDF-Nachrichten bis 4 MB statt der bisherigen kleinen Payload-Grenze durchgehen. **VAPID- und GA_WORKER_SECRET-Schlüssel weder löschen noch neu generieren.**
+5. In der Admin-App unter **Qualifikationen** die Empfängeradresse hinterlegen und den E-Mail-Versand bei Bedarf aktivieren. Eine PDF-Testbescheinigung mit einem nichtsensiblen Test-Mitglied prüfen: speichern → in der App ansehen → E-Mail samt Anhang → Admin-Bestätigung → Teilnehmeransicht prüfen.
+
+**Status:** GitHub-Quellcode ist implementiert und syntaktisch geprüft; die produktiven Apps-Script-/Cloudflare-Bereitstellungen und der Ende-zu-Ende-Test mit echtem PDF müssen noch durchgeführt werden.
+
+---
+
 ## Cloudflare-Production-Variablen gegen Verlust bei Deploy absichern
 
 Die Produktionskonfiguration in `wrangler.jsonc` enthält jetzt `keep_vars: true` und eine Pflichtprüfung für die verschlüsselten Secrets `GA_WORKER_SECRET` und `VAPID_PRIVATE_JWK`. Wrangler kann damit **bei Nutzung genau dieser Wrangler-Datei** normale Dashboard-Variablen bei künftigen Deployments beibehalten und Deployments ohne die beiden erforderlichen Secrets verweigern. Cloudflare-Worker-Secrets selbst sollten laut Dokumentation bereits standardmäßig erhalten bleiben; falls sie trotzdem fehlen, Deployment-Historie und Production/Previews sowie Worker-Namen vergleichen. Eine nicht verwendete `wrangler.jsonc` schützt die Worker-Bereitstellung nicht.
