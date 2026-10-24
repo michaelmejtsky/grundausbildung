@@ -224,8 +224,13 @@ export default {
   try{
     const type=request.headers.get('Content-Type')||'';
     if(!type.startsWith('application/json'))return reply({ok:false,error:'Ungültiger Inhaltstyp.'},415);
-    if(Number(request.headers.get('content-length')||0)>120000)return reply({ok:false,error:'Anfrage ist zu groß.'},413);
-    const json=await request.json();
+    // Authentifizierte PDF-Uploads bis 4 MB, Base64-Transport bis 8 MB begrenzen.
+    const maxBytes=8*1024*1024;
+    if(Number(request.headers.get('content-length')||0)>maxBytes)
+      return reply({ok:false,error:'PDF-Anfrage zu groß (maximal 4 MB PDF).'},413);
+    const raw=await request.text();
+    if(raw.length>maxBytes)return reply({ok:false,error:'Anfrage ist zu groß.'},413);
+    let json;try{json=JSON.parse(raw);}catch{return reply({ok:false,error:'Ungültige JSON-Anfrage.'},400);}
     if(json?.method==='gaPushInfo'&&Array.isArray(json.args)&&json.args.length===0){
       const checks=pushConfigurationChecks(env);
       const configured=Object.values(checks).every(Boolean);
