@@ -891,6 +891,208 @@ function gaSaveRating_(u,d){
 }
 
 
+/** Erste-Hilfe-Nachweise V1.5.5: private PDF-Dateien, geprüfte Rollen, Admin-E-Mail. */
+function gaAidSettings_(){
+ const p=PropertiesService.getScriptProperties();
+ return {Empfaenger:p.getProperty('GA_EH_EMPFAENGER')||'',
+   Aktiv:p.getProperty('GA_EH_EMAIL_AKTIV')==='JA'};
+}
+function gaSaveAidSettings_(u,d){
+ gaRequire_(u,['Administrator']);
+ const address=gaText_(d.Empfaenger,240).toLowerCase();
+ const enabled=d.Aktiv==='JA'||d.Aktiv===true;
+ if(address&&!gaEmail_(address))throw new Error('Bitte eine gültige Empfänger-E-Mail eingeben.');
+ if(enabled&&!address)throw new Error('Für den aktivierten Versand ist eine E-Mail-Adresse erforderlich.');
+ PropertiesService.getScriptProperties().setProperties({
+   GA_EH_EMPFAENGER:address,GA_EH_EMAIL_AKTIV:enabled?'JA':'NEIN'});
+ gaLog_(u.ID,'EH_VERSAND_EINSTELLUNGEN','System','',{Aktiv:enabled,EmpfaengerGesetzt:!!address});
+ return {ok:true,message:'Erste-Hilfe-E-Mail-Weiterleitung gespeichert.'};
+}
+function gaAidMember_(u,memberId){
+ const id=gaText_(memberId,100);
+ if(u.Rolle==='Administrator'){
+   const m=gaFind_('Mitglieder',id);
+   if(!m||!gaBool_(m.Aktiv))throw new Error('Bitte ein aktives Mitglied auswählen.');
+   return m;
+ }
+ gaRequire_(u,['Teilnehmer']);
+ const m=gaRows_('Mitglieder').find(x=>gaBool_(x.Aktiv)&&x.Email&&x.Email.toLowerCase()===u.Email.toLowerCase());
+ if(!m||id&&id!==m.ID)throw new Error('Zugriff nur auf das eigene aktive Mitgliedsprofil erlaubt.');
+ return m;
+}
+function gaAidLatest_(memberId){
+ return gaOptionalRows_('ErsteHilfeNachweise').filter(x=>x.MitgliedID===memberId).slice(-1)[0]||null;
+}
+function gaAidSetChecklist_(actor,memberId,complete){
+ const item=gaRows_('Checklistenpunkte').find(x=>x.Titel==='Erste-Hilfe-Bescheinigung abgegeben');
+ if(!item)return;
+ const ch=gaOptionalRows_('MitgliedChecks').find(x=>x.MitgliedID===memberId&&x.PunktID===item.ID);
+ if(!ch)return;
+ gaReplace_('MitgliedChecks',ch.ID,{Status:complete?'Erledigt':'Offen',
+   Kommentar:complete?'PDF-Nachweis in der Ausbildungsplattform abgegeben.':'Nachweis muss korrigiert werden.',
+   GeaendertVon:actor.ID,GeaendertAm:gaNow_()});
+}
+function gaAidSendEmail_(proof,member,blob){
+ const settings=gaAidSettings_();
+ if(!settings.Aktiv||!settings.Empfaenger)return {status:'Nicht aktiviert'};
+ const turnus=gaFind_('Turnusse',member.TurnusID);
+ const actor=gaFind_('Benutzer',proof.EingereichtVon);
+ const body=[
+   'Ein Erste-Hilfe-Nachweis wurde in der Ausbildungsplattform hinterlegt.','',
+   'Name: '+member.Vorname+' '+member.Nachname,
+   'Telefonnummer: '+(member.Telefon||'–'),
+   'E-Mail-Adresse: '+(member.Email||'–'),
+   'Standesbuchnummer: '+(member.Standesbuchnummer||'–'),
+   'Turnus: '+(turnus?turnus.Bezeichnung:'–'),
+   'Erste-Hilfe-Kursdatum: '+proof.Kursdatum,
+   'Stundenausmaß: '+proof.Stunden+' Stunden',
+   'Hochgeladen von: '+(actor?actor.Name:'Administration'),
+   'Eingereicht am: '+proof.EingereichtAm,'',
+   'Die Erste-Hilfe-Bescheinigung liegt als PDF-Anhang bei.',
+   'Automatische Nachricht der Feuerwehr-Ausbildungsplattform.'
+ ].join('\n');
+ try{
+   MailApp.sendEmail({to:settings.Empfaenger,
+     subject:'Erste-Hilfe-Bescheinigung – '+member.Vorname+' '+member.Nachname,
+     body:body,attachments:[blob.setName(proof.Dateiname)]});
+   gaReplace_('ErsteHilfeNachweise',proof.ID,{
+     EmailStatus:'Gesendet',EmailGesendetAm:gaNow_(),EmailEmpfaenger:settings.Empfaenger});
+   return {status:'Gesendet'};
+ }catch(e){
+   gaReplace_('ErsteHilfeNachweise',proof.ID,{EmailStatus:'Fehlgeschlagen'});
+   gaLog_('SYSTEM','EH_EMAIL_FEHLER','ErsteHilfeNachweis',proof.ID,{
+     Meldung:String(e&&e.message||e).slice(0,180)});
+   return {status:'Fehlgeschlagen'};
+ }
+}
+function gaSubmitAidProof_(u,d){
+ const member=gaAidMember_(u,d.MitgliedID);
+ if(!gaSheet_().getSheetByName('ErsteHilfeNachweise'))
+   throw new Error('Zuerst das Tabellenmenü „Tabellen prüfen/erstellen“ ausführen.');
+ const date=gaDateOnly_(d.Kursdatum);
+ if(!date)throw new Error('Bitte das Erste-Hilfe-Kursdatum eingeben.');
+ if(date>Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd'))
+   throw new Error('Ein zukünftiges Kursdatum kann noch nicht nachgewiesen werden.');
+ const hours=Number(d.Stunden);
+ if(!Number.isFinite(hours)||hours<0.5||hours>80||Math.round(hours*2)!==hours*2)
+   throw new Error('Stunden in halben Schritten von 0,5 bis 80 eingeben.');
+ const fileName=gaNeed_(d.Dateiname,'PDF-Dateiname',120)
+   .replace(/[^a-zA-Z0-9._ äöüÄÖÜß-]/g,'_');
+ if(!/\.pdf$/i.test(fileName))throw new Error('Nur PDF-Dateien sind erlaubt.');
+ const base64=String(d.PdfBase64||'');
+ if(!base64||base64.length>5600000||base64.length%4!==0||
+   !/^[A-Za-z0-9+/]+={0,2}$/.test(base64))
+   throw new Error('Die PDF-Datei ist ungültig oder zu groß (maximal 4 MB).');
+ let bytes;
+ try{bytes=Utilities.base64Decode(base64);}
+ catch(e){throw new Error('PDF-Daten konnten nicht gelesen werden.');}
+ if(bytes.length<5||bytes.length>4*1024*1024||
+   bytes[0]!==37||bytes[1]!==80||bytes[2]!==68||bytes[3]!==70||bytes[4]!==45)
+   throw new Error('Es muss ein gültiges PDF mit maximal 4 MB sein.');
+ const original=Utilities.newBlob(bytes,'application/pdf',fileName);
+ const props=PropertiesService.getScriptProperties();
+ const folderId=props.getProperty('GA_ERSTE_HILFE_FOLDER_ID');
+ let folder;
+ try{if(folderId)folder=DriveApp.getFolderById(folderId);}catch(e){}
+ if(!folder){
+   folder=DriveApp.createFolder('Grundausbildung - Erste-Hilfe-Nachweise (privat)');
+   props.setProperty('GA_ERSTE_HILFE_FOLDER_ID',folder.getId());
+ }
+ const file=folder.createFile(original);
+ file.setName(member.Nachname+'_'+member.Vorname+'_'+date+'_'+gaId_().slice(0,8)+'.pdf');
+ const proof={ID:gaId_(),MitgliedID:member.ID,Kursdatum:date,
+   Stunden:String(hours).replace('.',','),Dateiname:fileName,
+   DriveDateiID:file.getId(),Status:'Eingereicht',EingereichtVon:u.ID,
+   EingereichtAm:gaNow_(),GeprueftVon:'',GeprueftAm:'',Pruefnotiz:'',
+   EmailStatus:'Nicht gesendet',EmailGesendetAm:'',EmailEmpfaenger:''};
+ try{gaAppend_('ErsteHilfeNachweise',proof);}
+ catch(e){file.setTrashed(true);throw e;}
+ gaAidSetChecklist_(u,member.ID,true);
+ gaLog_(u.ID,'EH_PDF_EINGEREICHT','Mitglied',member.ID,{
+   NachweisID:proof.ID,Datum:date,Stunden:hours,Dateiname:fileName});
+ const admins=gaRows_('Benutzer').filter(x=>x.Rolle==='Administrator'&&gaBool_(x.Aktiv)&&x.ID!==u.ID);
+ admins.forEach(x=>gaNotify_(x.ID,'Aufgabe','Erste-Hilfe-Nachweis eingereicht',
+   member.Vorname+' '+member.Nachname+': bitte PDF prüfen.',proof.ID));
+ let mailStatus='Nicht aktiviert';
+ const settings=gaAidSettings_();
+ if(settings.Aktiv&&(u.Rolle!=='Administrator'||d.Versenden==='JA'||d.Versenden===true))
+   mailStatus=gaAidSendEmail_(proof,member,original).status;
+ else if(settings.Aktiv){
+   mailStatus='Abgewählt';
+   gaReplace_('ErsteHilfeNachweise',proof.ID,{EmailStatus:mailStatus});
+ }
+ if(admins.length)gaPushQueue_(5);
+ return {ok:true,message:'Erste-Hilfe-PDF gespeichert und zur Prüfung eingereicht. '+
+   (mailStatus==='Gesendet'?'E-Mail mit PDF versendet.':
+   mailStatus==='Fehlgeschlagen'?'E-Mail-Versand fehlgeschlagen; der Nachweis bleibt gespeichert.':
+   mailStatus==='Abgewählt'?'E-Mail-Versand abgewählt.':'Automatische E-Mail-Weiterleitung ist deaktiviert.')};
+}
+function gaReviewAidProof_(u,d){
+ gaRequire_(u,['Administrator']);
+ const proof=gaFind_('ErsteHilfeNachweise',gaText_(d.ID,100));
+ if(!proof)throw new Error('Erste-Hilfe-Nachweis nicht gefunden.');
+ if(gaAidLatest_(proof.MitgliedID)?.ID!==proof.ID)
+   throw new Error('Nur der zuletzt hochgeladene Nachweis kann geprüft werden.');
+ const action=gaChoice_(d.Entscheidung,['Bestätigt','Abgelehnt'],'Prüfentscheidung');
+ const note=gaText_(d.Pruefnotiz,500);
+ if(action==='Abgelehnt'&&!note)throw new Error('Bitte den Ablehnungsgrund eingeben.');
+ const member=gaFind_('Mitglieder',proof.MitgliedID);
+ if(!member)throw new Error('Mitglied nicht vorhanden.');
+ gaReplace_('ErsteHilfeNachweise',proof.ID,{
+   Status:action,GeprueftVon:u.ID,GeprueftAm:gaNow_(),Pruefnotiz:note});
+ const old=gaOptionalRows_('QualifikationMitglieder').find(x=>x.MitgliedID===member.ID);
+ if(action==='Bestätigt'){
+   if(old)gaReplace_('QualifikationMitglieder',old.ID,{
+     ErsteHilfeStatus:'Bestätigt',ErsteHilfeBestaetigtAm:proof.Kursdatum,
+     GeprueftVon:u.ID,GeprueftAm:gaNow_()});
+   else gaAppend_('QualifikationMitglieder',{
+     ID:gaId_(),MitgliedID:member.ID,ErsteHilfeStatus:'Bestätigt',
+     ErsteHilfeBestaetigtAm:proof.Kursdatum,GeprueftVon:u.ID,GeprueftAm:gaNow_()});
+ }else{
+   const otherConfirmed=gaOptionalRows_('ErsteHilfeNachweise')
+     .some(x=>x.MitgliedID===member.ID&&x.ID!==proof.ID&&x.Status==='Bestätigt');
+   if(!otherConfirmed){
+     gaAidSetChecklist_(u,member.ID,false);
+     if(old)gaReplace_('QualifikationMitglieder',old.ID,{
+       ErsteHilfeStatus:'Ausständig',ErsteHilfeBestaetigtAm:''});
+   }
+ }
+ gaLog_(u.ID,'EH_PDF_'+(action==='Bestätigt'?'BESTAETIGT':'ABGELEHNT'),
+   'ErsteHilfeNachweis',proof.ID,{Kommentar:note});
+ const user=gaRows_('Benutzer').find(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&
+   member.Email&&x.Email.toLowerCase()===member.Email.toLowerCase());
+ if(user){
+   gaNotify_(user.ID,'Aufgabe','Erste-Hilfe-Nachweis '+action.toLowerCase(),
+     action==='Bestätigt'?'Deine Erste-Hilfe-Bescheinigung wurde bestätigt.':
+     'Bitte deine Erste-Hilfe-Bescheinigung korrigieren: '+note,proof.ID);
+   gaPushQueue_(5);
+ }
+ return {ok:true,message:'Erste-Hilfe-Nachweis '+action.toLowerCase()+'.'};
+}
+function gaReadAidPdf_(u,d){
+ const proof=gaFind_('ErsteHilfeNachweise',gaText_(d.ID,100));
+ if(!proof)throw new Error('PDF-Nachweis nicht vorhanden.');
+ const member=gaAidMember_(u,proof.MitgliedID);
+ if(member.ID!==proof.MitgliedID)throw new Error('Keine Berechtigung für dieses PDF.');
+ const blob=DriveApp.getFileById(proof.DriveDateiID).getBlob();
+ if(blob.getSize()>4*1024*1024)throw new Error('Das PDF ist zu groß zum Anzeigen.');
+ return {dateiname:proof.Dateiname,base64:Utilities.base64Encode(blob.getBytes())};
+}
+function gaResendAidEmail_(u,d){
+ gaRequire_(u,['Administrator']);
+ if(!gaAidSettings_().Aktiv)throw new Error('Bitte zuerst den E-Mail-Versand aktivieren.');
+ const proof=gaFind_('ErsteHilfeNachweise',gaText_(d.ID,100));
+ if(!proof)throw new Error('Erste-Hilfe-Nachweis nicht gefunden.');
+ const member=gaFind_('Mitglieder',proof.MitgliedID);
+ if(!member)throw new Error('Mitglied nicht gefunden.');
+ const blob=DriveApp.getFileById(proof.DriveDateiID).getBlob();
+ const result=gaAidSendEmail_(proof,member,blob);
+ gaLog_(u.ID,'EH_EMAIL_ERNEUT','ErsteHilfeNachweis',proof.ID,{Status:result.status});
+ return {ok:result.status==='Gesendet',
+   message:result.status==='Gesendet'?'E-Mail mit PDF erneut versendet.':
+     'E-Mail-Versand fehlgeschlagen; das PDF ist weiterhin gespeichert.'};
+}
+
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
 function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse){
