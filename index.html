@@ -656,7 +656,7 @@ if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
 }catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-aid-pdf],[data-aid-resend]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -757,6 +757,22 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
    finally{x.disabled=false;x.textContent=label;}
    return;
  }
+ if(x.dataset.aidPdf){
+   x.disabled=true;
+   try{await aidOpenPdf(x.dataset.aidPdf);}
+   catch(err){tip(err.message||'PDF konnte nicht geöffnet werden.',true);}
+   finally{x.disabled=false;}
+   return;
+ }
+ if(x.dataset.aidResend){
+   if(!confirm('Erste-Hilfe-Bescheinigung mit Mitgliedsdaten und PDF erneut an den festgelegten E-Mail-Empfänger senden?'))return;
+   x.disabled=true;
+   try{const result=await api('resendAidEmail',{ID:x.dataset.aidResend});
+     tip(result.message,result.ok!==true);await reload();}
+   catch(err){tip(err.message,true);}
+   finally{x.disabled=false;}
+   return;
+ }
  if(x.dataset.readDirect){await doSave('readDirect',{ID:x.dataset.readDirect});return}
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
@@ -794,6 +810,22 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
     catch(err){tip('Mitglied gespeichert, aber Einladung fehlgeschlagen: '+err.message,true);}
   }else tip('Mitglied aufgenommen.');
   await reload();
+ }
+ else if(type==='aidSettings'){
+   data.Aktiv=fd.has('Aktiv')?'JA':'NEIN';
+   await doSave('saveAidSettings',data);
+ }
+ else if(type==='aidReview'){
+   data.ID=form.dataset.id;
+   await doSave('reviewAidProof',data);
+ }
+ else if(type==='aidUpload'){
+   const selected=form.querySelector('input[name="pdf"]')?.files?.[0];
+   data.Dateiname=selected?.name||'';
+   data.PdfBase64=await aidFileToBase64(selected);
+   data.MitgliedID=data.MitgliedID||STATE.meMember?.ID;
+   data.Versenden=fd.has('Versenden')?'JA':'NEIN';
+   await doSave('submitAidProof',data);
  }
  else if(type==='checkItem')await doSave('saveChecklistItem',data);
  else if(type==='check'){data.ID=form.dataset.id;await doSave('setCheck',data)}
