@@ -656,7 +656,7 @@ if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
 }catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
 async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-aid-pdf],[data-aid-resend]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-approve-project],[data-return-project],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;render();return}
  if(x.dataset.edit){FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
@@ -757,6 +757,26 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view
    finally{x.disabled=false;x.textContent=label;}
    return;
  }
+ if(x.dataset.aidCorrect){
+   const old=(STATE.ersteHilfeNachweise||[]).find(p=>p.ID===x.dataset.aidCorrect);
+   if(!old){tip('Eintrag nicht gefunden.',true);return;}
+   const form=document.querySelector('form[data-form="aidUpload"]');
+   if(!form)return;
+   if(role()==='Administrator')form.querySelector('[name="MitgliedID"]').value=old.MitgliedID;
+   form.querySelector('[name="Kursdatum"]').value=old.Kursdatum;
+   form.querySelector('[name="Stunden"]').value=String(old.Stunden).replace(',','.');
+   const file=form.querySelector('input[name="pdf"]');
+   file.required=false;
+   file.value='';
+   let hidden=form.querySelector('[name="ErsatzNachweisID"]');
+   if(!hidden){hidden=document.createElement('input');hidden.type='hidden';hidden.name='ErsatzNachweisID';form.appendChild(hidden);}
+   hidden.value=old.ID;
+   const btn=form.querySelector('button[type="submit"]');
+   if(btn)btn.textContent='Korrigierte Angaben speichern';
+   tip('Angaben übernommen. PDF nur auswählen, wenn du auch das Dokument ersetzen möchtest.');
+   form.scrollIntoView({behavior:'smooth',block:'start'});
+   return;
+ }
  if(x.dataset.aidPdf){
    x.disabled=true;
    try{await aidOpenPdf(x.dataset.aidPdf);}
@@ -822,8 +842,9 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='aidUpload'){
    const selected=form.querySelector('input[name="pdf"]')?.files?.[0];
    data.Dateiname=selected?.name||'';
-   data.PdfBase64=await aidFileToBase64(selected);
+   data.PdfBase64=selected?await aidFileToBase64(selected):'';
    data.MitgliedID=data.MitgliedID||STATE.meMember?.ID;
+   if(!selected&&!data.ErsatzNachweisID)throw new Error('Bitte die Bescheinigung als PDF auswählen.');
    data.Versenden=fd.has('Versenden')?'JA':'NEIN';
    await doSave('submitAidProof',data);
  }
