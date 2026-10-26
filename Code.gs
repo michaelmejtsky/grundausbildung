@@ -502,6 +502,121 @@ function gaTrainingVehicles_(report){
 function gaTrainingHours_(minutes){return (Math.round(Number(minutes)/6)/10).toLocaleString('de-AT',{minimumFractionDigits:1,maximumFractionDigits:1});}
 function gaTrainingDate_(stamp){const s=String(stamp||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4)+(s.length>=16?' '+s.slice(11,16):''):s;}
 
+/** Reads only recorded values, keeping planned and actual times distinct. */
+function gaTrainingPdfData_(d){
+ const termId=gaText_(d.TerminID,100),courseId=gaText_(d.KursID,100);
+ if(!termId&&!courseId)throw new Error('Bitte einen Ausbildungstermin oder ein Modul auswählen.');
+ if(termId&&courseId)throw new Error('Bitte nur einen Berichtstyp auswählen.');
+ const allTerms=gaRows_('Termine'),allCourses=gaRows_('Kurse');
+ const selected=termId?allTerms.filter(t=>t.ID===termId):allTerms.filter(t=>t.KursID===courseId);
+ if(!selected.length)throw new Error('Keine Termine für diese Auswahl gefunden.');
+ const reportRows=gaOptionalRows_('Ausbildungsberichte'),att=gaRows_('Teilnahmen');
+ const members=gaRows_('Mitglieder'),accounts=gaRows_('Benutzer');
+ const course=allCourses.find(c=>c.ID===(courseId||selected[0].KursID));
+ if(!course)throw new Error('Ausbildungsmodul nicht gefunden.');
+ const details=[],participants=new Map(),trainers=new Map(),cars=new Map();
+ let minutes=0,participantMinutes=0,trainerMinutes=0,kilometers=0,pending=0;
+ const nameMember=id=>{const m=members.find(x=>x.ID===id);return m?(m.Nachname+', '+m.Vorname):'[nicht mehr vorhandenes Mitglied]';};
+ const nameTrainer=id=>{const m=accounts.find(x=>x.ID===id);return m?m.Name:'[nicht mehr vorhandener Benutzer]';};
+ selected.sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn))).forEach(t=>{
+  const report=reportRows.find(r=>r.TerminID===t.ID);
+  if(!report){pending++;return;}
+  const duration=Number(report.DauerMinuten)||0;
+  if(duration<=0)return;
+  const present=att.filter(x=>x.TerminID===t.ID&&x.Anwesend==='JA').map(x=>({id:x.MitgliedID,name:nameMember(x.MitgliedID)}));
+  const trainersIds=String(report.AusbilderIDs||'').split(',').map(v=>v.trim()).filter(Boolean);
+  const teacherList=trainersIds.map(id=>({id,name:nameTrainer(id)}));
+  const vehicleList=gaTrainingVehicles_(report);
+  const km=vehicleList.reduce((sum,x)=>sum+Number(x.Kilometer||0),0);
+  details.push({term:t,report,minutes:duration,present,teacherList,vehicleList,kilometers:km});
+  minutes+=duration;participantMinutes+=duration*present.length;
+  trainerMinutes+=duration*teacherList.length;kilometers+=km;
+  present.forEach(p=>{const old=participants.get(p.id)||{name:p.name,minutes:0,terminCount:0};old.minutes+=duration;old.terminCount++;participants.set(p.id,old);});
+  teacherList.forEach(p=>{const old=trainers.get(p.id)||{name:p.name,minutes:0,terminCount:0};old.minutes+=duration;old.terminCount++;trainers.set(p.id,old);});
+  vehicleList.forEach(v=>{
+   const key=String(v.Fahrzeug||'').toLocaleLowerCase('de-AT');
+   const old=cars.get(key)||{name:v.Fahrzeug,kilometers:0,usages:0};
+   old.kilometers+=Number(v.Kilometer||0);old.usages++;cars.set(key,old);
+  });
+ });
+ return {course,details,minutes,participantMinutes,trainerMinutes,kilometers,pending,
+  participants:[...participants.values()].sort((a,b)=>a.name.localeCompare(b.name,'de')),
+  trainers:[...trainers.values()].sort((a,b)=>a.name.localeCompare(b.name,'de')),
+  vehicles:[...cars.values()].sort((a,b)=>a.name.localeCompare(b.name,'de')),
+  isSingle:!!termId};
+}
+function gaTrainingPdfTable_(body,headers,rows){
+ const table=body.appendTable([headers,...(rows.length?rows:[headers.map((_,i)=>i===0?'Keine Einträge':'')])]);
+ for(let c=0;c<headers.length;c++)table.getRow(0).getCell(c).editAsText().setBold(true);
+ return table;
+}
+function gaExportTrainingPdf_(u,d){
+ gaRequire_(u,['Administrator','Ausbilder']);
+ const report=gaTrainingPdfData_(d||{});
+ if(!report.details.length)throw new Error('Für diesen Termin bzw. dieses Modul ist noch kein bestätigter Tätigkeitsbericht mit Ist-Zeiten vorhanden.');
+ const title=report.isSingle?'FDISK-Tätigkeitsbericht – Ausbildungstermin':'FDISK-Modulübersicht – '+report.course.Titel;
+ const safe=(v)=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,220);
+ const hours=gaTrainingHours_,date=gaTrainingDate_;
+ const km=x=>Number(x||0).toLocaleString('de-AT',{minimumFractionDigits:1,maximumFractionDigits:2});
+ const fileName=('FDISK_Ausbildung_'+report.course.Titel+
+   (report.isSingle?'_'+String(report.details[0].term.Beginn||'').slice(0,10):'_Gesamt')+'.pdf')
+   .replace(/[^\wÄÖÜäöüß.-]+/g,'_').slice(0,135);
+ let docId=null;
+ try{
+  const doc=DocumentApp.create('TEMP_FDISK_Ausbildung_'+Utilities.getUuid());
+  docId=doc.getId();
+  const body=doc.getBody();
+  body.appendParagraph('FF ST. PÖLTEN-STADT').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph('Modul: '+safe(report.course.Titel));
+  body.appendParagraph('Erstellt: '+date(gaNow_())+' · Datenauszug für manuelle FDISK-Eingabe');
+  body.appendParagraph('Dokumentierte Termine: '+report.details.length+
+   ' | Ausbildungsstunden (Termindauer): '+hours(report.minutes)+' h'+
+   ' | Teilnehmerstunden: '+hours(report.participantMinutes)+' h'+
+   ' | Ausbilderstunden: '+hours(report.trainerMinutes)+' h'+
+   ' | Fahrzeugkilometer: '+km(report.kilometers)+' km');
+  if(report.pending)body.appendParagraph('Achtung: '+report.pending+' Termin(e) dieses Moduls besitzen noch keinen vollständigen Tätigkeitsbericht und sind in den Summen NICHT enthalten.');
+  body.appendParagraph('Einzeltermine').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  gaTrainingPdfTable_(body,['Datum','Tatsächliche Zeit','Stunden','Teilnehmer','Ausbilder','Fahrzeuge','km'],
+    report.details.map(x=>[
+      date(x.report.BeginnIst).slice(0,10),
+      date(x.report.BeginnIst).slice(11)+'–'+date(x.report.EndeIst).slice(11),
+      hours(x.minutes),String(x.present.length),String(x.teacherList.length),
+      x.vehicleList.length?x.vehicleList.map(v=>safe(v.Fahrzeug)).join('; '):'–',km(x.kilometers)
+    ]));
+  report.details.forEach((x,i)=>{
+   body.appendParagraph('Termin '+(i+1)+': '+safe(report.course.Titel)+' · '+date(x.report.BeginnIst)).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+   body.appendParagraph('Ort: '+safe(x.term.Ort||'–')+
+    ' | Beginn: '+date(x.report.BeginnIst)+' | Ende: '+date(x.report.EndeIst)+
+    ' | Dauer: '+hours(x.minutes)+' h');
+   body.appendParagraph('Teilnehmer und anrechenbare Stunden:');
+   gaTrainingPdfTable_(body,['Mitglied','Anwesenheit','Stunden'],x.present.map(p=>[safe(p.name),'Ja',hours(x.minutes)]));
+   body.appendParagraph('Mitwirkende Ausbilder:');
+   gaTrainingPdfTable_(body,['Ausbilder','Stunden'],x.teacherList.map(p=>[safe(p.name),hours(x.minutes)]));
+   body.appendParagraph('Verwendete Fahrzeuge:');
+   gaTrainingPdfTable_(body,['Fahrzeug','Kilometer'],x.vehicleList.map(v=>[safe(v.Fahrzeug),km(v.Kilometer)]));
+   if(x.report.Notiz)body.appendParagraph('Bemerkung: '+safe(x.report.Notiz));
+  });
+  body.appendParagraph('Summen für die FDISK-Übertragung').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph('Die folgenden Personenstunden ergeben sich aus der bestätigten Anwesenheit und der gesamten erfassten Termindauer. Abweichende individuelle Teilnahmezeiten sind hier nicht gesondert erfasst.');
+  body.appendParagraph('Teilnehmer – Gesamtsumme je Person:');
+  gaTrainingPdfTable_(body,['Teilnehmer','Termine','Stunden'],report.participants.map(x=>[safe(x.name),String(x.terminCount),hours(x.minutes)]));
+  body.appendParagraph('Ausbilder – Gesamtsumme je Person:');
+  gaTrainingPdfTable_(body,['Ausbilder','Termine','Stunden'],report.trainers.map(x=>[safe(x.name),String(x.terminCount),hours(x.minutes)]));
+  body.appendParagraph('Fahrzeuge – Gesamtsumme:');
+  gaTrainingPdfTable_(body,['Fahrzeug','Verwendungen','Kilometer'],report.vehicles.map(x=>[safe(x.name),String(x.usages),km(x.kilometers)]));
+  body.appendParagraph('Hinweis: Dies ist ein interner Datenauszug, keine automatische FDISK-Buchung. Angaben vor der Übertragung kontrollieren.');
+  doc.saveAndClose();
+  const pdf=DriveApp.getFileById(docId).getAs(MimeType.PDF).setName(fileName);
+  if(pdf.getBytes().length>8*1024*1024)throw new Error('PDF zu groß. Bitte einzelne Ausbildungstermine herunterladen.');
+  gaLog_(u.ID,'PDF_TAETIGKEITSBERICHT','Kurs',report.course.ID,{Termine:report.details.length,PDF:fileName});
+  return {ok:true,dateiname:fileName,base64:Utilities.base64Encode(pdf.getBytes()),
+   termine:report.details.length,gesamtKm:report.kilometers,ausbildungsMinuten:report.minutes};
+ }finally{
+  if(docId){try{DriveApp.getFileById(docId).setTrashed(true);}catch(e){Logger.log('Temporäres PDF-Dokument konnte nicht gelöscht werden: '+e.message);}}
+ }
+}
+
 function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
   if(!gaSheet_().getSheetByName('Ausbildungsberichte'))throw new Error('Tabelle Ausbildungsberichte fehlt. Im Google Sheet Grundausbildung → 7 · Tätigkeitsberichte einrichten ausführen.');
   const details=gaTrainingDetails_(d);
