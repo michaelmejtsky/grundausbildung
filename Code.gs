@@ -1258,7 +1258,7 @@ function gaSaveQuestionnaire_(u,d){
 
 /** Kursquiz V1.6: Antworten ausschließlich im Apps-Script-Backend prüfen. */
 function gaQuizInstalled_(){
- if(!gaSheet_().getSheetByName('QuizKurse')||!gaSheet_().getSheetByName('QuizVersuche'))
+ if(!gaSheet_().getSheetByName('QuizKurse')||!gaSheet_().getSheetByName('QuizVersuche')||!gaSheet_().getSheetByName('QuizFreigaben'))
   throw new Error('Quiz-Tabellen fehlen. Administrator: Grundausbildung → 1 · Tabellen prüfen/erstellen ausführen.');
 }
 function gaQuizPublicConfig_(c){
@@ -1296,7 +1296,7 @@ function gaQuizQuestions_(data){
 function gaQuizPublicQuestions_(questions){
  return questions.map((q,i)=>q.typ==='match'?
   {nr:i+1,typ:q.typ,text:q.text,left:q.pairs.map(p=>p[0]),
-   right:q.pairs.map((p,j)=>({id:j,text:p[1]})).reverse()}:
+   right:q.pairs.map((p,j)=>({id:q.tokens[j],text:p[1]})).reverse()}:
   {nr:i+1,typ:q.typ,text:q.text,options:q.options});
 }
 function gaGetQuizEdit_(u,d){
@@ -1322,9 +1322,11 @@ function gaSaveQuiz_(u,d){
  if(!Number.isInteger(time)||time<0||time>120)throw new Error('Zeitlimit: 0 bis 120 Minuten (0 = kein Limit).');
  let questions;
  try{questions=gaQuizQuestions_(d.Fragen);}catch(e){if(!enabled&&old){questions=JSON.parse(old.FragenJSON||'[]');}else throw e;}
+ const newQuestions=JSON.stringify(questions);
+ const majorChange=!!old&&(old.FragenJSON!==newQuestions||Number(old.Bestehensgrenze)!==pass);
  const val={KursID:id,Aktiv:enabled?'JA':'NEIN',Pflicht:required?'JA':'NEIN',
   Bestehensgrenze:String(pass),MaxVersuche:String(limit),ZeitlimitMinuten:String(time),
-  FragenJSON:JSON.stringify(questions),Version:String(old?Number(old.Version||0)+1:1),
+  FragenJSON:newQuestions,Version:String(old?(majorChange?Number(old.Version||0)+1:Number(old.Version||1)):1),
   AktualisiertVon:u.ID,AktualisiertAm:gaNow_()};
  if(val.FragenJSON.length>36000)throw new Error('Quiz ist zu groß. Fragen kürzen.');
  if(old)gaReplace_('QuizKurse',old.ID,val);
@@ -1368,7 +1370,7 @@ function gaStartQuiz_(u,d){
  const term=gaQuizEligibleTerm_(m,courseId);
  const list=gaRows_('QuizVersuche').filter(a=>a.MitgliedID===m.ID&&a.KursID===courseId&&a.QuizVersion===config.Version);
  if(list.some(a=>gaBool_(a.Bestanden)))throw new Error('Du hast diese Quizversion bereits erfolgreich bestanden.');
- const questions=JSON.parse(config.FragenJSON);
+ const questions=JSON.parse(config.FragenJSON).map(q=>q.typ==='match'?{...q,tokens:q.pairs.map(()=>gaId_())}:q);
  for(const attempt of list.filter(a=>a.Status==='In Bearbeitung')){
   const snapshot=JSON.parse(attempt.FragenSnapshotJSON||'[]');
   if(!gaQuizDue_(attempt,Number(config.ZeitlimitMinuten))){
@@ -1404,9 +1406,10 @@ function gaSubmitQuiz_(u,d){
  for(let i=0;i<qs.length;i++){
   const q=qs[i],answer=d.Antworten[i];
   if(q.typ==='match'){
-   if(!Array.isArray(answer)||answer.length!==q.pairs.length||answer.some(v=>!Number.isInteger(v)||v<0||v>=q.pairs.length))
+   const validTokens=new Set(q.tokens);
+   if(!Array.isArray(answer)||answer.length!==q.pairs.length||answer.some(v=>typeof v!=='string'||!validTokens.has(v)))
      throw new Error('Zuordnungsfragen müssen vollständig beantwortet werden.');
-   if(answer.every((v,n)=>v===n))correct++;
+   if(answer.every((v,n)=>v===q.tokens[n]))correct++;
   }else if(q.typ==='multi'){
    if(!Array.isArray(answer)||!answer.length||answer.some(v=>!Number.isInteger(v)||v<0||v>=q.options.length))
      throw new Error('Bitte bei der Mehrfachauswahl eine gültige Antwort auswählen.');
