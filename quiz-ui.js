@@ -57,7 +57,8 @@ function qAdmin(){
  '<details class="ga-member-fold"><summary><span>Ergebnisse und Versuche</span><span class="tag blue">'+recent.length+'</span></summary><div class="ga-fold-body">'+
  (recent.length?recent.map(a=>{const course=by(STATE.kurse,a.KursID),member=by(STATE.mitglieder,a.MitgliedID);
  return '<div class="ga-course-row"><div><b>'+h(course?.Titel||'Kurs')+'</b><p class="small muted">'+h(member?name(member):'Teilnehmer')+' · Versuch '+h(a.Versuch)+' · '+dt(a.AbgegebenAm)+'</p></div>'+
- '<span class="tag '+(a.Bestanden==='JA'?'ok':'bad')+'">'+h(a.Prozent)+' %</span></div>'}).join(''):'<p class="muted">Noch keine Ergebnisse.</p>')+'</div></details>';
+ '<span class="tag '+(a.Bestanden==='JA'?'ok':'bad')+'">'+h(a.Prozent)+' %</span>'+
+ (a.Bestanden==='JA'?'':'<button type="button" class="smallbtn" data-qunlock="'+h(a.KursID)+'|'+h(a.MitgliedID)+'">Zusatzversuch freigeben</button>')+'</div>'}).join(''):'<p class="muted">Noch keine Ergebnisse.</p>')+'</div></details>';
 }
 function qExam(){
  const s=Q_SESSION;
@@ -83,12 +84,13 @@ function qParticipant(){
   const attempts=(STATE.quizVersuche||[]).filter(a=>a.KursID===q.KursID&&String(a.QuizVersion)===String(q.Version));
   const passed=attempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
   const last=attempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
+  const extra=(STATE.quizFreigaben||[]).filter(u=>u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
   return '<article class="ga-project-card"><div class="row between"><div><b>'+h(course?.Titel||'Kurs')+'</b>'+
    '<div class="detail">'+h(q.FrageAnzahl)+' Fragen · Bestehensgrenze '+h(q.Bestehensgrenze)+' %</div></div>'+
    '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?'Bestanden':!eligible?'Gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwillig')+'</span></div>'+
    (last?'<p>Letztes Ergebnis: <b>'+h(last.Prozent)+' %</b></p>':'')+
    (passed?'<p class="muted small">Dein Ergebnis wurde gespeichert.</p>':!eligible?'<p class="muted small">Nach bestätigter Kursteilnahme verfügbar.</p>':
-   attempts.length<Number(q.MaxVersuche)?'<div class="btnline"><button class="primary" type="button" data-qstart="'+h(q.KursID)+'">'+(started?'Fortsetzen':'Quiz starten')+'</button></div>':
+   attempts.length<Number(q.MaxVersuche)+extra?'<div class="btnline"><button class="primary" type="button" data-qstart="'+h(q.KursID)+'">'+(started?'Fortsetzen':'Quiz starten')+'</button></div>':
    '<p class="muted small">Maximale Versuche erreicht. Ausbilder kontaktieren.</p>')+'</article>';
  }).join('');
  const result=Q_RESULT?'<div class="ga-q-result"><h2>'+ (Q_RESULT.Bestanden?'Bestanden!':'Nicht bestanden')+'</h2>'+
@@ -135,13 +137,15 @@ async function qSubmit(form){
  Q_SESSION=null;Q_RESULT=result;await reload();
 }
 document.getElementById('app')?.addEventListener('click',async e=>{
- const x=e.target.closest('[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qstart],[data-qresult-close],[data-course-quiz]');
+ const x=e.target.closest('[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
  if(!x)return;
  if(x.dataset.qadd!==undefined){qCapture();if(Q_ITEMS.length>=20)return tip('Maximal 20 Fragen möglich.',true);Q_ITEMS.push(qNew());qRepaint();return;}
  if(x.dataset.qdel!==undefined){qCapture();Q_ITEMS.splice(Number(x.dataset.qdel),1);qRepaint();return;}
  if(x.dataset.qback!==undefined){Q_EDIT='';Q_META=null;Q_ITEMS=[];render();return;}
  if(x.dataset.qresultClose!==undefined){Q_RESULT=null;render();return;}
  if(x.dataset.qedit||x.dataset.courseQuiz){await qOpenEditor(x.dataset.qedit||x.dataset.courseQuiz);return;}
+ if(x.dataset.qunlock){const [KursID,MitgliedID]=x.dataset.qunlock.split('|');if(!confirm('Für dieses Mitglied einen zusätzlichen Quizversuch freigeben?'))return;
+ x.disabled=true;try{const result=await api('unlockQuiz',{KursID,MitgliedID});tip(result.message);await reload();}catch(err){tip(err.message,true);}finally{x.disabled=false;}return;}
  if(x.dataset.qstart){x.disabled=true;try{await qStart(x.dataset.qstart);}catch(err){tip(err.message,true);x.disabled=false;}}
 });
 document.getElementById('app')?.addEventListener('change',e=>{
