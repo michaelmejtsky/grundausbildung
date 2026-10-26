@@ -10,7 +10,7 @@ function qEditorRows(){
  '<label>Frage</label><input name="qtext" maxlength="450" required value="'+h(q.text||'')+'">'+
  (q.typ==='match'?'<label>Zuordnungspaare, pro Zeile: Begriff | Zuordnung</label><textarea rows="4" name="qpairs">'+h((q.pairs||[]).map(p=>p.join(' | ')).join('\n'))+'</textarea>':
  q.typ==='tf'?'<label>Richtige Lösung</label><select name="qtf"><option value="0" '+(q.correct?.[0]===0?'selected':'')+'>Richtig</option><option value="1" '+(q.correct?.[0]===1?'selected':'')+'>Falsch</option></select>':
- '<label>Vier Antworten (eine pro Zeile)</label><textarea name="qoptions" rows="4">'+h((q.options||[]).join('\n'))+'</textarea>'+
+ '<label>Vier Antwortmöglichkeiten (alle erforderlich, eine je Zeile)</label><textarea name="qoptions" rows="4" placeholder="Antwort 1&#10;Antwort 2&#10;Antwort 3&#10;Antwort 4">'+h((q.options||[]).join('\n'))+'</textarea>'+
  '<label>Richtige Antwortnummern (1–4'+(q.typ==='multi'?', z. B. 1,3':'')+')</label><input name="qcorrect" value="'+h((q.correct||[0]).map(n=>Number(n)+1).join(','))+'">')+
  '</div>').join('');
 }
@@ -24,6 +24,38 @@ function qCapture(){
     correct:el.querySelector('[name=qcorrect]').value.split(',').map(n=>Number(n.trim())-1)};
  });
 }
+
+/** Clear inline validation: server requires exactly four filled options for selection questions. */
+function qValidateBeforeSave(){
+ if(!Q_ITEMS.length)throw new Error('Bitte mindestens eine Quizfrage anlegen.');
+ const focus=(i,field)=>{
+  const el=document.querySelector('[data-qitem="'+i+'"] [name="'+field+'"]');
+  if(el){el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});}
+ };
+ for(let i=0;i<Q_ITEMS.length;i++){
+  const q=Q_ITEMS[i],number=i+1;
+  if(!String(q.text||'').trim()){focus(i,'qtext');throw new Error('Frage '+number+': Bitte eine Fragestellung eintragen.');}
+  if(q.typ==='match'){
+   const pairs=q.pairs||[];
+   if(pairs.length<2||pairs.length>6||pairs.some(p=>!p[0]||!p[1])){
+    focus(i,'qpairs');throw new Error('Frage '+number+': Bitte 2 bis 6 vollständige Zuordnungspaare im Format „Begriff | Antwort“ eintragen.');
+   }
+  }else if(q.typ==='single'||q.typ==='multi'){
+   const options=q.options||[];
+   if(options.length!==4){focus(i,'qoptions');throw new Error('Frage '+number+': Es sind genau vier Antwortmöglichkeiten erforderlich, jeweils eine pro Zeile. Derzeit: '+options.length+'.');}
+   const missing=options.findIndex(o=>!String(o).trim());
+   if(missing!==-1){focus(i,'qoptions');throw new Error('Frage '+number+': Antwortmöglichkeit '+(missing+1)+' ist leer. Bitte alle vier Antworten ausfüllen.');}
+   if(new Set(options.map(o=>o.toLowerCase())).size!==4){focus(i,'qoptions');throw new Error('Frage '+number+': Alle vier Antwortmöglichkeiten müssen unterschiedlich sein.');}
+   const answers=q.correct||[];
+   if(!answers.length||answers.some(n=>!Number.isInteger(n)||n<0||n>3)||new Set(answers).size!==answers.length){
+    focus(i,'qcorrect');throw new Error('Frage '+number+': Bitte die Nummer der richtigen Antwort angeben (1–4).');
+   }
+   if(q.typ==='single'&&answers.length!==1){focus(i,'qcorrect');throw new Error('Frage '+number+': Genau eine Antwortnummer ist richtig.');}
+   if(q.typ==='multi'&&answers.length<2){focus(i,'qcorrect');throw new Error('Frage '+number+': Bei Mehrfachauswahl bitte mindestens zwei richtige Antwortnummern angeben, z. B. 1,3.');}
+  }
+ }
+}
+
 function qRepaint(){const el=document.getElementById('q-editor-rows');if(el)el.innerHTML=qEditorRows();}
 function qEditPage(){
  const course=by(STATE.kurse,Q_EDIT),c=Q_META||qCfg(Q_EDIT)||{};
@@ -113,6 +145,7 @@ async function qOpenEditor(id){
 }
 async function qSave(form,fd){
  qCapture();
+ qValidateBeforeSave();
  const d={KursID:form.dataset.course,Aktiv:fd.has('Aktiv')?'JA':'NEIN',Pflicht:fd.has('Pflicht')?'JA':'NEIN',
  Bestehensgrenze:fd.get('Bestehensgrenze'),MaxVersuche:fd.get('MaxVersuche'),ZeitlimitMinuten:fd.get('ZeitlimitMinuten'),Fragen:Q_ITEMS};
  const result=await api('saveQuiz',d);
