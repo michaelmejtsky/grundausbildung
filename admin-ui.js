@@ -17,7 +17,6 @@ function gaMenuHtml(tabs){
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
   ['Organisation',['rights','reports','messages','pushadmin']]
  ]:trainer?[
-  ['Meine Laufbahn',['mine','myterms','myquiz']],
   ['Ausbildung',['courses','projects','quizzes','terms','attendance']],
   ['Auswertung & Nachrichten',['reports','reviews','questionnaires','notifications']]
  ]:[['Dein Bereich',tabs.map(t=>t[0])]];
