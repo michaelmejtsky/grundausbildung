@@ -160,6 +160,8 @@ function qUpdateStats(){
 function qEditPage(){
  const course=by(STATE.kurse,Q_EDIT),cfg=Q_META||qCfg(Q_EDIT)||{};
  const total=Q_ITEMS.length,done=Q_ITEMS.filter(q=>!qValidity(q)).length;
+ const previousQuiz=qCfg(Q_EDIT);
+ const hasSavedQuiz=!!((previousQuiz&&Number(previousQuiz.FrageAnzahl)>0)||(Q_META?.ID&&Number(Q_META?.Fragen?.length??Q_META?.FrageAnzahl)>0));
  return '<section class="panel q-studio"><div class="q-studio-hero"><div><p class="ga-eyebrow">QUIZ-STUDIO / AUSBILDER</p>'+
   '<h2>'+h(course?.Titel||'Kursquiz')+'</h2><p>Fragen zusammenstellen, richtige Antworten auswählen und das Quiz vor der Veröffentlichung testen.</p></div>'+
   '<button type="button" class="secondary" data-qback="1">← Zur Übersicht</button></div>'+
@@ -175,7 +177,7 @@ function qEditPage(){
   '<div class="q-editor-actions"><button type="button" class="secondary" data-qadd="1" '+(total>=20?'disabled':'')+'>+ Frage hinzufügen</button>'+
   '<button type="button" class="secondary" data-qbackup="1">Entwurf exportieren</button>'+ 
   '<button type="button" class="secondary" data-qimport="1">Entwurf importieren</button>'+ 
-  ((/brandsicherheitswach|\bbsw\b/i).test(String(course?.Titel||''))?'<button type="button" class="primary" data-qbsw-template="1">🚒 13 BSW-Fragen laden</button>':'')+
+  (!hasSavedQuiz&&(/brandsicherheitswach|\bbsw\b/i).test(String(course?.Titel||''))?'<button type="button" class="primary" data-qbsw-template="1">🚒 13 BSW-Fragen laden</button>':'')+
   (Q_TEMPLATE_BACKUP?.courseId===Q_EDIT?'<button type="button" class="secondary" data-qbsw-undo="1">Vorlage rückgängig</button>':'')+
   '<input id="gaQuizDraftImport" type="file" accept="application/json,.json" data-quiz-import-file hidden></div></div>'+
   '<div class="q-editor-meter"><span style="width:'+(total?Math.round(done/total*100):0)+'%"></span></div>'+
