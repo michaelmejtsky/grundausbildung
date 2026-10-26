@@ -313,3 +313,64 @@
 .ga-external-block[open]>summary{border-bottom:1px solid #d9e5ef;background:#f6fbff}
 .ga-external-block .ga-fold-body{padding:15px}
 @media(max-width:750px){.ga-external-link{flex-direction:column;align-items:stretch}.ga-external-link button{width:100%}}
+
+
+/* Ausbildungstermine, Teilnehmer-/Ausbilderstunden und Fahrzeugkilometer – FDISK */
+.ga-training-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f4f9fd;border:1px solid #dce7f0;border-radius:13px;padding:12px 16px;margin:14px 0}
+.ga-training-status>span:nth-child(2){font-size:13px;color:#60798c;flex:1}
+.ga-training-status .secondary{margin-left:auto}
+.ga-training-step{display:inline-grid;place-items:center;width:31px;height:31px;border-radius:10px;background:#deebf7;color:#255e89;font-weight:850;margin-right:9px;font-size:15px}
+.ga-training-form>.panel{margin:14px 0}
+.ga-training-form>.panel>h3{font-size:19px;margin:0 0 11px;display:flex;align-items:center}
+.ga-training-time-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.ga-training-time-grid>label{font-size:14px;font-weight:750}
+.ga-training-time-entry{display:flex;align-items:center;gap:8px;margin-top:7px}
+.ga-training-time-entry input{flex:1;min-width:0;margin:0}
+.ga-training-time-entry button{white-space:nowrap}
+.ga-training-duration{margin:15px 0 0;padding:13px;border-radius:11px;background:#edf8f3;color:#175c43;font-weight:800}
+.ga-attendance-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px}
+.ga-attendance-choice{display:flex;align-items:center;gap:10px;background:#f8fbfe;border:1px solid #dce7ef;padding:11px 12px;border-radius:11px;font-size:13px;font-weight:650;margin:0;cursor:pointer;min-width:0}
+.ga-attendance-choice:has(input:checked){background:#eff9f3;border-color:#91c9ad}
+.ga-attendance-choice input[type="checkbox"]{width:19px!important;height:19px!important;flex:0 0 19px;margin:0!important;accent-color:#18885e}
+.ga-attendance-choice span{min-width:0;overflow-wrap:anywhere}
+.ga-training-count{margin:14px 0 0;font-size:13px;color:#45647b;font-weight:550}
+.ga-training-count strong{font-size:19px;color:#1b4f78}
+.ga-vehicle-row{display:grid;grid-template-columns:minmax(175px,1.6fr) minmax(145px,1fr) 38px;gap:12px;align-items:end;padding:12px;border:1px solid #e1eaf3;border-radius:12px;background:#f8fbfe;margin-bottom:8px}
+.ga-vehicle-row>label{font-size:13px;font-weight:750;margin:0}
+.ga-vehicle-row input{width:100%;margin:6px 0 0}
+.ga-vehicle-remove{width:36px;height:38px;font-size:22px;display:grid;place-items:center;line-height:1;padding:0!important;color:#984245!important}
+.ga-training-summary{background:#f2f8ff;border:1px solid #cbdff1;border-radius:12px;padding:15px;margin:14px 0}
+.ga-training-summary>strong{font-size:15px;color:#1d527a;display:block;margin-bottom:10px}
+.ga-training-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;font-size:13px;color:#2e5570}
+.ga-training-summary-grid span{padding:10px;background:#fff;border:1px solid #e1eaf3;border-radius:9px}
+.ga-training-list{display:flex;flex-direction:column;gap:9px}
+.ga-training-list-item{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid #e2ebf3;background:#fff;border-radius:12px;min-width:0}
+.ga-training-list-item>div:first-child{flex:1;min-width:0}
+.ga-training-list-item strong{display:block;overflow-wrap:anywhere}
+.ga-training-list-item p{margin:5px 0 0}
+.ga-training-list-item button{white-space:nowrap}
+.ga-training-report-card{border:1px solid #dbe7f1;border-radius:14px;background:#fff;padding:18px;margin:13px 0}
+.ga-training-report-card h3{margin:0 0 7px;font-size:18px}
+.ga-training-report-card .row{gap:14px;flex-wrap:wrap}
+.ga-training-report-card .row>div{flex:1}
+.ga-training-report-metrics{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.ga-training-report-metrics span{display:inline-flex;background:#eef6fb;border:1px solid #d8e8f2;padding:8px 11px;border-radius:10px;font-size:12px;font-weight:750;color:#2d5976}
+.ga-training-report-card details>summary{cursor:pointer;font-size:13px;color:#285e83;font-weight:750}
+.ga-training-report-card details .ga-training-list{margin-top:13px}
+@media(max-width:810px){
+ .ga-training-time-grid{grid-template-columns:1fr}
+ .ga-vehicle-row{grid-template-columns:1fr minmax(110px,.65fr) 38px}
+ .ga-attendance-list{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){
+ .ga-training-status{align-items:flex-start}
+ .ga-training-time-entry button{padding:8px 10px}
+ .ga-vehicle-row{grid-template-columns:minmax(0,1fr) 36px}
+ .ga-vehicle-row>label:first-child{grid-column:1/-1}
+ .ga-vehicle-row>label:nth-child(2){grid-column:1;grid-row:2}
+ .ga-vehicle-row>.ga-vehicle-remove{grid-column:2;grid-row:2}
+ .ga-attendance-list{grid-template-columns:1fr}
+ .ga-training-summary-grid{grid-template-columns:1fr}
+ .ga-training-list-item{flex-wrap:wrap}
+ .ga-training-list-item>div:first-child{flex-basis:100%}
+}
