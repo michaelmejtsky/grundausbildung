@@ -232,14 +232,14 @@ function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
  const base=admin?[
  ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],['quizzes','Quizverwaltung'],
- ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['abschnitt','Abschnittsmodule A/B'],['checks','Checklisten'],
+ ['terms','Termine'],['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['abschnitt','Abschnittsmodule A/B'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
  ['courses','Kurskatalog'],['projects','Kursprojekte'],
  ...(can.KurseGestalten||can.KurseBearbeiten?[['quizzes','Quizverwaltung']]:[]),
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
- ['attendance','Durchführung'],['reports','Mängel & Ideen'],
+ ['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['reports','Mängel & Ideen'],
  ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[]),
  ...(can.FrageboegenBearbeiten?[['questionnaires','Fragebögen']]:[])
  ]:r==='Teilnehmer'?[
@@ -254,11 +254,11 @@ function title(){return ({
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',abschnitt:'Abschnittsmodule A/B',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
- attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
+ attendance:'Ausbildung durchführen',trainingReports:'FDISK-Tätigkeitsberichte',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -1102,7 +1102,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
 }
  else if(type==='requirement')await doSave('setCourseRequirement',data);
  else if(type==='singleAttendance')await doSave('setAttendanceMember',data);
- else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
+ else if(type==='attendance')await gaSaveTrainingAttendance(form,fd);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script><script src="./training-report-ui.js"></script></body></html>
