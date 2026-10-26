@@ -1,3 +1,15 @@
+## Verwaltungsübersicht, GAB-Bestätigung und 30-Tage-Anmeldung – V1.7.0
+
+**Stand: 26. Oktober 2026.** Implementiert in GitHub `main`: Gruppierte Navigation mit mobilem Seitenmenü, übersichtliches Admin-Dashboard, gefilterte Mitgliederlisten, nach Turnus/Status filterbare Checklisten und individuelle Qualifikationsformulare. Bei zahlreichen Mitgliedern werden nicht länger sämtliche Editierformulare gleichzeitig geöffnet. Die bestehenden Datensätze bleiben unverändert.
+
+**GAB-Bestätigung:** Der Administrator kann unter **Qualifikationen → Mitglied auswählen** „GAB abgeschlossen und durch die Ausbildungsleitung bestätigt“ aktivieren. Nach Speicherung zählt der GAB-Abschluss auch dann als bestätigt, wenn einzelne GAB-Pflichtmodule noch nicht vollständig nacherfasst wurden. Diese Lücken bleiben als Warnhinweis und in den Pflichtmodulen sichtbar. Bei der BSW-Freigabe gelten weiterhin GAB, BSW-Modul und Altersvoraussetzung. Der Bestätigende wird protokolliert. Dies ist eine ausdrückliche administrative Freigabe, kein automatischer Nachweis über Kursbesuch.
+
+**30-Tage-Anmeldung:** Im Login ist „30 Tage angemeldet bleiben“ optional. Bei Aktivierung erhält der Browser eine zufällige Sitzungskennung mit Ablaufdatum. Serverseitig liegt **nur ein Hash der Kennung** in der neuen privaten Google-Sheets-Tabelle `Sitzungen` (kein Passwort, kein Klartext-Token). Die Sitzung endet bei Logout, Passwortänderung, Kontodeaktivierung oder spätestens nach 30 Tagen. Auf gemeinsam benutzten Geräten nicht einschalten. Ohne Häkchen bleibt die bisherige Kurzsitzung (bis zu 6 Stunden, nicht dauerhaft im Browser gespeichert).
+
+**Pflicht für den Livebetrieb:** Ein GitHub-Pages-Deploy aktualisiert **nur die Oberfläche**. Die aktuelle [Code.gs](https://github.com/michaelmejtsky/grundausbildung/blob/main/Code.gs) im *bestehenden* Apps-Script-Projekt der privaten Ausbildungs-Google-Tabelle vollständig übernehmen und über **Bereitstellungen verwalten → Neue Version → Bereitstellen** aktualisieren. Danach im Tabellenmenü **Grundausbildung → 1 · Tabellen prüfen/erstellen** ausführen, damit die zusätzliche Tabelle `Sitzungen` erstellt wird. Keine bestehenden Tabellen oder Bereitstellungslinks löschen. Bis zur Backend-Aktualisierung bleibt die neue 30-Tage-Anmeldung nicht verfügbar und die alte GAB-Berechnung in der laufenden App maßgeblich.
+
+**Prüfung:** JavaScript-Syntax, Listen mit 120 Mitgliedern/840 Checklisten-Zeilen, manuelle GAB-Freigabe sowie die Logik für Wiederanmeldung nach Cache-Ablauf und Widerruf wurden mit Testdaten geprüft. Ein echter End-to-End-Test der Google-Apps-Script-Bereitstellung muss nach dem Live-Update erfolgen.
+
 ## Kursquiz – V1.6.0 (26.10.2026)
 
 - **Quizverwaltung:** Administratoren und Ausbilder mit Kursgestaltungs-/Bearbeitungsrecht können für jeden veröffentlichten Kurs einen Wissenstest mit 1–20 Fragen speichern.
