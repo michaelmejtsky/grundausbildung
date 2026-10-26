@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.8.0',
+  VERSION: '1.9.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -14,6 +14,7 @@ const GA = Object.freeze({
     Kurse: ['ID','Titel','Bereich','Inhalt','Lernziele','Links','Aktiv','ErstelltAm'],
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
+    Ausbildungsberichte: ['ID','TerminID','BeginnIst','EndeIst','DauerMinuten','FahrzeugeJSON','AusbilderIDs','Notiz','ErfasstVon','AktualisiertAm'],
     Checklistenpunkte: ['ID','Titel','Bereich','Zustaendig','Aktiv','ErstelltAm'],
     MitgliedChecks: ['ID','MitgliedID','PunktID','Status','Kommentar','GeaendertVon','GeaendertAm'],
     Nachrichten: ['ID','Titel','Text','TurnusID','VonBenutzerID','ErstelltAm'],
@@ -49,7 +50,8 @@ function onOpen() {
     .addItem('3 · Systemprüfung','gaSystemPruefen')
     .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten')
     .addItem('5 · Push-Speicher und Trigger einrichten','gaPushEinrichten')
-    .addItem('6 · Login- und Quiz-Tabellen einrichten','gaErweiterungenEinrichten').addToUi();
+    .addItem('6 · Login- und Quiz-Tabellen einrichten','gaErweiterungenEinrichten')
+    .addItem('7 · Tätigkeitsberichte einrichten','gaBerichtsTabellenEinrichten').addToUi();
 }
 
 function gaSheet_() {
@@ -121,6 +123,25 @@ function gaErweiterungenEinrichten(){
  Logger.log(message);
  ss.toast(message,'Einrichtung abgeschlossen',7);
  return {ok:true,created,verified,message};
+}
+
+/** Erstellt ausschließlich die Ausbildungsberichte-Tabelle; andere Tabellen bleiben unverändert. */
+function gaBerichtsTabellenEinrichten(){
+ const ss=gaSheet_(),headers=GA.SHEETS.Ausbildungsberichte;
+ let sheet=ss.getSheetByName('Ausbildungsberichte'),created=!sheet;
+ if(!sheet)sheet=ss.insertSheet('Ausbildungsberichte');
+ if(sheet.getMaxColumns()<headers.length)sheet.insertColumnsAfter(sheet.getMaxColumns(),headers.length-sheet.getMaxColumns());
+ if(sheet.getLastRow()===0)sheet.getRange(1,1,1,headers.length).setValues([headers]);
+ else {
+  const current=sheet.getRange(1,1,1,headers.length).getDisplayValues()[0];
+  if(headers.some((h,i)=>h!==current[i]))throw new Error('Die Tabelle Ausbildungsberichte hat unerwartete Überschriften. Sie wurde nicht überschrieben.');
+ }
+ sheet.setFrozenRows(1);
+ sheet.getRange(1,1,1,headers.length).setBackground('#E8EDF3').setFontWeight('bold');
+ const message=created?'Tabelle Ausbildungsberichte erstellt.':'Tabelle Ausbildungsberichte geprüft; vorhandene Daten bleiben unverändert.';
+ Logger.log(message);
+ ss.toast(message,'FDISK-Tätigkeitsberichte',6);
+ return {ok:true,created,message};
 }
 
 function gaErstenAdminEinrichten() {
@@ -266,6 +287,7 @@ function gaApi(method,data,token){
   if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
+  if(method==='exportTrainingPdf')return gaExportTrainingPdf_(u,d);
   if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
   if(method==='resetPassword')return gaLock_(()=>gaResetPassword_(u,d));
   if(method==='changeUserRole')return gaLock_(()=>gaChangeUserRole_(u,d));
@@ -307,6 +329,7 @@ function gaState_(u){
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
  const abschnitt=gaOptionalRows_('AbschnittNachweise');
+ const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
   .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
@@ -339,6 +362,7 @@ function gaState_(u){
   meMember:own,
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
+  ausbildungsberichte:trainingReports,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
   quizFreigaben:(admin||trainer?quizUnlocks:own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
   quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
@@ -450,7 +474,37 @@ function gaSetCheck_(u,d){gaRequire_(u,['Administrator','Fachverwaltung']);const
   gaReplace_('MitgliedChecks',ch.ID,val);gaLog_(u.ID,'STATUS','MitgliedCheck',ch.ID,{von:ch.Status,auf:val.Status});
   const member=gaFind_('Mitglieder',ch.MitgliedID);
   gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&member&&x.Email.toLowerCase()===member.Email.toLowerCase()&&gaBool_(x.Aktiv)).forEach(x=>gaNotify_(x.ID,'Checkliste','Checkliste aktualisiert',item.Titel+': '+val.Status,ch.ID));return {ok:true};}
+/** Form data for practical training and subsequent FDISK reporting. */
+function gaTrainingDetails_(d){
+ const begin=gaDateTime_(d.BeginnIst),end=gaDateTime_(d.EndeIst);
+ const minutes=Math.round((Date.parse(end)-Date.parse(begin))/60000);
+ if(!Number.isFinite(minutes)||minutes<1||minutes>72*60)throw new Error('Die tatsächliche Ausbildungsdauer muss zwischen 1 Minute und 72 Stunden liegen.');
+ if(!Array.isArray(d.Fahrzeuge)||d.Fahrzeuge.length>12)throw new Error('Maximal zwölf Fahrzeuge je Ausbildung erfassen.');
+ const names=new Set();
+ const fahrzeuge=d.Fahrzeuge.map((raw,index)=>{
+  const Fahrzeug=gaNeed_(raw.Fahrzeug,'Fahrzeug '+(index+1),80);
+  const val=String(raw.Kilometer??'').trim().replace(',','.');
+  if(!/^\d+(?:\.\d{1,2})?$/.test(val))throw new Error('Kilometer für '+Fahrzeug+' als Zahl eingeben (z. B. 12,5).');
+  const Kilometer=Number(val);
+  if(!Number.isFinite(Kilometer)||Kilometer>9999)throw new Error('Kilometer für '+Fahrzeug+' müssen zwischen 0 und 9999 liegen.');
+  const normalized=Fahrzeug.toLocaleLowerCase('de-AT');
+  if(names.has(normalized))throw new Error('Fahrzeug '+Fahrzeug+' ist mehrfach erfasst. Bitte die Kilometer zusammenfassen.');
+  names.add(normalized);
+  return {Fahrzeug,Kilometer};
+ });
+ return {BeginnIst:begin,EndeIst:end,DauerMinuten:String(minutes),
+  FahrzeugeJSON:JSON.stringify(fahrzeuge),Notiz:gaText_(d.Notiz,1500)};
+}
+function gaTrainingVehicles_(report){
+ try{const list=JSON.parse(report?.FahrzeugeJSON||'[]');return Array.isArray(list)?list:[];}
+ catch(e){return [];}
+}
+function gaTrainingHours_(minutes){return (Math.round(Number(minutes)/6)/10).toLocaleString('de-AT',{minimumFractionDigits:1,maximumFractionDigits:1});}
+function gaTrainingDate_(stamp){const s=String(stamp||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4)+(s.length>=16?' '+s.slice(11,16):''):s;}
+
 function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
+  if(!gaSheet_().getSheetByName('Ausbildungsberichte'))throw new Error('Tabelle Ausbildungsberichte fehlt. Im Google Sheet Grundausbildung → 7 · Tätigkeitsberichte einrichten ausführen.');
+  const details=gaTrainingDetails_(d);
   const members=gaRows_('Mitglieder').filter(m=>m.TurnusID===term.TurnusID&&gaBool_(m.Aktiv));
   if(!Array.isArray(d.Anwesend)||d.Anwesend.length!==members.length)throw new Error('Die Anwesenheitsliste ist unvollständig.');
   const answers=new Map(d.Anwesend.map(x=>[String(x.MitgliedID),x.Anwesend===true]));
@@ -460,12 +514,16 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);cons
   if(!trainerIds.length||trainerIds.some(id=>!qualified.includes(id)))throw new Error('Mindestens einen gültigen Ausbilder auswählen.');
   if(u.Rolle==='Ausbilder'&&!trainerIds.includes(u.ID))throw new Error('Der bestätigende Ausbilder muss selbst angeführt sein.');
   const previous=gaRows_('Teilnahmen');
+  const saved=gaOptionalRows_('Ausbildungsberichte').find(r=>r.TerminID===term.ID);
+  const report={...details,AusbilderIDs:trainerIds.join(','),ErfasstVon:u.ID,AktualisiertAm:gaNow_()};
+  if(saved)gaReplace_('Ausbildungsberichte',saved.ID,report);
+  else gaAppend_('Ausbildungsberichte',{ID:gaId_(),TerminID:term.ID,...report});
   members.forEach(m=>{
     const existing=previous.find(x=>x.TerminID===term.ID&&x.MitgliedID===m.ID);
     const entry={Anwesend:answers.get(m.ID)?'JA':'NEIN',AusbilderIDs:trainerIds.join(','),BestaetigtVon:u.ID,BestaetigtAm:gaNow_()};
     if(existing)gaReplace_('Teilnahmen',existing.ID,entry);else gaAppend_('Teilnahmen',Object.assign({ID:gaId_(),TerminID:term.ID,MitgliedID:m.ID},entry));
   });gaReplace_('Termine',term.ID,{Status:'Durchgeführt'});
-  gaLog_(u.ID,'BESTAETIGEN','Termin',term.ID,{AusbilderIDs:trainerIds,Anwesend:members.filter(m=>answers.get(m.ID)).length,Total:members.length});
+  gaLog_(u.ID,'BESTAETIGEN','Termin',term.ID,{AusbilderIDs:trainerIds,Anwesend:members.filter(m=>answers.get(m.ID)).length,Total:members.length,DauerMinuten:details.DauerMinuten,FahrzeugeJSON:details.FahrzeugeJSON});
   const course=gaFind_('Kurse',term.KursID);
   const completed=gaOptionalRows_('Bewertungen');
   const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv));
