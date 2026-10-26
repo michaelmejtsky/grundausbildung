@@ -17,6 +17,7 @@ function gaMenuHtml(tabs){
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
   ['Organisation',['rights','reports','messages','pushadmin']]
  ]:trainer?[
+  ['Meine Laufbahn',['mine','myterms','myquiz']],
   ['Ausbildung',['courses','projects','quizzes','terms','attendance']],
   ['Auswertung & Nachrichten',['reports','reviews','questionnaires','notifications']]
  ]:[['Dein Bereich',tabs.map(t=>t[0])]];
@@ -209,13 +210,15 @@ gaApp?.addEventListener('click',e=>{
  if(x.dataset.goQual){GA_QUAL_PERSON=x.dataset.goQual;VIEW='qualifications';FORM='';EDIT=null;render();return;}
  if(x.dataset.gaClear){if(x.dataset.gaClear==='check')GA_CHECK_PERSON='';if(x.dataset.gaClear==='qual')GA_QUAL_PERSON='';
  if(x.dataset.gaClear==='member'){GA_MEM_CREATE=false;FORM='';EDIT=null;}render();return;}
- if(x.dataset.gaMore){if(x.dataset.gaMore==='check')GA_CHECK_LIMIT+=30;
+ if(x.dataset.gaMore){if(!['check','qual','member'].includes(x.dataset.gaMore))return;
+ if(x.dataset.gaMore==='check')GA_CHECK_LIMIT+=30;
  if(x.dataset.gaMore==='qual')GA_QUAL_LIMIT+=30;if(x.dataset.gaMore==='member')GA_MEM_LIMIT+=40;render();return;}
  if(x.dataset.gaAddMember){GA_MEM_CREATE=true;FORM='';EDIT=null;render();}
 });
 gaApp?.addEventListener('input',e=>{
  const x=e.target.closest('[data-ga-search]');if(!x)return;
  const typ=x.dataset.gaSearch;
+ if(!['check','qual','member'].includes(typ))return;
  if(typ==='check'){GA_CHECK_QUERY=x.value;GA_CHECK_LIMIT=30;}
  if(typ==='qual'){GA_QUAL_QUERY=x.value;GA_QUAL_LIMIT=30;}
  if(typ==='member'){GA_MEM_QUERY=x.value;GA_MEM_LIMIT=40;}
@@ -225,6 +228,7 @@ gaApp?.addEventListener('input',e=>{
 });
 gaApp?.addEventListener('change',e=>{
  const x=e.target.closest('[data-ga-select]');if(!x)return;
+ if(!['checkTurnus','checkStatus','qualTurnus','memberTurnus'].includes(x.dataset.gaSelect))return;
  if(x.dataset.gaSelect==='checkTurnus')GA_CHECK_TURNUS=x.value;
  if(x.dataset.gaSelect==='checkStatus')GA_CHECK_STATUS=x.value;
  if(x.dataset.gaSelect==='qualTurnus')GA_QUAL_TURNUS=x.value;
