@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.5.5',
+  VERSION: '1.6.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -30,7 +30,9 @@ const GA = Object.freeze({
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
     Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm'],
     BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm'],
-    ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger']
+    ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger'],
+    QuizKurse: ['ID','KursID','Aktiv','Pflicht','Bestehensgrenze','MaxVersuche','ZeitlimitMinuten','FragenJSON','Version','AktualisiertVon','AktualisiertAm'],
+    QuizVersuche: ['ID','KursID','MitgliedID','TerminID','QuizVersion','Versuch','Status','BegonnenAm','AbgegebenAm','Punkte','MaxPunkte','Prozent','Bestanden','AntwortenJSON','FragenSnapshotJSON']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -179,6 +181,9 @@ function gaApi(method,data,token){
   if(method==='logout'){CacheService.getScriptCache().remove(gaTokenKey_(token));return {ok:true};}
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
+  if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
+  if(method==='startQuiz')return gaLock_(()=>gaStartQuiz_(u,d));
+  if(method==='submitQuiz')return gaLock_(()=>gaSubmitQuiz_(u,d));
   if(method==='saveQuestionnaire')return gaLock_(()=>gaSaveQuestionnaire_(u,d));
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
@@ -236,8 +241,9 @@ function gaState_(u){
  const ownRatings=participant&&own?ratings.filter(r=>r.MitgliedID===own.ID):[];
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
+ const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche');
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
@@ -267,6 +273,8 @@ function gaState_(u){
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
   meMember:participant&&own?own:null,
   qualifikationen,
+  quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
+  quizVersuche:(participant&&own?quizAttempts.filter(a=>a.MitgliedID===own.ID):admin||trainer?quizAttempts:[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
   ersteHilfeNachweise:aidRowsVisible,
   ersteHilfeMail:admin?gaAidSettings_():null,
   kursAnforderungen:admin?reqs:[],
@@ -1113,9 +1121,15 @@ function gaResendAidEmail_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse){
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
- const complete=id=>terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+ const complete=id=>{
+   const attended=terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+   if(!attended)return false;
+   const config=(quizCfg||[]).find(c=>c.KursID===id&&valid(c.Aktiv)&&valid(c.Pflicht));
+   if(!config)return true;
+   return (quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&a.QuizVersion===config.Version&&valid(a.Bestanden));
+ };
  const gab=rs.filter(r=>valid(r.PflichtGAB)),bsw=rs.filter(r=>valid(r.PflichtBSW));
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
@@ -1235,4 +1249,174 @@ function gaSaveQuestionnaire_(u,d){
  Version:String(version),Aktiv:'JA',AktualisiertVon:u.ID,AktualisiertAm:gaNow_()});
  gaLog_(u.ID,'FRAGEBOGEN_AKTUALISIERT','Kurs',courseId,{Version:version,Fragen:questions.length});
  return {ok:true,message:'Fragebogen gespeichert. Alte Bewertungen bleiben unverändert.'};
+}
+
+
+/** Kursquiz V1.6: Antworten ausschließlich im Apps-Script-Backend prüfen. */
+function gaQuizInstalled_(){
+ if(!gaSheet_().getSheetByName('QuizKurse')||!gaSheet_().getSheetByName('QuizVersuche'))
+  throw new Error('Quiz-Tabellen fehlen. Administrator: Grundausbildung → 1 · Tabellen prüfen/erstellen ausführen.');
+}
+function gaQuizPublicConfig_(c){
+ let questions=[];try{questions=JSON.parse(c.FragenJSON||'[]');}catch(e){}
+ return {ID:c.ID,KursID:c.KursID,Aktiv:c.Aktiv,Pflicht:c.Pflicht,Bestehensgrenze:Number(c.Bestehensgrenze)||80,
+  MaxVersuche:Number(c.MaxVersuche)||3,ZeitlimitMinuten:Number(c.ZeitlimitMinuten)||0,
+  Version:c.Version,FrageAnzahl:Array.isArray(questions)?questions.length:0,AktualisiertAm:c.AktualisiertAm};
+}
+function gaQuizQuestions_(data){
+ if(!Array.isArray(data)||data.length<1||data.length>20)throw new Error('Bitte 1 bis 20 Quizfragen anlegen.');
+ return data.map((raw,i)=>{
+   const type=gaChoice_(String(raw.typ||''),['single','multi','tf','match'],'Fragetyp');
+   const text=gaNeed_(raw.text,'Frage '+(i+1),450);
+   if(type==='match'){
+     const pairs=raw.pairs;
+     if(!Array.isArray(pairs)||pairs.length<2||pairs.length>6)throw new Error('Zuordnung: 2 bis 6 Paare erforderlich.');
+     const valid=pairs.map(pair=>{
+       if(!Array.isArray(pair)||pair.length!==2)throw new Error('Ungültiges Zuordnungspaar.');
+       return [gaNeed_(pair[0],'Zuordnungsbegriff',150),gaNeed_(pair[1],'Zuordnungsantwort',150)];
+     });
+     if(new Set(valid.map(x=>x[1].toLowerCase())).size!==valid.length)throw new Error('Zuordnungsantworten müssen eindeutig sein.');
+     return {typ:type,text,pairs:valid};
+   }
+   const options=type==='tf'?['Richtig','Falsch']:(Array.isArray(raw.options)?raw.options:[]).map(s=>gaNeed_(s,'Antwortmöglichkeit',220));
+   if(options.length!==(type==='tf'?2:4)||new Set(options.map(x=>x.toLowerCase())).size!==options.length)
+     throw new Error('Bei Auswahlfragen sind vier verschiedene Antworten erforderlich.');
+   const correct=Array.isArray(raw.correct)?raw.correct.map(Number):[];
+   if(!correct.length||correct.some(x=>!Number.isInteger(x)||x<0||x>=options.length)||new Set(correct).size!==correct.length)
+     throw new Error('Gültige richtige Antworten für Frage '+(i+1)+' festlegen.');
+   if(type!=='multi'&&correct.length!==1)throw new Error('Hier muss genau eine Antwort richtig sein.');
+   if(type==='multi'&&correct.length<2)throw new Error('Mehrfachauswahl benötigt mindestens zwei richtige Antworten.');
+   return {typ:type,text,options,correct:correct.slice().sort((a,b)=>a-b)};
+ });
+}
+function gaQuizPublicQuestions_(questions){
+ return questions.map((q,i)=>q.typ==='match'?
+  {nr:i+1,typ:q.typ,text:q.text,left:q.pairs.map(p=>p[0]),
+   right:q.pairs.map((p,j)=>({id:j,text:p[1]})).reverse()}:
+  {nr:i+1,typ:q.typ,text:q.text,options:q.options});
+}
+function gaQuizRights_(u){if(u.Rolle==='Administrator')return;
+ if(u.Rolle!=='Ausbilder'||!(gaCan_(u,'KurseGestalten')||gaCan_(u,'KurseBearbeiten')))
+   throw new Error('Kein Recht zum Bearbeiten von Kursquiz.');
+}
+function gaSaveQuiz_(u,d){
+ gaQuizRights_(u);gaQuizInstalled_();
+ const id=gaNeed_(d.KursID,'Kurs-ID',100),course=gaFind_('Kurse',id);
+ if(!course||!gaBool_(course.Aktiv))throw new Error('Kurs muss vor dem Anlegen eines Quiz veröffentlicht sein.');
+ const old=gaOptionalRows_('QuizKurse').find(c=>c.KursID===id);
+ const enabled=d.Aktiv===true||d.Aktiv==='JA';
+ const required=enabled&&(d.Pflicht===true||d.Pflicht==='JA');
+ const pass=Number(d.Bestehensgrenze),limit=Number(d.MaxVersuche),time=Number(d.ZeitlimitMinuten);
+ if(!Number.isInteger(pass)||pass<50||pass>100)throw new Error('Bestehensgrenze: 50 bis 100 Prozent.');
+ if(!Number.isInteger(limit)||limit<1||limit>10)throw new Error('Versuche: 1 bis 10.');
+ if(!Number.isInteger(time)||time<0||time>120)throw new Error('Zeitlimit: 0 bis 120 Minuten (0 = kein Limit).');
+ let questions;
+ try{questions=gaQuizQuestions_(d.Fragen);}catch(e){if(!enabled&&old){questions=JSON.parse(old.FragenJSON||'[]');}else throw e;}
+ const val={KursID:id,Aktiv:enabled?'JA':'NEIN',Pflicht:required?'JA':'NEIN',
+  Bestehensgrenze:String(pass),MaxVersuche:String(limit),ZeitlimitMinuten:String(time),
+  FragenJSON:JSON.stringify(questions),Version:String(old?Number(old.Version||0)+1:1),
+  AktualisiertVon:u.ID,AktualisiertAm:gaNow_()};
+ if(val.FragenJSON.length>36000)throw new Error('Quiz ist zu groß. Fragen kürzen.');
+ if(old)gaReplace_('QuizKurse',old.ID,val);
+ else gaAppend_('QuizKurse',{ID:gaId_(),...val});
+ gaLog_(u.ID,'QUIZ_SPEICHERN','Kurs',id,{Aktiv:val.Aktiv,Pflicht:val.Pflicht,Version:val.Version,Fragen:questions.length});
+ return {ok:true,message:enabled?'Quiz gespeichert. Neue Quizversion '+val.Version+' ist aktiv.':'Quiz deaktiviert; bisherige Versuche bleiben erhalten.'};
+}
+function gaQuizMember_(u){
+ gaRequire_(u,['Teilnehmer']);
+ const m=gaRows_('Mitglieder').find(x=>gaBool_(x.Aktiv)&&String(x.Email||'').toLowerCase()===String(u.Email||'').toLowerCase());
+ if(!m)throw new Error('Dein Mitgliedsprofil wurde nicht gefunden.');
+ return m;
+}
+function gaQuizEligibleTerm_(m,courseId){
+ const attendance=gaRows_('Teilnahmen').filter(t=>t.MitgliedID===m.ID&&gaBool_(t.Anwesend));
+ const terms=gaRows_('Termine');
+ const term=attendance.map(a=>terms.find(t=>t.ID===a.TerminID))
+  .filter(t=>t&&t.KursID===courseId&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt')
+  .sort((a,b)=>String(b.Beginn).localeCompare(String(a.Beginn)))[0];
+ if(!term)throw new Error('Das Quiz wird erst nach bestätigter Kursteilnahme freigeschaltet.');
+ return term;
+}
+function gaQuizDue_(a,time){
+ const start=new Date(a.BegonnenAm).getTime();
+ return time>0&&(!Number.isFinite(start)||Date.now()>start+time*60000);
+}
+function gaQuizAttemptPublic_(row,questions,config){
+ return {VersuchID:row.ID,KursID:row.KursID,Version:row.QuizVersion,
+  Versuch:Number(row.Versuch),MaxVersuche:Number(config.MaxVersuche),
+  ZeitlimitMinuten:Number(config.ZeitlimitMinuten),BegonnenAm:row.BegonnenAm,
+  Fragen:gaQuizPublicQuestions_(questions)};
+}
+function gaStartQuiz_(u,d){
+ const m=gaQuizMember_(u);gaQuizInstalled_();
+ const courseId=gaNeed_(d.KursID,'Kurs-ID',100);
+ const course=gaFind_('Kurse',courseId),config=gaOptionalRows_('QuizKurse').find(c=>c.KursID===courseId&&gaBool_(c.Aktiv));
+ if(!course||!gaBool_(course.Aktiv)||!config)throw new Error('Für diesen Kurs ist kein aktives Quiz vorhanden.');
+ const term=gaQuizEligibleTerm_(m,courseId);
+ const list=gaRows_('QuizVersuche').filter(a=>a.MitgliedID===m.ID&&a.KursID===courseId&&a.QuizVersion===config.Version);
+ if(list.some(a=>gaBool_(a.Bestanden)))throw new Error('Du hast diese Quizversion bereits erfolgreich bestanden.');
+ const questions=JSON.parse(config.FragenJSON);
+ for(const attempt of list.filter(a=>a.Status==='In Bearbeitung')){
+  const snapshot=JSON.parse(attempt.FragenSnapshotJSON||'[]');
+  if(!gaQuizDue_(attempt,Number(config.ZeitlimitMinuten))){
+   return gaQuizAttemptPublic_(attempt,snapshot,config);
+  }
+  gaReplace_('QuizVersuche',attempt.ID,{Status:'Zeitüberschreitung',AbgegebenAm:gaNow_(),Bestanden:'NEIN'});
+ }
+ if(list.length>=Number(config.MaxVersuche))throw new Error('Maximale Versuchszahl erreicht. Bitte Ausbilder kontaktieren.');
+ const next={ID:gaId_(),KursID:courseId,MitgliedID:m.ID,TerminID:term.ID,QuizVersion:config.Version,
+  Versuch:String(list.length+1),Status:'In Bearbeitung',BegonnenAm:gaNow_(),AbgegebenAm:'',
+  Punkte:'',MaxPunkte:'',Prozent:'',Bestanden:'NEIN',AntwortenJSON:'',FragenSnapshotJSON:JSON.stringify(questions)};
+ gaAppend_('QuizVersuche',next);
+ gaLog_(u.ID,'QUIZ_START','Kurs',courseId,{MitgliedID:m.ID,Versuch:next.Versuch});
+ return gaQuizAttemptPublic_(next,questions,config);
+}
+function gaSubmitQuiz_(u,d){
+ const m=gaQuizMember_(u);gaQuizInstalled_();
+ const attempt=gaFind_('QuizVersuche',gaNeed_(d.VersuchID,'Versuch',100));
+ if(!attempt||attempt.MitgliedID!==m.ID||attempt.Status!=='In Bearbeitung')
+  throw new Error('Dieser Quizversuch ist nicht mehr offen.');
+ const config=gaOptionalRows_('QuizKurse').find(c=>c.KursID===attempt.KursID);
+ if(!config||!gaBool_(config.Aktiv)||config.Version!==attempt.QuizVersion)
+  throw new Error('Der Fragenkatalog hat sich geändert. Bitte das Quiz erneut öffnen.');
+ gaQuizEligibleTerm_(m,attempt.KursID);
+ if(gaQuizDue_(attempt,Number(config.ZeitlimitMinuten))){
+  gaReplace_('QuizVersuche',attempt.ID,{Status:'Zeitüberschreitung',AbgegebenAm:gaNow_(),Bestanden:'NEIN'});
+  throw new Error('Das Zeitlimit ist abgelaufen. Der Versuch wurde als nicht bestanden erfasst.');
+ }
+ const qs=JSON.parse(attempt.FragenSnapshotJSON||'[]');
+ if(!Array.isArray(d.Antworten)||d.Antworten.length!==qs.length)
+   throw new Error('Bitte alle Quizfragen beantworten.');
+ let correct=0;
+ for(let i=0;i<qs.length;i++){
+  const q=qs[i],answer=d.Antworten[i];
+  if(q.typ==='match'){
+   if(!Array.isArray(answer)||answer.length!==q.pairs.length||answer.some(v=>!Number.isInteger(v)||v<0||v>=q.pairs.length))
+     throw new Error('Zuordnungsfragen müssen vollständig beantwortet werden.');
+   if(answer.every((v,n)=>v===n))correct++;
+  }else if(q.typ==='multi'){
+   if(!Array.isArray(answer)||!answer.length||answer.some(v=>!Number.isInteger(v)||v<0||v>=q.options.length))
+     throw new Error('Bitte bei der Mehrfachauswahl eine gültige Antwort auswählen.');
+   const unique=[...new Set(answer)].sort((a,b)=>a-b);
+   if(JSON.stringify(unique)===JSON.stringify(q.correct))correct++;
+  }else{
+   if(!Number.isInteger(answer)||answer<0||answer>=q.options.length)
+     throw new Error('Bitte jede Frage beantworten.');
+   if(q.correct[0]===answer)correct++;
+  }
+ }
+ const percent=Math.round(100*correct/qs.length),passed=percent>=Number(config.Bestehensgrenze);
+ const time=gaNow_();
+ gaReplace_('QuizVersuche',attempt.ID,{Status:'Abgegeben',AbgegebenAm:time,
+  Punkte:String(correct),MaxPunkte:String(qs.length),Prozent:String(percent),
+  Bestanden:passed?'JA':'NEIN',AntwortenJSON:JSON.stringify(d.Antworten)});
+ const owner=gaRows_('Benutzer');
+ owner.filter(x=>gaBool_(x.Aktiv)&&(x.Rolle==='Administrator'||(x.Rolle==='Ausbilder'&&gaCan_(x,'KurseGestalten'))))
+  .filter(x=>x.ID!==u.ID).forEach(x=>gaNotify_(x.ID,'Aufgabe','Kursquiz abgegeben',
+   m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID));
+ gaLog_(u.ID,'QUIZ_ABGEBEN','Kurs',attempt.KursID,{MitgliedID:m.ID,QuizVersion:attempt.QuizVersion,Prozent:percent,Bestanden:passed});
+ const attempts=gaRows_('QuizVersuche').filter(x=>x.MitgliedID===m.ID&&x.KursID===attempt.KursID&&x.QuizVersion===config.Version).length;
+ return {ok:true,Bestanden:passed,Punkte:correct,MaxPunkte:qs.length,Prozent:percent,
+   Bestehensgrenze:Number(config.Bestehensgrenze),VersucheVerbleibend:Math.max(0,Number(config.MaxVersuche)-attempts),
+   Pflicht:gaBool_(config.Pflicht)};
 }
