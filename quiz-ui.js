@@ -67,7 +67,7 @@ function qExam(){
  '<p class="muted">'+(s.ZeitlimitMinuten?'Zeitlimit: '+h(s.ZeitlimitMinuten)+' Minuten ab Start.':'Kein Zeitlimit.')+' Alle Fragen beantworten und dann abgeben.</p>'+
  '<form data-form="quizAttempt">'+s.Fragen.map((q,i)=>{
  let content='';
- if(q.typ==='match'){const options=q.right.map(v=>'<option value="'+Number(v.id)+'">'+h(v.text)+'</option>').join('');
+ if(q.typ==='match'){const options=q.right.map(v=>'<option value="'+h(v.id)+'">'+h(v.text)+'</option>').join('');
    content=q.left.map((label,j)=>'<label>'+h(label)+'<select name="qm'+i+'_'+j+'" required><option value="">Zuordnen</option>'+options+'</select></label>').join('');
  }else{content=q.options.map((label,j)=>'<label class="q-answer"><input type="'+(q.typ==='multi'?'checkbox':'radio')+'" name="qa'+i+'" value="'+j+'"> '+h(label)+'</label>').join('');}
  return '<div class="ga-q-card"><b>Frage '+(i+1)+' von '+s.Fragen.length+'</b><h3>'+h(q.text)+'</h3>'+content+'</div>';
@@ -126,7 +126,7 @@ async function qSubmit(form){
   if(q.typ==='match'){
    const values=q.left.map((_,j)=>form.querySelector('[name="qm'+i+'_'+j+'"]')?.value||'');
    if(values.some(v=>v===''))throw Error('Bitte Frage '+(i+1)+' vollständig beantworten.');
-   return values.map(Number);
+   return values;
   }
   const selected=Array.from(form.querySelectorAll('[name="qa'+i+'"]:checked')).map(x=>Number(x.value));
   if(!selected.length)throw Error('Bitte Frage '+(i+1)+' beantworten.');
