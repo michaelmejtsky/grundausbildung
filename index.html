@@ -1093,6 +1093,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
  else if(type==='direct')await doSave('sendDirect',data);
+ else if(type==='abschnitt')await doSave('saveAbschnittNachweis',data);
  else if(type==='qualification'){
  const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===data.MitgliedID);
  if(data.GABFreigabe==='JA'&&q&&q.GABFreigabe!=='JA'&&!q.GABDokuVollstaendig&&
