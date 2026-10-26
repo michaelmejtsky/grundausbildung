@@ -131,7 +131,7 @@ function gaTrainingReportsPage(){
  const cards=current.map(x=>'<article class="ga-training-report-card">'+
  '<div class="row between"><div><h3>'+h(x.title)+'</h3><p class="small muted">'+x.saved.length+' dokumentierte von '+x.list.length+' Terminen'+
  (x.missing?' · '+x.missing+' ohne Tätigkeitsbericht':'')+'</p></div>'+
- '<button class="primary" type="button" data-training-pdf-course="'+h(x.id)+'" '+(!x.saved.length?'disabled':'')+'>Modul-PDF</button></div>'+
+ '<button class="primary" type="button" data-training-pdf-course="'+h(x.id)+'">'+(x.saved.length?'Modul-PDF':'Vorläufiges PDF')+'</button></div>'+
  '<div class="ga-training-report-metrics"><span>'+gaTrainingHours(x.duration)+' h Ausbildungsdauer</span>'+
  '<span>'+gaTrainingHours(x.pMinutes)+' Teilnehmerstunden</span>'+
  '<span>'+gaTrainingHours(x.tMinutes)+' Ausbilderstunden</span>'+
@@ -142,11 +142,11 @@ function gaTrainingReportsPage(){
  return '<div class="ga-training-list-item"><div><strong>'+h(dt(t.Beginn))+'</strong>'+
  '<p class="small muted">'+h(t.Ort||'–')+' · '+(r?gaTrainingHours(metrics.minutes)+' h · '+gaTrainingKm(metrics.km)+' km':'Bericht fehlt')+'</p></div>'+
  '<button class="secondary" type="button" data-training-open="'+h(t.ID)+'">Bearbeiten</button>'+
- '<button class="secondary" type="button" data-training-pdf-term="'+h(t.ID)+'" '+(!r?'disabled':'')+'>PDF</button></div>';
+ '<button class="secondary" type="button" data-training-pdf-term="'+h(t.ID)+'">'+(r?'PDF':'Vorläufiges PDF')+'</button></div>';
  }).join('')+'</div></details></article>').join('');
  return '<div class="ga-page-heading"><div><h2>Tätigkeitsberichte für FDISK</h2>'+
  '<p>Jederzeit abrufbare Summen nach Modul, Ausbildungsstunden, Fahrzeugen, Teilnehmern und Ausbildern.</p></div>'+
- '<button type="button" class="secondary" data-view="attendance">Ausbildung erfassen</button></div>'+
+ '<div class="ga-action-grid"><button type="button" class="secondary" data-view="attendance">Ausbildungstermin öffnen</button><button type="button" class="primary" data-view="freeActivities">Freie Tätigkeit erfassen</button></div></div>'+
  '<div class="ga-admin-toolbar"><div><label>Modul auswählen</label><select data-training-filter>'+
  '<option value="">Alle Ausbildungsmodule</option>'+modules.map(x=>'<option value="'+h(x.id)+'" '+(x.id===filter?'selected':'')+'>'+h(x.title)+'</option>').join('')+'</select></div></div>'+
  '<div class="ga-kpis">'+
@@ -159,13 +159,13 @@ function gaTrainingReportsPage(){
  '<p class="small muted">Die PDF-Dateien enthalten alle erfassten Teilnehmer und Ausbilder mit ihren anrechenbaren Stunden sowie die Fahrzeugkilometer. Der Auszug muss anschließend manuell in FDISK übertragen werden.</p></section>';
 }
 function gaTrainingUpdateSummary(){
- const form=document.querySelector('form[data-form="attendance"]');
+ const form=document.querySelector('form[data-form="attendance"],form[data-form="freeActivity"]');
  if(!form)return;
  const b=form.querySelector('[name="BeginnIst"]')?.value,e=form.querySelector('[name="EndeIst"]')?.value;
  const mins=gaTrainingMin(b,e);
- const count=form.querySelectorAll('input[name="member"]:checked').length;
+ const count=form.querySelectorAll('input[name="member"]:checked,input[name="participant"]:checked').length;
  const teachers=form.querySelectorAll('input[name="trainer"]:checked').length;
- const veh=[...form.querySelectorAll('[data-vehicle-row]')];
+ const veh=form.querySelector('input[name="FahrzeugeVerwendet"]:checked')?.value==='JA'?[...form.querySelectorAll('[data-vehicle-row]')]:[];
  const km=veh.reduce((sum,x)=>sum+Number(String(x.querySelector('[data-vehicle-km]')?.value||'0').replace(',','.'))||0,0);
  const duration=form.querySelector('[data-training-duration]'),label=form.querySelector('[data-training-present-count]'),kmLabel=form.querySelector('[data-training-km-total]'),summary=form.querySelector('[data-training-summary]');
  if(duration)duration.textContent=mins?'Ausbildungsdauer: '+gaTrainingHours(mins)+' Stunden':'Bitte gültigen Beginn und Ende eingeben';
@@ -197,8 +197,9 @@ async function gaSaveTrainingAttendance(form,fd){
  if(!teachers.length)throw new Error('Bitte mindestens einen Ausbilder anhaken.');
  if(STATE.user.Rolle==='Ausbilder'&&!teachers.includes(STATE.user.ID))throw new Error('Du musst dich selbst als durchführenden Ausbilder anhaken.');
  const data={TerminID:term.ID,BeginnIst:begin,EndeIst:end,Notiz:fd.get('Notiz')||'',
-  Fahrzeuge:gaTrainingVehiclesFromForm(form),AusbilderIDs:teachers,
+  Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[],AusbilderIDs:teachers,
   Anwesend:members.map(m=>({MitgliedID:m.ID,Anwesend:present.has(m.ID)}))};
+ if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte mindestens ein Fahrzeug erfassen.');
  if(!confirm('Ausbildung mit '+present.size+' anwesenden Teilnehmern, '+teachers.length+
   ' Ausbilder(n) und '+data.Fahrzeuge.length+' Fahrzeug(en) verbindlich dokumentieren?'))return;
  const result=await api('saveAttendance',data);
@@ -209,7 +210,8 @@ async function gaDownloadTrainingPdf(args,button){
  const previous=button?.textContent;
  if(button){button.disabled=true;button.textContent='PDF wird erstellt …';}
  try{
-  const result=await api('exportTrainingPdf',args);
+  const free=!!args.FreieTaetigkeitID;
+ const result=await api(free?'exportFreeActivityPdf':'exportTrainingPdf',free?{ID:args.FreieTaetigkeitID}:args);
   if(!result?.base64)throw new Error('PDF konnte nicht erzeugt werden.');
   const raw=atob(result.base64),u=new Uint8Array(raw.length);
   for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
@@ -222,8 +224,9 @@ async function gaDownloadTrainingPdf(args,button){
  finally{if(button){button.disabled=false;button.textContent=previous;}}
 }
 document.getElementById('app')?.addEventListener('click',event=>{
- const x=event.target.closest('[data-training-now],[data-training-vehicle-add],[data-training-vehicle-remove],[data-training-pdf-term],[data-training-pdf-course],[data-training-open]');
+ const x=event.target.closest('[data-training-finish-open],[data-training-now],[data-training-vehicle-add],[data-training-vehicle-remove],[data-training-pdf-term],[data-training-pdf-course],[data-training-open]');
  if(!x)return;
+ if(x.dataset.trainingFinishOpen!==undefined){const box=document.getElementById('gaFinishTraining');if(box){box.open=true;box.scrollIntoView({block:'start',behavior:'smooth'});}return;}
  if(x.dataset.trainingNow){
   const now=new Date(),p=n=>String(n).padStart(2,'0');
   const value=now.getFullYear()+'-'+p(now.getMonth()+1)+'-'+p(now.getDate())+'T'+p(now.getHours())+':'+p(now.getMinutes());
@@ -246,9 +249,12 @@ document.getElementById('app')?.addEventListener('click',event=>{
  if(x.dataset.trainingPdfCourse){gaDownloadTrainingPdf({KursID:x.dataset.trainingPdfCourse},x);}
 });
 document.getElementById('app')?.addEventListener('input',event=>{
- if(event.target.closest('form[data-form="attendance"]'))gaTrainingUpdateSummary();
+ if(event.target.closest('form[data-form="attendance"],form[data-form="freeActivity"]'))gaTrainingUpdateSummary();
 });
 document.getElementById('app')?.addEventListener('change',event=>{
  if(event.target.matches('[data-training-filter]')){GA_TRAINING_FILTER=event.target.value;render();return;}
- if(event.target.closest('form[data-form="attendance"]'))gaTrainingUpdateSummary();
+ if(event.target.matches('input[name="FahrzeugeVerwendet"]')){
+  const area=event.target.closest('form')?.querySelector('#gaTrainingVehicleArea');if(area)area.hidden=event.target.value!=='JA';gaTrainingUpdateSummary();return;
+ }
+ if(event.target.closest('form[data-form="attendance"],form[data-form="freeActivity"]'))gaTrainingUpdateSummary();
 });
