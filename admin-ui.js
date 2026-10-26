@@ -13,7 +13,7 @@ function gaMenuHtml(tabs){
  const admin=role()==='Administrator',trainer=role()==='Ausbilder';
  const groups=admin?[
   ['Start',['overview','terms','notifications']],
-  ['Ausbildung',['courses','projects','quizzes','turnus','qualifications','questionnaires','reviews']],
+  ['Ausbildung',['courses','projects','quizzes','turnus','qualifications','abschnitt','questionnaires','reviews']],
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
   ['Organisation',['rights','reports','messages','pushadmin']]
  ]:trainer?[
@@ -120,6 +120,52 @@ function gaExternalBlockForms(q){
  '<div class="wide"><button class="primary" type="submit">Abschnittsnachweis speichern</button></div></form></div></details>';
  }).join('');
 }
+
+/** Klar sichtbare Verwaltung externer Pflichtmodule – ohne Kurs- oder Terminplanung. */
+function gaAbschnittOverview(){
+ const qs=STATE.qualifikationen||[];
+ const backendReady=Array.isArray(STATE.abschnittNachweise);
+ const filtered=qs.filter(q=>{
+  const member=by(STATE.mitglieder,q.MitgliedID);
+  return (!GA_QUAL_TURNUS||q.TurnusID===GA_QUAL_TURNUS)&&
+   (!GA_QUAL_QUERY||gaMatches(q.Name+' '+q.Standesbuchnummer+' '+(member?.Email||''),GA_QUAL_QUERY));
+ });
+ const selected=qs.find(q=>q.MitgliedID===GA_QUAL_PERSON);
+ const proofs=STATE.abschnittNachweise||[];
+ const hasProof=(id,cid)=>proofs.some(x=>x.MitgliedID===id&&x.KursID===cid&&x.Absolviert==='JA'&&
+    (cid==='GAB-ABSCHNITT-BLOCK-A'||x.PruefungBestanden==='JA'));
+ const completedA=qs.filter(q=>hasProof(q.MitgliedID,'GAB-ABSCHNITT-BLOCK-A')).length;
+ const completedB=qs.filter(q=>hasProof(q.MitgliedID,'GAB-ABSCHNITT-BLOCK-B')).length;
+ const alerts=!backendReady?
+ '<div class="ga-alert"><strong>Apps-Script-Aktualisierung erforderlich.</strong> Die neue Nachweistabelle ist bereits vorhanden, aber der aktuell verbundene Server liefert noch keine Abschnittsnachweise. Bitte die aktuelle <a href="https://github.com/michaelmejtsky/grundausbildung/blob/main/Code.gs" target="_blank" rel="noopener noreferrer">Code.gs</a> in die bestehende Apps-Script-Bereitstellung übernehmen und eine neue Version veröffentlichen. Danach hier aktualisieren.</div>':'';
+ const list=filtered.slice(0,GA_QUAL_LIMIT).map(q=>{
+  const a=hasProof(q.MitgliedID,'GAB-ABSCHNITT-BLOCK-A'),b=hasProof(q.MitgliedID,'GAB-ABSCHNITT-BLOCK-B');
+  return '<button type="button" class="ga-admin-person '+(GA_QUAL_PERSON===q.MitgliedID?'selected':'')+
+   '" data-ga-person="qual" data-id="'+h(q.MitgliedID)+'">'+
+   '<span><strong>'+h(q.Name)+'</strong><small>Block A: '+(a?'erledigt':'offen')+' · Block B + Abschluss: '+(b?'erledigt':'offen')+'</small></span>'+
+   '<span class="tag '+(a&&b?'ok':'warn')+'">'+(a&&b?'Vollständig':'Offen')+'</span></button>';
+ }).join('');
+ const controls='<div class="ga-admin-toolbar"><div><label>Mitglied suchen</label>'+
+ '<input type="search" data-ga-search="qual" value="'+h(GA_QUAL_QUERY)+'" placeholder="Name oder Standesbuchnummer"></div>'+
+ '<div><label>Turnus</label>'+gaTurnusSelect(GA_QUAL_TURNUS,'data-ga-select="qualTurnus"')+'</div></div>';
+ const detail=selected?'<section class="panel ga-person-detail"><div class="row between"><div><p class="ga-eyebrow">EXTERNE AUSBILDUNG · ABSCHNITT</p>'+
+ '<h2>'+h(selected.Name)+'</h2><p class="small muted">Block A und Block B mit Abschluss Truppmann getrennt bestätigen.</p></div>'+
+ '<button type="button" class="secondary" data-ga-clear="qual">Schließen</button></div>'+
+ (backendReady?gaExternalBlockForms(selected):'<p class="muted">Nachweiserfassung erst nach der oben beschriebenen Apps-Script-Aktualisierung möglich.</p>')+
+ '</section>':'<section class="panel ga-admin-placeholder"><h2>Mitglied auswählen</h2>'+
+ '<p>Wähle links die gewünschte Person aus. Danach kannst du Block A und Block B mit Abschlussprüfung einzeln dokumentieren.</p></section>';
+ return '<div class="ga-page-heading"><div><h2>Abschnittsmodule A & B</h2>'+
+ '<p>Verpflichtende GAB-Hauptmodule: externe Teilnahme und positive Abschlussprüfung dokumentieren.</p></div>'+
+ '<button type="button" class="secondary" data-view="qualifications">Zurück zu Qualifikationen</button></div>'+
+ '<div class="ga-kpis">'+gaMetric(qs.length,'Teilnehmer','In der Qualifikationsübersicht')+
+ gaMetric(completedA,'Block A bestätigt','Abschnittsmodul')+
+ gaMetric(completedB,'Block B inkl. ASMTRM','Positiv abgeschlossen')+'</div>'+alerts+
+ '<section class="panel"><h2>Teilnehmer auswählen</h2>'+controls+
+ '<div class="ga-admin-split"><div class="ga-person-list">'+(list||gaNotice('Keine passenden Teilnehmer gefunden.'))+
+ (filtered.length>GA_QUAL_LIMIT?'<button type="button" class="secondary full" data-ga-more="qual">Weitere Teilnehmer anzeigen</button>':'')+
+ '<p class="small muted">'+filtered.length+' Teilnehmer in der Auswahl</p></div>'+detail+'</div></section>';
+}
+
 function gaQualForm(q){
  const warn=q.GABManuellBestaetigt&&!q.GABDokuVollstaendig?
   '<div class="ga-alert">GAB ist durch den Administrator bestätigt. Dokumentation noch unvollständig: '+h(q.GABHinweis)+'</div>':
@@ -164,7 +210,8 @@ function qualifications(){
  '<div><label>Ausbildungstermin</label><select name="TerminID" required>'+option(STATE.termine,t=>(by(STATE.kurse,t.KursID)?.Titel||'Kurs')+' · '+t.Beginn)+'</select></div>'+
  '<div><label>Teilgenommen?</label><select name="Anwesend"><option value="JA">Ja</option><option value="NEIN">Nein</option></select></div>'+
  '<div><button type="submit" class="primary">Teilnahme speichern</button></div></form></div></details>';
- return '<div class="ga-page-heading"><div><h2>Qualifikationen</h2><p>GAB, Brandsicherheitswachen und persönliche Nachweise übersichtlich verwalten.</p></div></div>'+
+ return '<div class="ga-page-heading"><div><h2>Qualifikationen</h2><p>GAB, Brandsicherheitswachen und persönliche Nachweise übersichtlich verwalten.</p></div></div>'+ 
+ '<section class="panel ga-external-link"><div><h3>Externe Pflichtmodule – Block A und Block B</h3><p>Abschnittsausbildung und positiven Abschluss Truppmann getrennt bestätigen. Die Erfassung ist auch ohne eigenen Ausbildungstermin möglich.</p></div><button type="button" class="primary" data-view="abschnitt">Abschnittsmodule öffnen</button></section>'+
  '<div class="ga-kpis">'+gaMetric(qs.filter(x=>x.GABAbgeschlossen).length,'GAB abgeschlossen','Bestätigte Mitglieder')+
  gaMetric(qs.filter(x=>!x.GABAbgeschlossen).length,'GAB offen','Noch nicht freigegeben')+
  gaMetric(qs.filter(x=>x.BSWDienstMoeglich).length,'BSW freigegeben','Drei Bedingungen erfüllt')+'</div>'+
