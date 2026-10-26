@@ -28,6 +28,7 @@ const GA = Object.freeze({
     Bewertungen: ['ID','TerminID','KursID','MitgliedID','Sterne','Kommentar','ErstelltAm','AktualisiertAm','FragebogenID','FragebogenVersion','FragenSnapshotJSON','AntwortenJSON','Positives','Verbesserungen','Ideen'],
     QualifikationMitglieder: ['ID','MitgliedID','Geburtsdatum','ErsteHilfeStatus','ErsteHilfeBestaetigtAm','FDISKEintragDatum','GABFreigabe','Notiz','GeprueftVon','GeprueftAm','GABAnerkannt','FDISKPlatzhalter'],
     KursAnforderungen: ['ID','KursID','PflichtGAB','PflichtBSW','AktualisiertVon','AktualisiertAm'],
+    AbschnittNachweise: ['ID','MitgliedID','KursID','Absolviert','Ausbildungsdatum','PruefungBestanden','Pruefungsdatum','Nachweis','Notiz','BestaetigtVon','BestaetigtAm'],
     Direktnachrichten: ['ID','VonBenutzerID','AnBenutzerID','Titel','Text','ErstelltAm','GelesenAm'],
     BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm'],
     ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger'],
@@ -250,6 +251,7 @@ function gaApi(method,data,token){
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
   if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
   if(method==='saveQualification')return gaLock_(()=>gaSaveQualification_(u,d));
+  if(method==='saveAbschnittNachweis')return gaLock_(()=>gaSaveAbschnittNachweis_(u,d));
   if(method==='setCourseRequirement')return gaLock_(()=>gaSetCourseRequirement_(u,d));
   if(method==='setAttendanceMember')return gaLock_(()=>gaSetAttendanceMember_(u,d));
   if(method==='sendDirect')return gaLock_(()=>gaSendDirect_(u,d));
@@ -304,8 +306,9 @@ function gaState_(u){
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
+ const abschnitt=gaOptionalRows_('AbschnittNachweise');
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
@@ -335,6 +338,7 @@ function gaState_(u){
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
   meMember:own,
   qualifikationen,
+  abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
   quizFreigaben:(admin||trainer?quizUnlocks:own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
   quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
@@ -1259,9 +1263,13 @@ function gaResendAidEmail_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts){
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
  const complete=id=>{
+   if(id==='GAB-ABSCHNITT-BLOCK-A'||id==='GAB-ABSCHNITT-BLOCK-B'){
+     const proof=(abschnitt||[]).find(x=>x.MitgliedID===m.ID&&x.KursID===id);
+     return !!proof&&valid(proof.Absolviert)&&(id!=='GAB-ABSCHNITT-BLOCK-B'||valid(proof.PruefungBestanden));
+   }
    const attended=terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
    if(!attended)return false;
    const config=(quizCfg||[]).find(c=>c.KursID===id&&valid(c.Aktiv)&&valid(c.Pflicht));
@@ -1294,6 +1302,26 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
   PflichtGesamt:requirements.length,PflichtAbsolviert:done,
   OffeneGABKurse:advanced?[]:gabOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs'),
   OffeneBSWKurse:bswOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs')};
+}
+function gaSaveAbschnittNachweis_(u,d){
+ gaRequire_(u,['Administrator']);
+ const id=gaNeed_(d.MitgliedID,'Mitglied',100),m=gaFind_('Mitglieder',id);
+ const courseId=gaChoice_(d.KursID,['GAB-ABSCHNITT-BLOCK-A','GAB-ABSCHNITT-BLOCK-B'],'Abschnittsmodul');
+ if(!m)throw new Error('Mitglied nicht vorhanden.');
+ const done=d.Absolviert==='JA',passed=courseId==='GAB-ABSCHNITT-BLOCK-B'&&d.PruefungBestanden==='JA';
+ const courseDate=gaDateOnly_(d.Ausbildungsdatum),examDate=gaDateOnly_(d.Pruefungsdatum);
+ if(done&&!courseDate)throw new Error('Bitte Datum des Abschnittsmoduls angeben.');
+ if(passed&&!done)throw new Error('Block B muss vor der bestandenen Abschlussprüfung absolviert sein.');
+ if(passed&&!examDate)throw new Error('Bitte Datum der positiven Abschlussprüfung angeben.');
+ const values={Absolviert:done?'JA':'NEIN',Ausbildungsdatum:done?courseDate:'',
+  PruefungBestanden:passed?'JA':'NEIN',Pruefungsdatum:passed?examDate:'',
+  Nachweis:gaText_(d.Nachweis,500),Notiz:gaText_(d.Notiz,700),
+  BestaetigtVon:u.ID,BestaetigtAm:gaNow_()};
+ const existing=gaOptionalRows_('AbschnittNachweise').find(x=>x.MitgliedID===id&&x.KursID===courseId);
+ if(existing)gaReplace_('AbschnittNachweise',existing.ID,values);
+ else gaAppend_('AbschnittNachweise',{ID:gaId_(),MitgliedID:id,KursID:courseId,...values});
+ gaLog_(u.ID,'ABSCHNITTSMODUL_NACHWEIS','Mitglied',id,{KursID:courseId,Absolviert:values.Absolviert,PruefungBestanden:values.PruefungBestanden});
+ return {ok:true,message:'Abschnittsmodul dokumentiert. GAB-Pflichtfortschritt wurde neu berechnet.'};
 }
 function gaSaveQualification_(u,d){
  gaRequire_(u,['Administrator']);const m=gaFind_('Mitglieder',gaText_(d.MitgliedID,100));
