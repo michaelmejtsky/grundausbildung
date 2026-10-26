@@ -1,5 +1,5 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v2.11';
+const CACHE='ga-shell-v2.12';
 const CORE=['./','./index.html','./quiz-ui.js','./bsw-quiz-vorlage.json','./aid-ui.js','./admin-ui.js','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
