@@ -374,3 +374,49 @@
  .ga-training-list-item{flex-wrap:wrap}
  .ga-training-list-item>div:first-child{flex-basis:100%}
 }
+
+
+/* Course-first workflow, expandable closing report and independent activities */
+.ga-course-top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:13px 16px;margin:12px 0 18px;border:1px solid #dce7f1;background:#f7fbff;border-radius:12px;font-size:12px;color:#3c6582}
+.ga-course-top .tag{font-size:12px}
+.ga-course-section{border:1px solid #d6e3ef;border-radius:15px;background:#fff;margin-bottom:15px;overflow:hidden}
+.ga-course-section[open]{border-color:#9ec5e4;box-shadow:0 5px 16px #17446310}
+.ga-course-section>summary{display:flex;align-items:center;gap:13px;padding:17px;cursor:pointer;list-style:none}
+.ga-course-section>summary::-webkit-details-marker{display:none}
+.ga-course-section>summary:after{content:"⌄";font-size:22px;color:#668eaa}
+.ga-course-section[open]>summary:after{content:"⌃"}
+.ga-course-section>summary>span:nth-child(2){flex:1}
+.ga-course-section>summary strong{display:block;font-size:18px;color:#183e5a}
+.ga-course-section>summary small{display:block;font-size:12px;color:#648196;margin-top:5px}
+.ga-course-section-icon{width:37px;height:37px;flex:0 0 37px;display:grid;place-items:center;background:#e5f1fb;color:#20608d;border-radius:12px;font-weight:850;font-size:18px}
+.ga-course-section-body{padding:20px;border-top:1px solid #e1eaf3}
+.ga-course-links{border-left:3px solid #2c7db2;padding:12px 16px;margin:0 0 15px;background:#f1f9ff;border-radius:7px}
+.ga-course-links h3{margin:0 0 8px;font-size:16px}
+.ga-course-links li{padding:4px 0;overflow-wrap:anywhere}
+.ga-course-text{white-space:pre-wrap;line-height:1.65;font-size:14px;color:#24465f;overflow-wrap:anywhere;padding:12px 3px}
+.ga-subsection{border:1px solid #e0e9f2;background:#fbfdff;border-radius:11px;margin:10px 0;overflow:hidden}
+.ga-subsection>summary{padding:13px 15px;cursor:pointer;font-weight:750;color:#235574;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ga-subsection>summary .ga-inline-count{display:inline-flex;justify-content:center;padding:4px 7px;min-width:23px;background:#e1edf7;color:#2a628b;border-radius:30px}
+.ga-subsection>.ga-attendance-list,.ga-subsection>textarea,.ga-subsection>p{margin:0 13px 14px}
+.ga-training-continue{display:flex;justify-content:flex-end;margin-top:16px}
+.ga-training-fieldset{border-bottom:1px solid #e3eaf2;padding:12px 0 19px;margin-bottom:10px}
+.ga-training-fieldset h3{font-size:16px;margin:4px 0 11px;color:#254b69}
+.ga-training-vehicle-choice{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
+.ga-training-vehicle-choice label{display:inline-flex;align-items:center;gap:9px;padding:11px 15px;border:1px solid #dce6ef;border-radius:11px;background:#f8fbff;cursor:pointer;font-weight:700;font-size:13px}
+.ga-training-vehicle-choice label:has(input:checked){background:#eff8ff;border-color:#77b1dc;color:#1e5f90}
+.ga-training-vehicle-choice input[type=radio]{width:19px!important;height:19px!important;margin:0!important;flex:0 0 19px}
+#gaTrainingVehicleArea[hidden]{display:none!important}
+.ga-training-finish-buttons{display:flex;gap:11px;justify-content:flex-end;flex-wrap:wrap;margin:18px 0}
+.ga-training-finish-buttons button{min-height:42px}
+.ga-free-editor>form{display:grid;gap:16px}
+.ga-free-editor h3{margin:0 0 15px}
+.ga-free-editor label{min-width:0}
+.ga-training-time-grid input,.ga-training-time-grid select{width:100%;margin-top:5px}
+@media(max-width:650px){
+ .ga-course-section>summary{padding:13px 12px}
+ .ga-course-section>summary strong{font-size:16px}
+ .ga-course-section-body{padding:12px}
+ .ga-course-top{font-size:11px}
+ .ga-training-continue button,.ga-training-finish-buttons button{width:100%}
+ .ga-training-finish-buttons{flex-direction:column}
+}
