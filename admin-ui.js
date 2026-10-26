@@ -13,11 +13,13 @@ function gaMenuHtml(tabs){
  const admin=role()==='Administrator',trainer=role()==='Ausbilder';
  const groups=admin?[
   ['Start',['overview','terms','notifications']],
+  ['Durchführung & FDISK',['attendance','trainingReports']],
   ['Ausbildung',['courses','projects','quizzes','turnus','qualifications','abschnitt','questionnaires','reviews']],
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
   ['Organisation',['rights','reports','messages','pushadmin']]
  ]:trainer?[
-  ['Ausbildung',['courses','projects','quizzes','terms','attendance']],
+  ['Ausbildung',['courses','projects','quizzes','terms']],
+  ['Durchführung & FDISK',['attendance','trainingReports']],
   ['Auswertung & Nachrichten',['reports','reviews','questionnaires','notifications']]
  ]:[['Dein Bereich',tabs.map(t=>t[0])]];
  const visible=new Set(tabs.map(t=>t[0]));
