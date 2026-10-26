@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.9.0',
+  VERSION: '1.10.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -15,6 +15,7 @@ const GA = Object.freeze({
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
     Ausbildungsberichte: ['ID','TerminID','BeginnIst','EndeIst','DauerMinuten','FahrzeugeJSON','AusbilderIDs','Notiz','ErfasstVon','AktualisiertAm'],
+    FreieTaetigkeiten: ['ID','Titel','Kategorie','Ort','BeginnIst','EndeIst','DauerMinuten','TeilnehmerIDs','AusbilderIDs','FahrzeugeJSON','Notiz','ErfasstVon','AktualisiertAm'],
     Checklistenpunkte: ['ID','Titel','Bereich','Zustaendig','Aktiv','ErstelltAm'],
     MitgliedChecks: ['ID','MitgliedID','PunktID','Status','Kommentar','GeaendertVon','GeaendertAm'],
     Nachrichten: ['ID','Titel','Text','TurnusID','VonBenutzerID','ErstelltAm'],
@@ -288,6 +289,8 @@ function gaApi(method,data,token){
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
   if(method==='exportTrainingPdf')return gaExportTrainingPdf_(u,d);
+  if(method==='saveFreeActivity')return gaLock_(()=>gaSaveFreeActivity_(u,d));
+  if(method==='exportFreeActivityPdf')return gaExportFreeActivityPdf_(u,d);
   if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
   if(method==='resetPassword')return gaLock_(()=>gaResetPassword_(u,d));
   if(method==='changeUserRole')return gaLock_(()=>gaChangeUserRole_(u,d));
@@ -330,6 +333,7 @@ function gaState_(u){
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
  const abschnitt=gaOptionalRows_('AbschnittNachweise');
  const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
+ const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
   .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
@@ -363,6 +367,7 @@ function gaState_(u){
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
   ausbildungsberichte:trainingReports,
+  freieTaetigkeiten:freeActivities,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
   quizFreigaben:(admin||trainer?quizUnlocks:own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
   quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
@@ -621,6 +626,81 @@ function gaExportTrainingPdf_(u,d){
  }finally{
   if(docId){try{DriveApp.getFileById(docId).setTrashed(true);}catch(e){Logger.log('Temporäres PDF-Dokument konnte nicht gelöscht werden: '+e.message);}}
  }
+}
+
+
+/** Eigenständige Feuerwehrtätigkeiten ohne Kurs- und Terminpflicht – unabhängig von GAB. */
+function gaSaveFreeActivity_(u,d){
+ gaRequire_(u,['Administrator','Ausbilder']);
+ if(!gaSheet_().getSheetByName('FreieTaetigkeiten'))
+  throw new Error('Die Tabelle FreieTaetigkeiten fehlt. Bitte die neue Code.gs im bestehenden Apps Script aktualisieren und die Tabelle einmalig einrichten.');
+ const Titel=gaNeed_(d.Titel,'Tätigkeitsbezeichnung',160);
+ const Kategorie=gaChoice_(d.Kategorie,['Ausbildung','Übung','Diensttätigkeit','Sonstige'],'Tätigkeitsart');
+ const Ort=gaText_(d.Ort,160),details=gaTrainingDetails_(d);
+ const allUsers=gaRows_('Benutzer'),allMembers=gaRows_('Mitglieder');
+ const trainers=Array.isArray(d.AusbilderIDs)?[...new Set(d.AusbilderIDs.map(String))]:[];
+ if(!trainers.length||trainers.some(id=>!allUsers.some(x=>x.ID===id&&['Ausbilder','Administrator'].includes(x.Rolle))))
+  throw new Error('Mindestens einen gültigen Ausbilder bzw. Verantwortlichen auswählen.');
+ if(u.Rolle==='Ausbilder'&&!trainers.includes(u.ID))
+  throw new Error('Der durchführende Ausbilder muss selbst angeführt sein.');
+ const participants=Array.isArray(d.TeilnehmerIDs)?[...new Set(d.TeilnehmerIDs.map(String))]:[];
+ if(participants.some(id=>!allMembers.some(m=>m.ID===id)))
+  throw new Error('Ein Teilnehmer ist im Mitgliederverzeichnis nicht vorhanden.');
+ const change={Titel,Kategorie,Ort,...details,AusbilderIDs:trainers.join(','),
+  TeilnehmerIDs:participants.join(','),ErfasstVon:u.ID,AktualisiertAm:gaNow_()};
+ let id=gaText_(d.ID,100),old=id?gaFind_('FreieTaetigkeiten',id):null;
+ if(id&&!old)throw new Error('Die Tätigkeit existiert nicht mehr.');
+ if(old){
+  if(u.Rolle!=='Administrator'&&old.ErfasstVon!==u.ID)
+   throw new Error('Du kannst nur eigene Tätigkeitsberichte ändern.');
+  gaReplace_('FreieTaetigkeiten',id,change);
+ }else{id=gaId_();gaAppend_('FreieTaetigkeiten',{ID:id,...change});}
+ gaLog_(u.ID,old?'FREIE_TAETIGKEIT_AKTUALISIEREN':'FREIE_TAETIGKEIT_ERFASSEN','FreieTaetigkeiten',id,
+  {Kategorie,DauerMinuten:details.DauerMinuten,Teilnehmer:participants.length,Ausbilder:trainers.length,
+   FahrzeugeJSON:details.FahrzeugeJSON});
+ return {ok:true,ID:id,message:'Tätigkeit mit Personalstunden und Fahrzeugkilometern gespeichert.'};
+}
+function gaExportFreeActivityPdf_(u,d){
+ gaRequire_(u,['Administrator','Ausbilder']);
+ const entry=gaFind_('FreieTaetigkeiten',gaText_(d?.ID,100));
+ if(!entry)throw new Error('Tätigkeitsbericht nicht gefunden.');
+ const memberRows=gaRows_('Mitglieder'),userRows=gaRows_('Benutzer');
+ const members=String(entry.TeilnehmerIDs||'').split(',').filter(Boolean)
+   .map(id=>memberRows.find(m=>m.ID===id)).map(m=>m?(m.Nachname+', '+m.Vorname):'[Mitglied nicht gefunden]');
+ const trainers=String(entry.AusbilderIDs||'').split(',').filter(Boolean)
+   .map(id=>userRows.find(u=>u.ID===id)).map(x=>x?x.Name:'[Benutzer nicht gefunden]');
+ const vehicles=gaTrainingVehicles_(entry),mins=Number(entry.DauerMinuten)||0;
+ const hrs=gaTrainingHours_,date=gaTrainingDate_;
+ const km=x=>Number(x||0).toLocaleString('de-AT',{minimumFractionDigits:1,maximumFractionDigits:2});
+ const totalKm=vehicles.reduce((n,v)=>n+Number(v.Kilometer||0),0);
+ const filename=('FDISK_Taetigkeit_'+String(entry.Titel||'')+'_'+String(entry.BeginnIst).slice(0,10)+'.pdf')
+   .replace(/[^\wÄÖÜäöüß.-]+/g,'_').slice(0,140);
+ let docId=null;
+ try{
+  const doc=DocumentApp.create('TEMP_FDISK_Taetigkeit_'+Utilities.getUuid());
+  docId=doc.getId();const body=doc.getBody();
+  body.appendParagraph('FF ST. PÖLTEN-STADT').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph('FDISK-Tätigkeitsbericht').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph(String(entry.Titel)+' · '+String(entry.Kategorie||''));
+  body.appendParagraph('Ort: '+String(entry.Ort||'–'));
+  body.appendParagraph('Tatsächlicher Beginn: '+date(entry.BeginnIst)+' · Ende: '+date(entry.EndeIst));
+  body.appendParagraph('Dauer: '+hrs(mins)+' h | Teilnehmerstunden: '+hrs(mins*members.length)+
+   ' h | Ausbilderstunden: '+hrs(mins*trainers.length)+' h | Fahrzeugkilometer: '+km(totalKm)+' km');
+  body.appendParagraph('Teilnehmer').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  gaTrainingPdfTable_(body,['Name','Stunden'],members.map(n=>[n,hrs(mins)]));
+  body.appendParagraph('Mitwirkende Ausbilder').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  gaTrainingPdfTable_(body,['Name','Stunden'],trainers.map(n=>[n,hrs(mins)]));
+  body.appendParagraph('Fahrzeuge').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  gaTrainingPdfTable_(body,['Fahrzeug','Kilometer'],vehicles.map(v=>[String(v.Fahrzeug),km(v.Kilometer)]));
+  if(entry.Notiz)body.appendParagraph('Bemerkungen: '+String(entry.Notiz));
+  body.appendParagraph('Für die manuelle Übertragung nach FDISK. Personenstunden basieren auf Anwesenheit über die gesamte Dauer. Kein automatischer FDISK-Eintrag.');
+  doc.saveAndClose();
+  const pdf=DriveApp.getFileById(docId).getAs(MimeType.PDF).setName(filename);
+  const bytes=pdf.getBytes();
+  if(bytes.length>8*1024*1024)throw new Error('Das PDF ist zu groß.');
+  gaLog_(u.ID,'PDF_FREIE_TAETIGKEIT','FreieTaetigkeiten',entry.ID,{Datei:filename});
+  return {ok:true,dateiname:filename,base64:Utilities.base64Encode(bytes)};
+ }finally{if(docId)try{DriveApp.getFileById(docId).setTrashed(true);}catch(e){Logger.log('Temp-Datei: '+e.message);}}
 }
 
 function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
