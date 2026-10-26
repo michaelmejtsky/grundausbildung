@@ -44,8 +44,8 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 @media(max-width:840px){.ga-review-grid,.ga-member-hero,.ga-qualification-grid{grid-template-columns:1fr}.ga-review-banner{align-items:flex-start}.ga-review-banner h2{font-size:22px}.ga-member-hero{padding:21px}.ga-member-hero h2{font-size:26px}.ga-member-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.ga-member-stat{padding:11px}.ga-member-stat strong{font-size:24px}.ga-member-stat span,.ga-member-stat small{font-size:11px}.ga-next-course{grid-template-columns:1fr;gap:9px}.ga-next-date{text-align:left}.ga-review-panel .row h2{font-size:22px}}
 @media(max-width:420px){.ga-member-stats{grid-template-columns:1fr}.ga-review-banner{flex-direction:column}.ga-member-fold>summary{padding:15px}.ga-fold-body{padding:12px}}
 
-</style></head><body>
-<div id="login" class="login-wrap"><div class="login-card"><div class="logo">🚒</div><h1>Grundausbildung</h1><p class="sub">Ausbildungsplattform · Feuerwehr St. Pölten Stadt</p><form id="loginForm"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required><div id="loginError" class="hidden error"></div><button class="primary full" style="margin-top:20px" type="submit">Anmelden</button></form>
+</style><link rel="stylesheet" href="./admin-ui.css"></head><body>
+<div id="login" class="login-wrap"><div class="login-card"><div class="logo">🚒</div><h1>Grundausbildung</h1><p class="sub">Ausbildungsplattform · Feuerwehr St. Pölten Stadt</p><form id="loginForm"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required><div id="loginError" class="hidden error"></div><label class="inline-check ga-stay-logged"><input type="checkbox" name="remember" value="JA"> 30 Tage angemeldet bleiben</label><p class="small muted" style="margin:6px 0 11px">Nur auf deinem eigenen Gerät aktivieren. Beim Abmelden wird die Sitzung beendet.</p><button class="primary full" style="margin-top:8px" type="submit">Anmelden</button></form>
 <div id="invitePanel" class="hidden">
   <div class="notice">Persönlicher Einladungslink</div>
   <p id="inviteDescription" class="small muted">Einladung wird geprüft …</p>
@@ -59,11 +59,12 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.6.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.7.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
+const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 let PUSH_FEEDBACK='',PUSH_FEEDBACK_ERROR=false;
 let PROJECT_REVIEW_ID='';
@@ -105,6 +106,38 @@ async function rpc(fn,...args){
     throw e;
   }finally{clearTimeout(timer);}
 }
+
+function gaStoreLogin(token,validUntil){
+ const expiry=Number(validUntil);
+ if(!token||!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+31*86400000)return false;
+ try{localStorage.setItem(GA_LOGIN_STORAGE_KEY,JSON.stringify({token,validUntil:expiry}));return true;}catch(_){return false;}
+}
+function gaClearLogin(){try{localStorage.removeItem(GA_LOGIN_STORAGE_KEY);}catch(_){}}
+function gaGetStoredLogin(){
+ try{
+  const item=JSON.parse(localStorage.getItem(GA_LOGIN_STORAGE_KEY)||'null');
+  if(!item||typeof item.token!=='string'||item.token.length>200||Number(item.validUntil)<=Date.now()){gaClearLogin();return null;}
+  return item;
+ }catch(_){gaClearLogin();return null;}
+}
+async function gaRestoreLogin(){
+ // Einladungslinks haben Vorrang und enthalten kein wiederverwendbares Login.
+ if(new URLSearchParams(location.hash.slice(1)).has('invite'))return;
+ const saved=gaGetStoredLogin();if(!saved)return;
+ TOKEN=saved.token;
+ try{
+  STATE=await api('state');
+  $('login').classList.add('hidden');$('app').classList.remove('hidden');
+  VIEW=NOTICE_FOCUS?'notifications':'overview';
+  render();
+  if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
+ }catch(e){
+  TOKEN='';STATE=null;
+  if(/Sitzung|anmelden|abgelaufen|Berechtigung/.test(String(e.message||''))){gaClearLogin();}
+  else{$('loginError').textContent='Automatische Anmeldung derzeit nicht erreichbar. Bitte Verbindung prüfen oder erneut anmelden.';$('loginError').classList.remove('hidden');}
+ }
+}
+
 async function initInvite(){
   const params=new URLSearchParams(location.hash.slice(1));
   inviteToken=params.get('invite')||'';
@@ -169,6 +202,7 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
   });
 }
 initInvite();
+gaRestoreLogin();
 function gaPushFeedback(msg,error=false){
  PUSH_FEEDBACK=String(msg);PUSH_FEEDBACK_ERROR=!!error;
  const el=$('pushActionResult');if(el){el.textContent=PUSH_FEEDBACK;el.className='push-result'+(PUSH_FEEDBACK_ERROR?' bad':'');}
@@ -221,7 +255,7 @@ function title(){return ({
  attendance:'Kursdurchführung',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
-function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
+function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
  const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
@@ -787,13 +821,38 @@ async function gaDisablePush(){
  return {message:'Push auf diesem Gerät ausgeschaltet.'};
 }
 async function doSave(method,data){try{const result=await api(method,data);FORM='';EDIT=null;tip(result?.message||'Erfolgreich gespeichert.');await reload();}catch(e){tip(e.message,true)}}
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').classList.add('hidden');const fd=new FormData(e.target);const b=e.target.querySelector('button');b.disabled=true;b.textContent='Anmelden …';try{const result=await rpc('gaLogin',fd.get('email'),fd.get('password'));TOKEN=result.token;STATE=await api('state');$('login').classList.add('hidden');$('app').classList.remove('hidden');VIEW=NOTICE_FOCUS?'notifications':'overview';render();
-if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
-}catch(err){$('loginError').textContent=err.message;$('loginError').classList.remove('hidden')}finally{b.disabled=false;b.textContent='Anmelden'}});
-async function logout(){try{if(TOKEN)await api('logout')}catch(e){}TOKEN='';STATE=null;FORM='';EDIT=null;$('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset()}
+$('loginForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ $('loginError').classList.add('hidden');
+ const fd=new FormData(e.target),b=e.target.querySelector('button[type=submit]');
+ b.disabled=true;b.textContent='Anmelden …';
+ try{
+  const wants30Days=fd.has('remember');
+  const result=await rpc('gaLogin',fd.get('email'),fd.get('password'),wants30Days);
+  TOKEN=result.token;
+  STATE=await api('state');
+  if(wants30Days){
+   if(!gaStoreLogin(result.token,result.rememberUntil))tip('30-Tage-Anmeldung noch nicht aktiv: Backend-Version und Browser-Speicher prüfen.',true);
+  }else gaClearLogin();
+  $('login').classList.add('hidden');$('app').classList.remove('hidden');
+  VIEW=NOTICE_FOCUS?'notifications':'overview';render();
+  if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
+ }catch(err){
+  TOKEN='';STATE=null;
+  $('loginError').textContent=err.message;$('loginError').classList.remove('hidden');
+ }finally{b.disabled=false;b.textContent='Anmelden';}
+});
+async function logout(){
+ gaClearLogin();
+ const oldToken=TOKEN;
+ TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';
+ document.body.classList.remove('ga-nav-open');
+ $('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();
+ try{if(oldToken)await rpc('gaApi','logout',{},oldToken);}catch(e){tip('Lokal abgemeldet. Bei fehlender Verbindung kann die Sitzung serverseitig noch gültig sein.',true);}
+}
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
 $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
- if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';render();return}
+ if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';document.body.classList.remove('ga-nav-open');render();return}
  if(x.dataset.edit){PROJECT_REVIEW_ID='';FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
  if(x.dataset.term){TERM=x.dataset.term;render();return}
@@ -955,6 +1014,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
   if(EDIT)data.ID=EDIT;
+  if(typeof GA_MEM_CREATE!=='undefined')GA_MEM_CREATE=false;
   const invite=data.SofortEinladen==='JA',email=String(data.Email||'').trim();
   if(invite&&!email){tip('Für die Zugangseinladung muss eine E-Mail-Adresse eingetragen sein.',true);return;}
   const saved=await api('saveMember',data);
@@ -994,4 +1054,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script></body></html>
