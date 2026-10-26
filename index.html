@@ -46,6 +46,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 
 </style><link rel="stylesheet" href="./admin-ui.css"></head><body>
 <div id="login" class="login-wrap"><div class="login-card"><div class="logo">🚒</div><h1>Grundausbildung</h1><p class="sub">Ausbildungsplattform · Feuerwehr St. Pölten Stadt</p><form id="loginForm"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required><div id="loginError" class="hidden error"></div><label class="inline-check ga-stay-logged"><input type="checkbox" name="remember" value="JA"> 30 Tage angemeldet bleiben</label><p class="small muted" style="margin:6px 0 11px">Nur auf deinem eigenen Gerät aktivieren. Beim Abmelden wird die Sitzung beendet.</p><button class="primary full" style="margin-top:8px" type="submit">Anmelden</button></form>
+<details class="ga-forgot-panel"><summary>Passwort vergessen?</summary><form id="gaForgotForm"><label>E-Mail-Adresse deines Zugangs</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><div class="small muted" id="gaForgotResult" role="status"></div><button type="submit" class="secondary full">Reset-Link anfordern</button></form></details>
 <div id="invitePanel" class="hidden">
   <div class="notice">Persönlicher Einladungslink</div>
   <p id="inviteDescription" class="small muted">Einladung wird geprüft …</p>
@@ -59,7 +60,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.7.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.8.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -235,6 +236,7 @@ function navs(){
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
+ ['mine','Meine Ausbildung'],['myterms','Meine Termine'],['myquiz','Meine Wissenstests'],
  ['courses','Kurskatalog'],['projects','Kursprojekte'],
  ...(can.KurseGestalten||can.KurseBearbeiten?[['quizzes','Quizverwaltung']]:[]),
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
@@ -244,8 +246,9 @@ function navs(){
  ]:r==='Teilnehmer'?[
  ['mine','Meine Übersicht'],['myterms','Ausbildungstermine'],['myquiz','Wissenstests'],
  ['ratings','Kurs bewerten'],['messages','Nachrichten']
- ]:[['tasks','Meine Aufgaben']];
- return base.concat([['notifications','Benachrichtigungen']]);
+ ]:[['tasks','Meine Aufgaben'],['mine','Meine Ausbildung'],['myterms','Meine Termine'],['myquiz','Meine Wissenstests']];
+ const personal=STATE.meMember?base:base.filter(x=>!['mine','myterms','myquiz'].includes(x[0]));
+ return personal.concat([['notifications','Benachrichtigungen']]);
 }
 function title(){return ({
  overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
@@ -638,10 +641,10 @@ function mine(){
  const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===member.ID)||{};
  const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
  const percent=Math.max(0,Math.min(100,Number(q.Fortschritt)||0));
- const completed=(STATE.teilnahmen||[]).filter(t=>t.Anwesend==='JA');
- const checks=(STATE.checks||[]),openChecks=checks.filter(c=>c.Status==='Offen');
+ const completed=(STATE.teilnahmen||[]).filter(t=>t.MitgliedID===member.ID&&t.Anwesend==='JA');
+ const checks=(STATE.checks||[]).filter(c=>c.MitgliedID===member.ID),openChecks=checks.filter(c=>c.Status==='Offen');
  const gabOpen=arr(q.OffeneGABKurse),bswOpen=arr(q.OffeneBSWKurse);
- const upcoming=(STATE.termine||[]).filter(t=>t.Status==='Geplant'&&
+ const upcoming=(STATE.termine||[]).filter(t=>t.TurnusID===member.TurnusID&&t.Status==='Geplant'&&
   new Date(t.Beginn).getTime()>=Date.now()-3600000).sort((a,b)=>a.Beginn.localeCompare(b.Beginn));
  const next=upcoming[0],nextCourse=next&&by(STATE.kurse,next.KursID);
  const first=h(member.Vorname||STATE.user.Name||'');
@@ -694,13 +697,13 @@ function mine(){
  return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
 }
 function myterms(){
- const all=(STATE.termine||[]).slice();
+ const all=(STATE.termine||[]).filter(t=>STATE.meMember&&t.TurnusID===STATE.meMember.TurnusID);
  const now=Date.now();
  const coming=all.filter(t=>t.Status==='Geplant'&&new Date(t.Beginn).getTime()>=now-3600000)
   .sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn)));
  const past=all.filter(t=>!coming.some(x=>x.ID===t.ID))
   .sort((a,b)=>String(b.Beginn).localeCompare(String(a.Beginn)));
- const attendances=STATE.teilnahmen||[];
+ const attendances=(STATE.teilnahmen||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID);
  const item=t=>{
   const course=by(STATE.kurse,t.KursID);
   const attended=attendances.some(a=>a.TerminID===t.ID&&a.Anwesend==='JA');
@@ -821,6 +824,15 @@ async function gaDisablePush(){
  return {message:'Push auf diesem Gerät ausgeschaltet.'};
 }
 async function doSave(method,data){try{const result=await api(method,data);FORM='';EDIT=null;tip(result?.message||'Erfolgreich gespeichert.');await reload();}catch(e){tip(e.message,true)}}
+$('gaForgotForm').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const form=event.target,btn=form.querySelector('button[type=submit]'),message=$('gaForgotResult');
+ btn.disabled=true;message.textContent='Anfrage wird geprüft …';
+ try{const result=await rpc('gaRequestPasswordReset',new FormData(form).get('email'));
+  message.textContent=result?.message||'Falls ein Zugang besteht, wurde eine E-Mail verschickt.';
+ }catch(err){message.textContent='Anfrage derzeit nicht erreichbar. Wende dich an den Administrator oder versuche es erneut.';}
+ finally{btn.disabled=false;}
+});
 $('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();
  $('loginError').classList.add('hidden');
@@ -1001,6 +1013,12 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',data)}
  else if(type==='project'){if(EDIT)data.ID=EDIT;await doSave('saveProject',data);}
  else if(type==='permissions')await doSave('setPermission',data);
+ else if(type==='roleChange'){
+  const old=by(STATE.benutzer,data.BenutzerID);
+  if(!old)throw new Error('Zugang nicht gefunden.');
+  if(!confirm('Rolle für '+old.Name+' von '+old.Rolle+' auf '+data.Rolle+' ändern? Bestehender Zugang und Ausbildungsnachweise bleiben erhalten.'))return;
+  await doSave('changeUserRole',data);
+ }
  else if(type==='report')await doSave('submitReport',data);
  else if(type==='reportStatus')await doSave('setReportStatus',data);
  else if(type==='questionnaire')await doSave('saveQuestionnaire',data);
