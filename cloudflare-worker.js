@@ -237,7 +237,7 @@ export default {
       return reply({ok:true,value:{configured,publicKey:configured?env.VAPID_PUBLIC_KEY:'',
         diagnosticVersion:2,checks}},200);
     }
-    if(!json||!['gaLogin','gaApi','gaCheckInvite','gaAcceptInvite'].includes(json.method)||!Array.isArray(json.args))
+    if(!json||!['gaLogin','gaApi','gaCheckInvite','gaAcceptInvite','gaRequestPasswordReset'].includes(json.method)||!Array.isArray(json.args))
       return reply({ok:false,error:'Ungültige Anfrage.'},400);
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),45000);
