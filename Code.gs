@@ -32,7 +32,8 @@ const GA = Object.freeze({
     BewertungsFrageboegen: ['ID','KursID','FragenJSON','Version','Aktiv','AktualisiertVon','AktualisiertAm'],
     ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger'],
     QuizKurse: ['ID','KursID','Aktiv','Pflicht','Bestehensgrenze','MaxVersuche','ZeitlimitMinuten','FragenJSON','Version','AktualisiertVon','AktualisiertAm'],
-    QuizVersuche: ['ID','KursID','MitgliedID','TerminID','QuizVersion','Versuch','Status','BegonnenAm','AbgegebenAm','Punkte','MaxPunkte','Prozent','Bestanden','AntwortenJSON','FragenSnapshotJSON']
+    QuizVersuche: ['ID','KursID','MitgliedID','TerminID','QuizVersion','Versuch','Status','BegonnenAm','AbgegebenAm','Punkte','MaxPunkte','Prozent','Bestanden','AntwortenJSON','FragenSnapshotJSON'],
+    QuizFreigaben: ['ID','KursID','MitgliedID','QuizVersion','ZusatzVersuche','FreigegebenVon','FreigegebenAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -185,6 +186,7 @@ function gaApi(method,data,token){
   if(method==='getQuizEdit')return gaGetQuizEdit_(u,d);
   if(method==='startQuiz')return gaLock_(()=>gaStartQuiz_(u,d));
   if(method==='submitQuiz')return gaLock_(()=>gaSubmitQuiz_(u,d));
+  if(method==='unlockQuiz')return gaLock_(()=>gaUnlockQuiz_(u,d));
   if(method==='saveQuestionnaire')return gaLock_(()=>gaSaveQuestionnaire_(u,d));
   if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
   if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
@@ -242,7 +244,7 @@ function gaState_(u){
  const ownRatings=participant&&own?ratings.filter(r=>r.MitgliedID===own.ID):[];
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
- const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche');
+ const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
   .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
@@ -275,6 +277,7 @@ function gaState_(u){
   meMember:participant&&own?own:null,
   qualifikationen,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
+  quizFreigaben:(participant&&own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):admin||trainer?quizUnlocks:[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
   quizVersuche:(participant&&own?quizAttempts.filter(a=>a.MitgliedID===own.ID):admin||trainer?quizAttempts:[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
   ersteHilfeNachweise:aidRowsVisible,
   ersteHilfeMail:admin?gaAidSettings_():null,
@@ -1348,9 +1351,12 @@ function gaQuizDue_(a,time){
  const start=new Date(a.BegonnenAm).getTime();
  return time>0&&(!Number.isFinite(start)||Date.now()>start+time*60000);
 }
+function gaQuizExtra_(memberId,courseId,version){return gaOptionalRows_('QuizFreigaben')
+ .filter(x=>x.MitgliedID===memberId&&x.KursID===courseId&&x.QuizVersion===version)
+ .reduce((sum,x)=>sum+Math.max(0,Number(x.ZusatzVersuche)||0),0);}
 function gaQuizAttemptPublic_(row,questions,config){
  return {VersuchID:row.ID,KursID:row.KursID,Version:row.QuizVersion,
-  Versuch:Number(row.Versuch),MaxVersuche:Number(config.MaxVersuche),
+  Versuch:Number(row.Versuch),MaxVersuche:Number(config.MaxVersuche)+gaQuizExtra_(row.MitgliedID,row.KursID,row.QuizVersion),
   ZeitlimitMinuten:Number(config.ZeitlimitMinuten),BegonnenAm:row.BegonnenAm,
   Fragen:gaQuizPublicQuestions_(questions)};
 }
@@ -1370,7 +1376,7 @@ function gaStartQuiz_(u,d){
   }
   gaReplace_('QuizVersuche',attempt.ID,{Status:'Zeitüberschreitung',AbgegebenAm:gaNow_(),Bestanden:'NEIN'});
  }
- if(list.length>=Number(config.MaxVersuche))throw new Error('Maximale Versuchszahl erreicht. Bitte Ausbilder kontaktieren.');
+ if(list.length>=Number(config.MaxVersuche)+gaQuizExtra_(m.ID,courseId,config.Version))throw new Error('Maximale Versuchszahl erreicht. Bitte Ausbilder kontaktieren.');
  const next={ID:gaId_(),KursID:courseId,MitgliedID:m.ID,TerminID:term.ID,QuizVersion:config.Version,
   Versuch:String(list.length+1),Status:'In Bearbeitung',BegonnenAm:gaNow_(),AbgegebenAm:'',
   Punkte:'',MaxPunkte:'',Prozent:'',Bestanden:'NEIN',AntwortenJSON:'',FragenSnapshotJSON:JSON.stringify(questions)};
@@ -1424,6 +1430,22 @@ function gaSubmitQuiz_(u,d){
  gaLog_(u.ID,'QUIZ_ABGEBEN','Kurs',attempt.KursID,{MitgliedID:m.ID,QuizVersion:attempt.QuizVersion,Prozent:percent,Bestanden:passed});
  const attempts=gaRows_('QuizVersuche').filter(x=>x.MitgliedID===m.ID&&x.KursID===attempt.KursID&&x.QuizVersion===config.Version).length;
  return {ok:true,Bestanden:passed,Punkte:correct,MaxPunkte:qs.length,Prozent:percent,
-   Bestehensgrenze:Number(config.Bestehensgrenze),VersucheVerbleibend:Math.max(0,Number(config.MaxVersuche)-attempts),
+   Bestehensgrenze:Number(config.Bestehensgrenze),VersucheVerbleibend:Math.max(0,Number(config.MaxVersuche)+gaQuizExtra_(m.ID,attempt.KursID,config.Version)-attempts),
    Pflicht:gaBool_(config.Pflicht)};
+}
+
+function gaUnlockQuiz_(u,d){
+ gaQuizRights_(u);gaQuizInstalled_();
+ const courseId=gaNeed_(d.KursID,'Kurs-ID',100),memberId=gaNeed_(d.MitgliedID,'Mitglied-ID',100);
+ const member=gaFind_('Mitglieder',memberId),config=gaOptionalRows_('QuizKurse').find(x=>x.KursID===courseId&&gaBool_(x.Aktiv));
+ if(!member||!gaBool_(member.Aktiv)||!config)throw new Error('Mitglied oder aktives Kursquiz nicht vorhanden.');
+ const completed=gaRows_('QuizVersuche').filter(x=>x.KursID===courseId&&x.MitgliedID===memberId&&x.QuizVersion===config.Version);
+ if(!completed.length)throw new Error('Dieses Mitglied hat noch keinen Quizversuch gestartet.');
+ const record={ID:gaId_(),KursID:courseId,MitgliedID:memberId,QuizVersion:config.Version,
+   ZusatzVersuche:'1',FreigegebenVon:u.ID,FreigegebenAm:gaNow_()};
+ gaAppend_('QuizFreigaben',record);
+ const participant=gaRows_('Benutzer').find(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&String(x.Email||'').toLowerCase()===String(member.Email||'').toLowerCase());
+ if(participant)gaNotify_(participant.ID,'Aufgabe','Neuer Quizversuch freigegeben','Für deinen Kurs wurde ein zusätzlicher Quizversuch ermöglicht.',courseId);
+ gaLog_(u.ID,'QUIZ_ZUSATZVERSUCH','Kurs',courseId,{MitgliedID:memberId,QuizVersion:config.Version});
+ return {ok:true,message:'Ein zusätzlicher Quizversuch wurde freigegeben.'};
 }
