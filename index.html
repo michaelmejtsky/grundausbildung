@@ -1014,10 +1014,10 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='turnus')await doSave('saveTurnus',data);
  else if(type==='member'){
   if(EDIT)data.ID=EDIT;
-  if(typeof GA_MEM_CREATE!=='undefined')GA_MEM_CREATE=false;
   const invite=data.SofortEinladen==='JA',email=String(data.Email||'').trim();
   if(invite&&!email){tip('Für die Zugangseinladung muss eine E-Mail-Adresse eingetragen sein.',true);return;}
   const saved=await api('saveMember',data);
+  if(typeof GA_MEM_CREATE!=='undefined')GA_MEM_CREATE=false;
   FORM='';EDIT=null;
   if(invite){
     try{const invited=await api('inviteUser',{Name:String(data.Vorname).trim()+' '+String(data.Nachname).trim(),Email:email,Rolle:'Teilnehmer',Bereich:''});tip(invited.message||'Mitglied angelegt und Einladung versendet.');}
@@ -1048,7 +1048,12 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='pushRule')await doSave('setPushRule',data);
  else if(type==='message')await doSave('sendMessage',data);
  else if(type==='direct')await doSave('sendDirect',data);
- else if(type==='qualification')await doSave('saveQualification',data);
+ else if(type==='qualification'){
+ const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===data.MitgliedID);
+ if(data.GABFreigabe==='JA'&&q&&q.GABFreigabe!=='JA'&&!q.GABDokuVollstaendig&&
+   !confirm('GAB jetzt ausdrücklich bestätigen, obwohl die Ausbildungsdokumentation noch nicht vollständig ist? Offene Pflichtmodule bleiben sichtbar.'))return;
+ await doSave('saveQualification',data);
+}
  else if(type==='requirement')await doSave('setCourseRequirement',data);
  else if(type==='singleAttendance')await doSave('setAttendanceMember',data);
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
