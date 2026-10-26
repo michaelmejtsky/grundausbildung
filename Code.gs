@@ -349,7 +349,7 @@ function gaState_(u){
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
+  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
   kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[],
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
@@ -553,13 +553,13 @@ function gaTrainingPdfTable_(body,headers,rows){
 function gaExportTrainingPdf_(u,d){
  gaRequire_(u,['Administrator','Ausbilder']);
  const report=gaTrainingPdfData_(d||{});
- if(!report.details.length)throw new Error('Für diesen Termin bzw. dieses Modul ist noch kein bestätigter Tätigkeitsbericht mit Ist-Zeiten vorhanden.');
+ // Berichte ohne erfasste Ist-Zeiten als eindeutig vorläufigen Auszug ausgeben.
  const title=report.isSingle?'FDISK-Tätigkeitsbericht – Ausbildungstermin':'FDISK-Modulübersicht – '+report.course.Titel;
  const safe=(v)=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,220);
  const hours=gaTrainingHours_,date=gaTrainingDate_;
  const km=x=>Number(x||0).toLocaleString('de-AT',{minimumFractionDigits:1,maximumFractionDigits:2});
  const fileName=('FDISK_Ausbildung_'+report.course.Titel+
-   (report.isSingle?'_'+String(report.details[0].term.Beginn||'').slice(0,10):'_Gesamt')+'.pdf')
+   (report.isSingle?'_'+String(report.details[0]?.term?.Beginn||gaRows_('Termine').find(t=>t.ID===d.TerminID)?.Beginn||'').slice(0,10):'_Gesamt')+'.pdf')
    .replace(/[^\wÄÖÜäöüß.-]+/g,'_').slice(0,135);
  let docId=null;
  try{
@@ -569,6 +569,7 @@ function gaExportTrainingPdf_(u,d){
   body.appendParagraph('FF ST. PÖLTEN-STADT').setHeading(DocumentApp.ParagraphHeading.HEADING2);
   body.appendParagraph(title).setHeading(DocumentApp.ParagraphHeading.HEADING1);
   body.appendParagraph('Modul: '+safe(report.course.Titel));
+  if(!report.details.length||report.pending)body.appendParagraph('VORLÄUFIG / UNVOLLSTÄNDIG – nur tatsächlich dokumentierte Ist-Zeiten werden in den Summen gezählt. Nicht erfasste Werte bedeuten nicht, dass keine Leistung erbracht wurde.');
   body.appendParagraph('Erstellt: '+date(gaNow_())+' · Datenauszug für manuelle FDISK-Eingabe');
   body.appendParagraph('Dokumentierte Termine: '+report.details.length+
    ' | Ausbildungsstunden (Termindauer): '+hours(report.minutes)+' h'+
@@ -576,6 +577,11 @@ function gaExportTrainingPdf_(u,d){
    ' | Ausbilderstunden: '+hours(report.trainerMinutes)+' h'+
    ' | Fahrzeugkilometer: '+km(report.kilometers)+' km');
   if(report.pending)body.appendParagraph('Achtung: '+report.pending+' Termin(e) dieses Moduls besitzen noch keinen vollständigen Tätigkeitsbericht und sind in den Summen NICHT enthalten.');
+  if(!report.details.length){
+    body.appendParagraph('Bisher keine vollständigen Ist-Zeiten erfasst. Geplante Termine (keine geleisteten Stunden):');
+    const planned=gaRows_('Termine').filter(t=>d.TerminID?t.ID===d.TerminID:t.KursID===d.KursID);
+    gaTrainingPdfTable_(body,['Planbeginn','Planende','Ort','Status'],planned.map(t=>[date(t.Beginn),date(t.Ende),safe(t.Ort),safe(t.Status)]));
+  }
   body.appendParagraph('Einzeltermine').setHeading(DocumentApp.ParagraphHeading.HEADING2);
   gaTrainingPdfTable_(body,['Datum','Tatsächliche Zeit','Stunden','Teilnehmer','Ausbilder','Fahrzeuge','km'],
     report.details.map(x=>[
@@ -625,7 +631,7 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);cons
   const answers=new Map(d.Anwesend.map(x=>[String(x.MitgliedID),x.Anwesend===true]));
   if(members.some(m=>!answers.has(m.ID)))throw new Error('Anwesenheit für jedes Mitglied erforderlich.');
   const trainerIds=Array.isArray(d.AusbilderIDs)?d.AusbilderIDs:[];
-  const qualified=gaRows_('Benutzer').filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)&&gaBool_(x.Aktiv)).map(x=>x.ID);
+  const qualified=gaRows_('Benutzer').filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)).map(x=>x.ID);
   if(!trainerIds.length||trainerIds.some(id=>!qualified.includes(id)))throw new Error('Mindestens einen gültigen Ausbilder auswählen.');
   if(u.Rolle==='Ausbilder'&&!trainerIds.includes(u.ID))throw new Error('Der bestätigende Ausbilder muss selbst angeführt sein.');
   const previous=gaRows_('Teilnahmen');
