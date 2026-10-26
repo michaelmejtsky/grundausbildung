@@ -199,10 +199,12 @@ function qPreviewPage(){
    '<label>'+h(pair[0])+'<select name="pm'+i+'_'+j+'" '+(result?'disabled':'required')+'><option value="">Bitte zuordnen</option>'+
     q.pairs.map((p,k)=>'<option value="'+k+'" '+(selected?.[j]===k?'selected':'')+'>'+h(p[1])+'</option>').reverse().join('')+'</select></label>').join('')+'</div>':
    (q.typ==='tf'?['Richtig','Falsch']:q.options).map((t,j)=>
-    '<label class="q-preview-choice"><input name="pa'+i+'" type="'+(q.typ==='multi'?'checkbox':'radio')+'" value="'+j+'" '+
-    ((Array.isArray(selected)?selected.includes(j):selected===j)?'checked':'')+' '+(result?'disabled':'')+'> '+h(t)+'</label>').join('');
+    '<label class="q-preview-choice"><span class="q-choice-letter" aria-hidden="true">'+qLetter(j)+'</span>'+
+    '<input name="pa'+i+'" type="'+(q.typ==='multi'?'checkbox':'radio')+'" value="'+j+'" '+
+    ((Array.isArray(selected)?selected.includes(j):selected===j)?'checked':'')+' '+(result?'disabled':'')+
+    '><span class="q-choice-text">'+h(t)+'</span></label>').join('');
   const hit=result?.details?.[i];
-  return '<section class="q-preview-question"><div class="row between"><span>Frage '+(i+1)+' / '+Q_ITEMS.length+'</span>'+
+  return '<section class="q-preview-question"><div class="row between"><span class="q-question-count">Frage '+(i+1)+' / '+Q_ITEMS.length+'</span>'+
    (result?'<span class="tag '+(hit?'ok':'bad')+'">'+(hit?'Richtig':'Falsch')+'</span>':'')+'</div>'+
    '<h3>'+h(q.text)+'</h3>'+choices+
    (result?'<p class="q-solution"><b>Richtige Lösung:</b> '+h(correctLabel)+'</p>':'')+'</section>';
@@ -270,9 +272,15 @@ function qExam(){
  '<form data-form="quizAttempt">'+s.Fragen.map((q,i)=>{
  let content='';
  if(q.typ==='match'){const options=q.right.map(v=>'<option value="'+h(v.id)+'">'+h(v.text)+'</option>').join('');
-   content=q.left.map((label,j)=>'<label>'+h(label)+'<select name="qm'+i+'_'+j+'" required><option value="">Zuordnen</option>'+options+'</select></label>').join('');
- }else{content=q.options.map((label,j)=>'<label class="q-answer"><input type="'+(q.typ==='multi'?'checkbox':'radio')+'" name="qa'+i+'" value="'+j+'"> '+h(label)+'</label>').join('');}
- return '<div class="ga-q-card"><b>Frage '+(i+1)+' von '+s.Fragen.length+'</b><h3>'+h(q.text)+'</h3>'+content+'</div>';
+   content='<div class="q-preview-matches">'+q.left.map((label,j)=>
+    '<label class="q-match-choice"><span class="q-match-prompt">'+h(label)+'</span>'+
+    '<select name="qm'+i+'_'+j+'" required><option value="">Zuordnen</option>'+options+'</select></label>').join('')+'</div>';
+ }else{content=q.options.map((label,j)=>
+   '<label class="q-preview-choice q-quiz-choice"><span class="q-choice-letter" aria-hidden="true">'+qLetter(j)+'</span>'+
+   '<input type="'+(q.typ==='multi'?'checkbox':'radio')+'" name="qa'+i+'" value="'+j+'">'+
+   '<span class="q-choice-text">'+h(label)+'</span></label>').join('');}
+ return '<div class="ga-q-card"><div class="q-question-count">Frage '+(i+1)+' von '+s.Fragen.length+'</div>'+
+ '<h3>'+h(q.text)+'</h3>'+content+'</div>';
  }).join('')+'<div class="btnline"><button class="primary" type="submit">Antworten abgeben</button></div></form></section>';
 }
 function qParticipant(){
