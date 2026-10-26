@@ -34,73 +34,78 @@ function gaTrainingStatsForTerm(term){
   participantMinutes:minutes*attendance.length,trainerMinutes:minutes*trainers.length,km,vehicle};
 }
 function gaAttendancePage(){
- if(!['Administrator','Ausbilder'].includes(role()))return '<section class="panel"><p>Keine Berechtigung.</p></section>';
- if(!Array.isArray(STATE.ausbildungsberichte))return '<section class="panel"><h2>Ausbildungsdokumentation aktualisieren</h2><div class="ga-alert">Die neue Tätigkeitsbericht-Funktion ist am Server noch nicht aktiv. Bitte die aktuelle Code.gs in deinem bestehenden Google Apps Script als neue Version veröffentlichen und danach die App aktualisieren. Anwesenheiten und bisherige Daten bleiben erhalten.</div></section>';
+ if(!['Administrator','Ausbilder'].includes(role()))return '<section class="panel">Keine Berechtigung.</section>';
+ const ready=Array.isArray(STATE.ausbildungsberichte);
+ if(!ready)return '<section class="panel"><h2>Ausbildungsdokumentation</h2><p class="ga-alert">Die aktuelle Code.gs muss zuerst in Google Apps Script bereitgestellt werden, damit die Ist-Zeiten und Berichte sicher gespeichert werden.</p></section>';
  const term=TERM&&by(STATE.termine,TERM);
- if(!term)return '<div class="ga-page-heading"><div><h2>Ausbildung durchführen</h2>'+
-  '<p>Termin auswählen, anwesende Teilnehmer, tatsächliche Zeiten, Ausbilder und Fahrzeuge dokumentieren.</p></div>'+
-  '<button type="button" class="secondary" data-view="trainingReports">Tätigkeitsberichte</button></div>'+
-  '<section class="panel"><div class="ga-training-list">'+(STATE.termine||[]).slice().sort((a,b)=>String(b.Beginn).localeCompare(String(a.Beginn))).map(t=>{
-   const c=by(STATE.kurse,t.KursID),r=gaReportByTerm(t.ID);
-   return '<div class="ga-training-list-item"><div><strong>'+h(c?.Titel||'Kurs')+'</strong>'+
-    '<p class="small muted">'+dt(t.Beginn)+' · '+h(t.Ort||'Ort nicht eingetragen')+'</p></div>'+
-    '<span class="tag '+(r?'ok':'blue')+'">'+(r?'Tätigkeitsbericht vorhanden':t.Status==='Durchgeführt'?'Bericht nachtragen':'Noch nicht abgeschlossen')+'</span>'+
-    '<button type="button" class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div>';
-  }).join('')+'</div></section>';
- const course=by(STATE.kurse,term.KursID),report=gaReportByTerm(term.ID);
+ if(!term){
+  const list=(STATE.termine||[]).slice().sort((a,b)=>String(b.Beginn).localeCompare(String(a.Beginn)));
+  return '<div class="ga-page-heading"><div><h2>Ausbildungstermine öffnen</h2>'+
+   '<p>Unterlagen direkt öffnen, Ausbildung durchführen und erst danach den Tätigkeitsbericht abschließen.</p></div>'+
+   '<button class="secondary" type="button" data-view="trainingReports">PDF & Statistik</button></div>'+
+   '<section class="panel"><div class="ga-training-list">'+list.map(t=>{
+    const c=by(STATE.kurse,t.KursID),r=gaReportByTerm(t.ID);
+    return '<div class="ga-training-list-item"><div><strong>'+h(c?.Titel||'Ausbildung')+'</strong>'+
+      '<p class="small muted">'+dt(t.Beginn)+' · '+h(t.Ort||'Ort offen')+'</p></div>'+
+      '<span class="tag '+(r?'ok':'blue')+'">'+(r?'Dokumentiert':'Noch offen')+'</span>'+
+      '<button type="button" class="primary" data-training-open="'+h(t.ID)+'">Kurs öffnen</button></div>';
+   }).join('')+'</div></section>';
+ }
+ const c=by(STATE.kurse,term.KursID),report=gaReportByTerm(term.ID);
  const members=(STATE.mitglieder||[]).filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA');
- const prev=(STATE.teilnahmen||[]).filter(a=>a.TerminID===term.ID);
- const availableTrainers=(STATE.benutzer||[]).filter(x=>['Administrator','Ausbilder'].includes(x.Rolle)&&x.Aktiv==='JA');
- const selectedTeachers=report?String(report.AusbilderIDs||'').split(','):
-  (prev[0]?.AusbilderIDs?String(prev[0].AusbilderIDs).split(','):[STATE.user.ID]);
- const vehicles=gaReportVehicles(report);
- const existingKm=vehicles.reduce((sum,v)=>sum+Number(v.Kilometer||0),0);
- const memberRows=members.map(m=>{
-  const seen=prev.find(x=>x.MitgliedID===m.ID);
-  return '<label class="ga-attendance-choice"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(seen?.Anwesend==='JA'?'checked':'')+'>'+
-  '<span>'+h(name(m))+'</span></label>';
- }).join('');
- const trainerRows=availableTrainers.map(u=>'<label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(u.ID)+'" '+
- (selectedTeachers.includes(u.ID)?'checked':'')+'><span>'+h(u.Name)+(u.ID===STATE.user.ID?' · Du':'')+'</span></label>').join('');
- const start=String(report?.BeginnIst||term.Beginn||'').slice(0,16),end=String(report?.EndeIst||term.Ende||'').slice(0,16);
- const count=prev.filter(x=>x.Anwesend==='JA').length;
- return '<div class="ga-page-heading"><div><p class="ga-eyebrow">FDISK-TÄTIGKEITSERFASSUNG</p>'+
- '<h2>'+h(course?.Titel||'Ausbildungstermin')+'</h2><p>'+dt(term.Beginn)+' · '+h(term.Ort||'Ort offen')+'</p></div>'+
- '<button type="button" class="secondary" data-close-term="1">← Terminliste</button></div>'+
- (report?'<div class="ga-training-status"><span class="tag ok">Tätigkeitsbericht gespeichert</span>'+
- '<span>Letzte Erfassung: '+h(report.AktualisiertAm||'')+'</span>'+
- '<button type="button" class="secondary" data-training-pdf-term="'+h(term.ID)+'">PDF dieses Termins</button></div>':
- '<div class="ga-training-status"><span class="tag warn">Noch kein vollständiger Tätigkeitsbericht</span>'+
- '<span>Mit dem Abschluss speicherst du die Ist-Zeiten, Teilnehmer, Ausbilder und Fahrzeuge.</span></div>')+
- '<form data-form="attendance" class="ga-training-form"><section class="panel">'+
- '<h3><span class="ga-training-step">1</span> Tatsächliche Ausbildungszeit</h3>'+
- '<p class="muted small">Geplante Zeiten werden vorgeschlagen. Bitte den tatsächlichen Beginn und das tatsächliche Ende kontrollieren bzw. korrigieren.</p>'+
- '<div class="ga-training-time-grid"><label>Beginn (Datum und Uhrzeit)<div class="ga-training-time-entry"><input type="datetime-local" data-training-begin name="BeginnIst" required value="'+h(start)+'">'+
- '<button type="button" class="secondary" data-training-now="begin">Jetzt</button></div></label>'+
- '<label>Ende (Datum und Uhrzeit)<div class="ga-training-time-entry"><input type="datetime-local" data-training-end name="EndeIst" required value="'+h(end)+'">'+
- '<button type="button" class="secondary" data-training-now="end">Jetzt</button></div></label></div>'+
- '<div class="ga-training-duration" data-training-duration>'+
- (gaTrainingMin(start,end)?'Ausbildungsdauer: '+gaTrainingHours(gaTrainingMin(start,end))+' Stunden':'Bitte gültigen Beginn und Ende eingeben')+'</div>'+
- '</section><section class="panel"><h3><span class="ga-training-step">2</span> Teilnehmer</h3>'+
- '<p class="small muted">Nur tatsächlich anwesende Mitglieder markieren. Für die FDISK-Summen zählt jedes markierte Mitglied mit der vollen angegebenen Ausbildungsdauer.</p>'+
- '<div class="ga-attendance-list">'+memberRows+'</div>'+
- '<div class="ga-training-count">Anwesende Teilnehmer: <strong data-training-present-count>'+count+'</strong> / '+members.length+'</div></section>'+
- '<section class="panel"><h3><span class="ga-training-step">3</span> Mitwirkende Ausbilder</h3>'+
- '<p class="muted small">Alle Ausbilder anhaken, die bei diesem Modul mitgewirkt haben. Der bestätigende Ausbilder muss selbst angeführt sein.</p>'+
- '<div class="ga-attendance-list ga-trainers-list">'+trainerRows+'</div></section>'+
- '<section class="panel"><h3><span class="ga-training-step">4</span> Fahrzeuge und Kilometer</h3>'+
- '<p class="small muted">Alle verwendeten Fahrzeuge einzeln erfassen. Bei stationär eingesetzten Fahrzeugen sind 0 km zulässig.</p>'+
- '<datalist id="gaVehicleNames">'+gaVehicleSuggestions().map(v=>'<option value="'+h(v)+'"></option>').join('')+'</datalist>'+
+ const previous=(STATE.teilnahmen||[]).filter(a=>a.TerminID===term.ID);
+ // Auch eingeladene, noch nicht aktivierte Ausbilder dürfen als tatsächlich mitwirkend erfasst werden.
+ const trainers=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));
+ const chosen=report?String(report.AusbilderIDs||'').split(','):
+  previous[0]?.AusbilderIDs?String(previous[0].AusbilderIDs).split(','):[STATE.user.ID];
+ if(!trainers.some(u=>u.ID===STATE.user.ID))trainers.unshift({ID:STATE.user.ID,Name:STATE.user.Name,Rolle:STATE.user.Rolle,Aktiv:'JA'});
+ const list=members.map(m=>'<label class="ga-attendance-choice"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+
+   (previous.find(x=>x.MitgliedID===m.ID)?.Anwesend==='JA'?'checked':'')+'><span>'+h(name(m))+'</span></label>').join('');
+ const teacherOptions=trainers.map(u=>'<label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(u.ID)+'" '+
+  (chosen.includes(u.ID)?'checked':'')+'><span>'+h(u.Name||'Ausbilder')+(u.ID===STATE.user.ID?' · Du':'')+
+  (u.Aktiv!=='JA'?' · Einladung offen':'')+'</span></label>').join('');
+ const links=safeLinks(c?.Links),vehicles=gaReportVehicles(report);
+ const startTime=String(report?.BeginnIst||term.Beginn||'').slice(0,16),
+  endTime=String(report?.EndeIst||term.Ende||'').slice(0,16);
+ const used=vehicles.length>0;
+ const linkBlock=links?'<div class="ga-course-links"><h3>Präsentation und Unterlagen</h3><ul class="url-list">'+links+'</ul></div>':
+  '<p class="small muted">Für dieses Modul wurde noch keine Präsentation hinterlegt.</p>';
+ const completed=!!report;
+ return '<div class="ga-page-heading"><div><p class="ga-eyebrow">AUSBILDUNGSMODUL</p><h2>'+h(c?.Titel||'Ausbildung')+'</h2>'+
+ '<p>'+dt(term.Beginn)+' · '+h(term.Ort||'–')+'</p></div><button class="secondary" type="button" data-close-term="1">← Alle Termine</button></div>'+
+ '<div class="ga-course-top"><span class="tag '+(completed?'ok':'blue')+'">'+(completed?'Abschluss dokumentiert':'Ausbildung offen')+'</span>'+
+ '<span>1. Unterlagen öffnen & ausbilden</span><span>2. Ausbildung abschließen</span></div>'+
+ '<details class="ga-course-section" open><summary><span class="ga-course-section-icon">1</span><span><strong>Kursinhalt & Präsentation</strong><small>Direkt beim Öffnen verfügbar</small></span></summary>'+
+ '<div class="ga-course-section-body">'+linkBlock+
+ '<details class="ga-subsection" open><summary>Ausbildungsinhalt anzeigen</summary><div class="ga-course-text">'+h(c?.Inhalt||'Kein Inhalt hinterlegt')+'</div></details>'+
+ (c?.Lernziele?'<details class="ga-subsection"><summary>Lernziele</summary><div class="ga-course-text">'+h(c.Lernziele)+'</div></details>':'')+
+ '<div class="ga-training-continue"><button class="primary" type="button" data-training-finish-open>Ausbildung abschließen & Anwesenheit erfassen</button></div></div></details>'+
+ '<details class="ga-course-section" id="gaFinishTraining" '+(completed?'':'')+'><summary><span class="ga-course-section-icon">2</span>'+
+ '<span><strong>Ausbildung abschließen</strong><small>Anwesende, Ist-Zeiten, Ausbilder und Fahrzeuge</small></span></summary>'+
+ '<div class="ga-course-section-body"><form data-form="attendance" class="ga-training-form">'+
+ '<section class="ga-training-fieldset"><h3>Beginn und Ende</h3><div class="ga-training-time-grid">'+
+ '<label>Beginn<div class="ga-training-time-entry"><input type="datetime-local" name="BeginnIst" required value="'+h(startTime)+'"><button type="button" class="secondary" data-training-now="begin">Jetzt</button></div></label>'+
+ '<label>Ende<div class="ga-training-time-entry"><input type="datetime-local" name="EndeIst" required value="'+h(endTime)+'"><button type="button" class="secondary" data-training-now="end">Jetzt</button></div></label></div>'+
+ '<p class="ga-training-duration" data-training-duration>'+ (gaTrainingMin(startTime,endTime)?'Ausbildungsdauer: '+gaTrainingHours(gaTrainingMin(startTime,endTime))+' Stunden':'Bitte Beginn und Ende ergänzen')+'</p></section>'+
+ '<details class="ga-subsection" open><summary>Teilnehmer markieren <span class="ga-inline-count" data-training-present-count>'+previous.filter(a=>a.Anwesend==='JA').length+'</span></summary>'+
+ '<div class="ga-attendance-list">'+list+'</div></details>'+
+ '<details class="ga-subsection"><summary>Weitere Ausbilder markieren</summary><p class="small muted">Bereits eingeladene Ausbilder können auch vor dem ersten Login dokumentiert werden.</p>'+
+ '<div class="ga-attendance-list ga-trainers-list">'+teacherOptions+'</div></details>'+
+ '<section class="ga-training-fieldset"><h3>Wurden Fahrzeuge verwendet?</h3>'+
+ '<div class="ga-training-vehicle-choice"><label><input type="radio" name="FahrzeugeVerwendet" value="NEIN" '+(!used?'checked':'')+'> Nein</label>'+
+ '<label><input type="radio" name="FahrzeugeVerwendet" value="JA" '+(used?'checked':'')+'> Ja, Fahrzeuge erfassen</label></div>'+
+ '<div id="gaTrainingVehicleArea" '+(!used?'hidden':'')+'><datalist id="gaVehicleNames">'+gaVehicleSuggestions().map(x=>'<option value="'+h(x)+'"></option>').join('')+'</datalist>'+
  '<div id="gaTrainingVehicleRows">'+(vehicles.length?vehicles:[{}]).map(gaVehicleRow).join('')+'</div>'+
- '<button type="button" class="secondary" data-training-vehicle-add>+ Weiteres Fahrzeug</button>'+
- '<p class="ga-training-count">Gesamte Fahrzeugkilometer: <strong data-training-km-total>'+gaTrainingKm(existingKm)+'</strong> km</p></section>'+
- '<section class="panel"><h3><span class="ga-training-step">5</span> Tätigkeitsbericht</h3>'+
- '<label>Besonderheiten / Bemerkungen (optional)<textarea name="Notiz" rows="3" maxlength="1500" placeholder="z. B. praktische Tätigkeiten, besondere Vorkommnisse, Ausbildungsinhalte">'+h(report?.Notiz||'')+'</textarea></label>'+
- '<div class="ga-training-summary" data-training-summary></div>'+
- '<p class="small muted">Alle Änderungen werden mit Benutzer und Zeitpunkt protokolliert. Ein erneutes Speichern korrigiert den bestehenden Termin, erzeugt keinen doppelten Tätigkeitsbericht.</p>'+
- '<div class="btnline"><button type="submit" class="primary">Ausbildung und Tätigkeitsbericht speichern</button>'+
- '<button type="button" class="secondary" data-view="trainingReports">Gesamtauswertung</button></div></section></form>';
+ '<button class="secondary" type="button" data-training-vehicle-add>+ Weiteres Fahrzeug</button>'+
+ '<p class="ga-training-count">Fahrzeugkilometer: <strong data-training-km-total>'+gaTrainingKm(vehicles.reduce((n,v)=>n+Number(v.Kilometer||0),0))+'</strong> km</p></div></section>'+
+ '<details class="ga-subsection"><summary>Bemerkungen (optional)</summary><textarea name="Notiz" rows="3" maxlength="1500">'+h(report?.Notiz||'')+'</textarea></details>'+
+ '<div class="ga-training-summary" data-training-summary></div><div class="ga-training-finish-buttons">'+
+ '<button class="primary" type="submit">Ausbildung abschließen & speichern</button>'+
+ '<button class="secondary" type="button" data-training-pdf-term="'+h(term.ID)+'">PDF-Tätigkeitsbericht</button></div>'+
+ '<p class="small muted">'+(completed?'Du kannst den bestehenden Bericht hier korrigieren.':'PDF ist auch vor der Erfassung als deutlich vorläufig markierter Bericht verfügbar.')+
+ '</p></form></div></details>';
 }
+
 function gaTrainingModuleRows(){
  const terms=(STATE.termine||[]),reports=(STATE.ausbildungsberichte||[]);
  const ids=new Set(terms.map(t=>t.KursID));
