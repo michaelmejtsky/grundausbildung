@@ -99,6 +99,27 @@ function checks(){
  '<div><label>Zuständig</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div>'+
  '<div><button class="primary" type="submit">Anlegen</button></div></form></div></details>';
 }
+function gaExternalBlockForms(q){
+ const blocks=[
+ {id:'GAB-ABSCHNITT-BLOCK-A',title:'Block A · Basiswissen im Abschnitt',exam:false},
+ {id:'GAB-ABSCHNITT-BLOCK-B',title:'Block B · Basiswissen und Abschluss Truppmann',exam:true}
+ ];
+ return '<div class="ga-abschnitt-head"><h3>Verpflichtende Abschnittsmodule</h3><p class="small muted">Externe Ausbildung dokumentieren. Wir planen keine Abschnittstermine und geben keine Prüfungsergebnisse ohne Nachweis frei.</p></div>'+
+ blocks.map(b=>{
+ const proof=(STATE.abschnittNachweise||[]).find(x=>x.MitgliedID===q.MitgliedID&&x.KursID===b.id)||{};
+ const complete=proof.Absolviert==='JA'&&(!b.exam||proof.PruefungBestanden==='JA');
+ return '<details class="ga-member-fold ga-external-block"><summary><span>'+b.title+'</span><span class="tag '+(complete?'ok':'warn')+'">'+(complete?'Abgeschlossen':b.exam&&proof.Absolviert==='JA'?'Prüfung ausständig':'Offen')+'</span></summary>'+
+ '<div class="ga-fold-body"><form data-form="abschnitt" class="grid"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'">'+
+ '<input type="hidden" name="KursID" value="'+b.id+'">'+
+ '<div class="wide"><label class="inline-check"><input type="checkbox" name="Absolviert" value="JA" '+(proof.Absolviert==='JA'?'checked':'')+'> Ausbildung Block '+(b.exam?'B':'A')+' im Abschnitt vollständig absolviert</label></div>'+
+ '<div><label>Datum der Ausbildung / Bestätigung</label><input type="date" name="Ausbildungsdatum" value="'+h(proof.Ausbildungsdatum||'')+'"></div>'+
+ (b.exam?'<div class="wide"><label class="inline-check"><input type="checkbox" name="PruefungBestanden" value="JA" '+(proof.PruefungBestanden==='JA'?'checked':'')+'> Abschluss Truppmann (ASMTRM) erfolgreich bestanden</label></div>'+
+ '<div><label>Datum der bestandenen Abschlussprüfung</label><input type="date" name="Pruefungsdatum" value="'+h(proof.Pruefungsdatum||'')+'"></div>':'')+
+ '<div class="wide"><label>Nachweis / Bestätigung (Aktenzeichen, Prüfungsbestätigung oder Verweis)</label><input name="Nachweis" maxlength="500" value="'+h(proof.Nachweis||'')+'"></div>'+
+ '<div class="wide"><label>Notiz (optional)</label><textarea name="Notiz" rows="2">'+h(proof.Notiz||'')+'</textarea></div>'+
+ '<div class="wide"><button class="primary" type="submit">Abschnittsnachweis speichern</button></div></form></div></details>';
+ }).join('');
+}
 function gaQualForm(q){
  const warn=q.GABManuellBestaetigt&&!q.GABDokuVollstaendig?
   '<div class="ga-alert">GAB ist durch den Administrator bestätigt. Dokumentation noch unvollständig: '+h(q.GABHinweis)+'</div>':
@@ -109,6 +130,7 @@ function gaQualForm(q){
  gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul vollständig','BSW noch offen')+
  gaStatusBadge(q.Alter16,'Mindestalter erreicht','Alter fehlt/unter 16')+'</div>'+warn+
  '<p class="small muted">Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · '+h(q.Fortschritt)+' % · Ausbildungsstufe: '+h(q.Ausbildungsweg||'–')+'</p>'+
+ gaExternalBlockForms(q)+
  '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'">'+
  '<div class="ga-qual-approval"><label class="inline-check"><input type="checkbox" name="GABFreigabe" value="JA" '+(q.GABFreigabe==='JA'?'checked':'')+'> <b>GAB abgeschlossen und durch die Ausbildungsleitung bestätigt</b></label>'+
  '<p class="small muted">Diese Bestätigung setzt den GAB-Status auf abgeschlossen. Noch fehlende Nachweise bleiben als Hinweis sichtbar.</p></div>'+
