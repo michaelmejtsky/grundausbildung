@@ -87,7 +87,10 @@ function gaEinrichten() {
   defaults.forEach(v=>{if(!existing.includes(v[0]))gaAppend_('Checklistenpunkte',{
     ID:gaId_(),Titel:v[0],Bereich:v[1],Zustaendig:v[2],Aktiv:'JA',ErstelltAm:gaNow_()
   });});
-  SpreadsheetApp.getUi().alert('Grundausbildung bereit: '+Object.keys(GA.SHEETS).length+' Datentabellen, Beispielkurs und Checklistenpunkte geprüft. Vorhandene Daten wurden nicht gelöscht.');
+  const message='Grundausbildung bereit: '+Object.keys(GA.SHEETS).length+' Tabellen geprüft. Vorhandene Daten wurden nicht gelöscht.';
+  Logger.log(message);
+  ss.toast(message,'Grundausbildung',7);
+  return {ok:true,message};
 }
 /**
  * Zusatzinstallation, ohne bestehende Daten oder Beispielkurse zu verändern.
@@ -112,11 +115,11 @@ function gaErweiterungenEinrichten(){
   }
   sh.setFrozenRows(1);sh.getRange(1,1,1,header.length).setBackground('#E8EDF3').setFontWeight('bold');
  });
- const message='Zusatz-Tabellen fertig.\nNeu: '+(created.join(', ')||'keine')+
- '\nBereits vorhanden: '+(verified.join(', ')||'keine')+
- '\nBestehende Kurs- und Teilnehmerdaten wurden nicht verändert.';
- SpreadsheetApp.getUi().alert(message);
- return {ok:true,created,verified};
+ const message='Zusatz-Tabellen fertig. Neu: '+(created.join(', ')||'keine')+
+  '. Bereits vorhanden: '+(verified.join(', ')||'keine')+'. Keine Ausbildungsdaten verändert.';
+ Logger.log(message);
+ ss.toast(message,'Einrichtung abgeschlossen',7);
+ return {ok:true,created,verified,message};
 }
 
 function gaErstenAdminEinrichten() {
