@@ -17,7 +17,7 @@ function qEditorRows(){
 function qCapture(){
  const root=document.getElementById('q-editor-rows');if(!root)return;
  Q_ITEMS=Array.from(root.querySelectorAll('[data-qitem]')).map(el=>{
-  const typ=el.querySelector('[data-qtype]').value,text=el.querySelector('[name=qtext]').value;
+  const typ=Q_ITEMS[Number(el.dataset.qitem)]?.typ||el.querySelector('[data-qtype]').value,text=el.querySelector('[name=qtext]').value;
   if(typ==='match')return {typ,text,pairs:el.querySelector('[name=qpairs]').value.split('\n').map(s=>s.trim()).filter(Boolean).map(s=>{let i=s.indexOf('|');return i<0?[s,'']:[s.slice(0,i).trim(),s.slice(i+1).trim()]})};
   if(typ==='tf')return {typ,text,correct:[Number(el.querySelector('[name=qtf]').value)]};
   return {typ,text,options:el.querySelector('[name=qoptions]').value.split('\n').map(x=>x.trim()),
@@ -99,7 +99,7 @@ function qParticipant(){
  '<p>Fragen beantworten und den Lernfortschritt überprüfen.</p></div></div>'+result+
  '<section class="panel"><h2>Wissenstests</h2><div class="ga-project-list">'+(cards||'<div class="ga-empty">Für deine Kurse sind noch keine Quiz freigeschaltet.</div>')+'</div></section>';
 }
-function quizPage(){return role()==='Teilnehmer'?qParticipant():qAdmin();}
+function quizPage(){if(!Array.isArray(STATE?.quizKurse))return '<section class="panel"><h2>Quizfunktion vorbereiten</h2><p>GitHub Pages ist aktualisiert. Für Quizspeicherung und automatische Auswertung muss die neue Code.gs im bestehenden Google Apps Script bereitgestellt werden. Danach im Tabellenmenü <b>Grundausbildung → Tabellen prüfen/erstellen</b> ausführen.</p></section>';return role()==='Teilnehmer'?qParticipant():qAdmin();}
 async function qOpenEditor(id){
  const c=by(STATE.kurse,id);if(!c)return tip('Kurs nicht gefunden.',true);
  Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];VIEW='quizzes';render();
