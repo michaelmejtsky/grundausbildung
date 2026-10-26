@@ -233,3 +233,86 @@ gaApp?.addEventListener('change',e=>{
 });
 document.getElementById('gaOpenMenu')?.addEventListener('click',()=>document.body.classList.toggle('ga-nav-open'));
 document.getElementById('gaBackdrop')?.addEventListener('click',()=>document.body.classList.remove('ga-nav-open'));
+
+
+/* Zugang und Rollenverwaltung – V1.8: vorhandene Konten weiterverwenden */
+let GA_USER_QUERY='',GA_USER_ROLE='',GA_USER_LIMIT=40,GA_SELECTED_USER='';
+function gaUserRoleSelect(current,attr){
+ return '<select '+attr+'>'+['Teilnehmer','Ausbilder','Fachverwaltung','Administrator'].map(r=>
+  '<option value="'+r+'" '+(r===current?'selected':'')+'>'+r+'</option>').join('')+'</select>';
+}
+function gaUserEdit(u){
+ const roles=['Zeugkammer','Administration','IT','Ausbildungsleitung'];
+ return '<section class="panel ga-person-detail"><div class="row between"><div><p class="ga-eyebrow">BESTEHENDER ZUGANG</p>'+
+ '<h2>'+h(u.Name)+'</h2><p class="muted">'+h(u.Email)+'</p></div>'+
+ '<button type="button" class="secondary" data-ga-close-user="1">Schließen</button></div>'+
+ '<p class="small muted">Du änderst nur die Benutzerrolle. Passwort, Login-Adresse, Mitgliedsprofil und Ausbildungsnachweise bleiben erhalten.</p>'+
+ '<form data-form="roleChange"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'">'+
+ '<div class="grid"><div><label>Hauptrolle</label>'+gaUserRoleSelect(u.Rolle,'name="Rolle" data-ga-user-role="1"')+'</div>'+
+ '<div><label>Zuständigkeit für Fachverwaltung</label><select name="Bereich">'+
+ '<option value="">Keine</option>'+roles.map(r=>'<option '+(r===u.Bereich?'selected':'')+'>'+r+'</option>').join('')+'</select>'+
+ '<p class="small muted">Nur für Fachverwaltung erforderlich; z. B. Zeugkammer oder IT.</p></div></div>'+
+ '<div class="ga-alert">Ein Rollenwechsel gilt für die bestehenden Anmeldungen und wird protokolliert. Ausbildungsnachweise werden nicht gelöscht.</div>'+
+ '<div class="btnline"><button class="primary" type="submit">Rolle und Fachbereich speichern</button></div></form>'+
+ '<div class="ga-account-reset"><h3>Passwort</h3><p class="muted small">Wenn das Passwort vergessen wurde, sende einen einmaligen Reset-Link. Der Benutzer legt sein neues Passwort selbst fest (30 Minuten gültig).</p>'+
+ '<button type="button" class="secondary" data-reset-password="'+h(u.ID)+'">Passwort-Reset per E-Mail senden</button></div>'+
+ (u.Rolle==='Ausbilder'?'<div class="ga-account-reset"><h3>Ausbilderrechte</h3><p class="small muted">Berechtigungen zum Anlegen, Freigeben und Bearbeiten von Kursen legst du separat fest.</p>'+
+ '<button type="button" class="secondary" data-view="rights">Ausbilderrechte verwalten</button></div>':'')+'</section>';
+}
+function users(){
+ const all=STATE.benutzer||[],members=STATE.mitglieder||[];
+ const filtered=all.filter(u=>(!GA_USER_ROLE||u.Rolle===GA_USER_ROLE)&&(!GA_USER_QUERY||gaMatches(u.Name+' '+u.Email+' '+u.Rolle,GA_USER_QUERY)));
+ const selected=all.find(u=>u.ID===GA_SELECTED_USER);
+ const list=filtered.slice(0,GA_USER_LIMIT).map(u=>{
+  const hasMember=members.some(m=>String(m.Email||'').toLowerCase()===String(u.Email||'').toLowerCase());
+  return '<button type="button" class="ga-admin-person'+(u.ID===GA_SELECTED_USER?' selected':'')+'" data-ga-user="'+h(u.ID)+'">'+
+   '<span><strong>'+h(u.Name)+'</strong><small>'+h(u.Email)+' · '+(hasMember?'Mitgliedsprofil vorhanden':'Ohne Mitgliedsprofil')+'</small></span>'+
+   '<span class="tag '+(u.Aktiv==='JA'?'ok':'warn')+'">'+h(u.Rolle)+'</span><span>›</span></button>';
+ }).join('');
+ const invite='<details class="ga-member-fold ga-admin-bottom"><summary>Neuen Zugang einladen – nur wenn noch kein Benutzer existiert</summary>'+
+ '<div class="ga-fold-body"><p class="muted small">Ist die E-Mail bereits vorhanden, verwende oben „Rolle ändern“. Es ist kein zweiter Account erforderlich.</p>'+
+ '<form data-form="user"><div class="grid">'+
+ '<div><label>Name</label><input name="Name" required maxlength="140"></div>'+
+ '<div><label>E-Mail-Adresse</label><input name="Email" type="email" required></div>'+
+ '<div><label>Rolle</label>'+gaUserRoleSelect('Teilnehmer','name="Rolle"')+'</div>'+
+ '<div><label>Fachbereich (wenn Fachverwaltung)</label><select name="Bereich"><option value="">Keine</option>'+
+ ['Zeugkammer','Administration','IT','Ausbildungsleitung'].map(x=>'<option>'+x+'</option>').join('')+'</select></div>'+
+ '</div><p class="small muted">Der neue Benutzer erhält einen Einladungslink und legt sein Passwort selbst fest.</p>'+
+ '<button type="submit" class="primary">Einladung versenden</button></form></div></details>';
+ return '<div class="ga-page-heading"><div><h2>Zugänge & Rollen</h2>'+
+ '<p>Bestehenden Zugang hochstufen, Zuständigkeiten festlegen und Passwörter zurücksetzen.</p></div></div>'+
+ '<div class="ga-kpis">'+gaMetric(all.filter(x=>x.Aktiv==='JA').length,'Aktive Zugänge','')+
+ gaMetric(all.filter(x=>x.Rolle==='Ausbilder').length,'Ausbilder','')+
+ gaMetric(all.filter(x=>x.Rolle==='Fachverwaltung').length,'Fachverwaltung','')+'</div>'+
+ '<section class="panel"><h2>Benutzer suchen</h2><div class="ga-admin-toolbar"><div><label>Suche nach Name oder E-Mail</label>'+
+ '<input type="search" data-ga-search="user" value="'+h(GA_USER_QUERY)+'" placeholder="Mitglied oder Benutzer suchen"></div>'+
+ '<div><label>Hauptrolle filtern</label><select data-ga-select="userRole"><option value="">Alle Rollen</option>'+
+ ['Teilnehmer','Ausbilder','Fachverwaltung','Administrator'].map(role=>'<option value="'+role+'" '+(GA_USER_ROLE===role?'selected':'')+'>'+role+'</option>').join('')+
+ '</select></div></div><div class="ga-admin-split"><div class="ga-person-list">'+
+ (list||gaNotice('Kein Benutzer gefunden.'))+
+ (filtered.length>GA_USER_LIMIT?'<button type="button" class="secondary full" data-ga-more="user">Weitere Zugänge anzeigen</button>':'')+
+ '<p class="small muted">'+filtered.length+' Benutzer passen zum Filter</p></div>'+
+ (selected?gaUserEdit(selected):'<section class="panel ga-admin-placeholder"><h2>Zugang auswählen</h2>'+
+ '<p>Wähle eine Person aus, um Rolle, Fachbereich und Passwort zurückzusetzen.</p></section>')+'</div></section>'+invite;
+}
+gaApp?.addEventListener('click',event=>{
+ const x=event.target.closest('[data-ga-user],[data-ga-close-user]');
+ if(!x)return;
+ if(x.dataset.gaUser){GA_SELECTED_USER=x.dataset.gaUser;render();return;}
+ GA_SELECTED_USER='';render();
+});
+gaApp?.addEventListener('input',event=>{
+ const x=event.target.closest('[data-ga-search="user"]');if(!x)return;
+ GA_USER_QUERY=x.value;GA_USER_LIMIT=40;
+ const caret=x.selectionStart;render();
+ const next=document.querySelector('[data-ga-search="user"]');
+ if(next){next.focus();try{next.setSelectionRange(caret,caret);}catch(_){}}
+});
+gaApp?.addEventListener('change',event=>{
+ const x=event.target.closest('[data-ga-select="userRole"]');if(!x)return;
+ GA_USER_ROLE=x.value;GA_USER_LIMIT=40;render();
+});
+gaApp?.addEventListener('click',event=>{
+ const x=event.target.closest('[data-ga-more="user"]');if(!x)return;
+ GA_USER_LIMIT+=40;render();
+});
