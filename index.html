@@ -388,7 +388,7 @@ function projects(){
 }
 function rights(){
  if(role()!=='Administrator')return '';
- const permissions=[
+ const fields=[
  ['KurseGestalten','Kurse gestalten und Projekte einreichen'],
  ['KurseFreigeben','Kurse prüfen und veröffentlichen'],
  ['KurseBearbeiten','Veröffentlichte Kurse bearbeiten'],
@@ -397,12 +397,40 @@ function rights(){
  ['MeldungenBearbeiten','Mängel und Ideen bearbeiten'],
  ['BewertungenAnsehen','Kursbewertungen auswerten']
  ];
- return '<section class="panel"><h2>Ausbilderberechtigungen</h2><p class="muted">Jede Berechtigung wird einzeln vergeben. Die Serverprüfung verhindert, dass Ausbilder ihre eigenen Rechte erweitern.</p>'+
- '<div class="items">'+((STATE.berechtigungen||[]).length?(STATE.berechtigungen||[]).map(u=>
-  '<form class="item" data-form="permissions"><input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'">'+
-  '<div class="row between"><b>'+h(u.Name)+'</b><button class="smallbtn" type="submit">Berechtigungen speichern</button></div>'+
-  permissions.map(([k,l])=>'<label class="inline-check"><input type="checkbox" name="'+k+'" value="JA" '+(u[k]?'checked':'')+'> '+h(l)+'</label>').join('')+'</form>'
- ).join(''):'Keine aktiven Ausbilder vorhanden. Zuerst über „Zugänge“ einladen.')+'</div></section>';
+ // Zugänge sind maßgeblich, nicht die separat gespeicherte Berechtigungstabelle:
+ // Ein neu ernannter oder eingeladener Ausbilder hat ggf. noch keine Rechtezeile.
+ const trainers=(STATE.benutzer||[]).filter(u=>String(u.Rolle||'').trim()==='Ausbilder');
+ const byPermissionId=new Map((STATE.berechtigungen||[]).map(p=>[p.BenutzerID,p]));
+ const selected=(typeof GA_RIGHTS_FOCUS!=='undefined'?GA_RIGHTS_FOCUS:'');
+ const sorted=trainers.slice().sort((a,b)=>{
+   if(a.ID===selected)return -1;if(b.ID===selected)return 1;
+   const activeA=a.Aktiv==='JA',activeB=b.Aktiv==='JA';
+   if(activeA!==activeB)return activeA?-1:1;
+   return String(a.Name||'').localeCompare(String(b.Name||''),'de');
+ });
+ const list=sorted.map(u=>{
+  const rights=byPermissionId.get(u.ID)||{};
+  const active=u.Aktiv==='JA';
+  const checked=k=>rights[k]===true||String(rights[k]||'').toUpperCase()==='JA';
+  return '<details class="ga-member-fold ga-rights-account" '+(u.ID===selected?'open':'')+'>'+
+   '<summary><span>'+h(u.Name||u.Email||'Ausbilder')+'<small class="ga-rights-sub">'+h(u.Email||'')+'</small></span>'+
+   '<span class="tag '+(active?'ok':'warn')+'">'+(active?'Zugang aktiv':'Einladung/ Aktivierung offen')+'</span></summary>'+
+   '<div class="ga-fold-body"><p class="small muted">'+(active?
+    'Die ausgewählten Berechtigungen gelten für diesen Ausbilder.':
+    'Das Konto ist noch nicht aktiviert. Die Rechte kannst du bereits vorbereiten; nutzbar werden sie erst nach Abschluss der Einladung.')+'</p>'+
+   '<form data-form="permissions"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'">'+
+   '<div class="ga-rights-grid">'+fields.map(([key,label])=>
+    '<label class="inline-check"><input type="checkbox" name="'+key+'" value="JA" '+(checked(key)?'checked':'')+'> '+h(label)+'</label>').join('')+'</div>'+
+   '<div class="btnline"><button class="primary" type="submit">Berechtigungen speichern</button></div></form></div></details>';
+ }).join('');
+ const uncatalogued=(STATE.berechtigungen||[]).filter(p=>!trainers.some(u=>u.ID===p.BenutzerID));
+ return '<section class="panel"><div class="row between"><div><h2>Ausbilderberechtigungen</h2>'+
+ '<p class="muted">Alle als Ausbilder eingetragenen Benutzer – auch ohne bisherige Berechtigungen und vor Aktivierung der Einladung.</p></div>'+
+ '<span class="tag blue">'+trainers.length+' Ausbilder</span></div>'+
+ (trainers.length?'<div class="ga-project-list ga-rights-list">'+list+'</div>':
+ '<div class="ga-empty">Noch kein Ausbilder-Zugang vorhanden. Unter „Zugänge & Rollen“ kannst du eine bestehende Person zum Ausbilder machen.</div>')+
+ (uncatalogued.length?'<p class="small muted">Hinweis: Für '+uncatalogued.length+' früheren Berechtigungseintrag besteht aktuell keine Ausbilderrolle. Diese Rechte sind daher nicht auswählbar.</p>':'')+
+ '</section>';
 }
 function reports(){
  const admin=role()==='Administrator',manager=admin||!!STATE.rechte?.MeldungenBearbeiten;
