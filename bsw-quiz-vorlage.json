@@ -1,0 +1,190 @@
+{
+  "format": "ga-quiz-draft",
+  "version": 2,
+  "kursId": "BSW-VORLAGE",
+  "exportiert": "2026-10-26",
+  "meta": {
+    "Aktiv": "NEIN",
+    "Pflicht": "NEIN",
+    "Bestehensgrenze": 80,
+    "MaxVersuche": 3,
+    "ZeitlimitMinuten": 0
+  },
+  "fragen": [
+    {
+      "typ": "single",
+      "text": "Wer hat nach § 22 NÖ Feuerwehrgesetz 2015 eine erforderliche Brandsicherheitswache bei einer entsprechenden Veranstaltung mit Bescheid vorzuschreiben?",
+      "options": [
+        "Die Gemeinde",
+        "Der Veranstalter selbst",
+        "Der Feuerwehrkommandant",
+        "Die Bereichsalarmzentrale"
+      ],
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "single",
+      "text": "Was ist bei der Vorschreibung einer Brandsicherheitswache laut § 22 NÖ Feuerwehrgesetz insbesondere festzulegen?",
+      "options": [
+        "Aufgaben, Stärke und Ausrüstung der Brandsicherheitswache",
+        "Eintrittspreis, Beginn und Dauer des Kartenvorverkaufs",
+        "Anzahl der Ordner und Ablauf des Bühnenprogramms",
+        "Verpflegungsplan und Anreise der Besucher"
+      ],
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "single",
+      "text": "Wer ist nach § 3 NÖ Veranstaltungsgesetz für die Betriebs- und Nutzungssicherheit der Veranstaltungsbetriebsstätte verantwortlich?",
+      "options": [
+        "Der Veranstalter",
+        "Die eingeteilte Brandsicherheitswache",
+        "Die Feuerwehr als Organisation",
+        "Die Bereichsalarmzentrale"
+      ],
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "multi",
+      "text": "Welche Tätigkeiten gehören grundsätzlich zur Aufgabe einer Brandsicherheitswache? Wähle alle zutreffenden Antworten.",
+      "options": [
+        "Brandgefährliche Vorgänge beobachten und kontrollieren",
+        "Festgestellte Brandgefahren weitergeben und die erforderlichen Meldungen veranlassen",
+        "Die Veranstaltungsleitung bei ihren Brandschutzmaßnahmen auf Mängel hinweisen",
+        "Als Ersatz für das Veranstaltungspersonal den gesamten Einlass organisieren"
+      ],
+      "correct": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "typ": "tf",
+      "text": "Die Brandsicherheitswache kann eigenständig eine behördliche Veranstaltungssperre mit Bescheid verhängen.",
+      "correct": [
+        1
+      ]
+    },
+    {
+      "typ": "multi",
+      "text": "Welche Punkte sind bei einer brandschutzbezogenen Kontrolle vor Veranstaltungsbeginn relevant? Wähle alle zutreffenden Antworten.",
+      "options": [
+        "Flucht- und Rettungswege sind benutzbar",
+        "Vorgesehene Löschmittel sind erreichbar",
+        "Feuerwehrzufahrten und Zugänge sind nicht verstellt",
+        "Die Sitzplätze sind nach Ticketpreisen sortiert"
+      ],
+      "correct": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "typ": "single",
+      "text": "Ein Notausgang ist kurz vor Veranstaltungsbeginn mit Material verstellt. Was ist das richtige Vorgehen?",
+      "options": [
+        "Verantwortliche Person informieren, sofortige Behebung verlangen und Feststellung dokumentieren",
+        "Den Notausgang erst beim Schlussrundgang erneut ansehen",
+        "Die Behinderung nur unter Kollegen besprechen",
+        "Die eigene Kontrolle beenden, ohne eine Meldung abzugeben"
+      ],
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "single",
+      "text": "Für eine Veranstaltung ist Bühnenpyrotechnik vorgesehen. Was ist vor ihrem Einsatz für die BSW besonders wichtig?",
+      "options": [
+        "Die vorgesehene Verwendung mit Bescheid bzw. Auflagen und Sicherheitsvorkehrungen abgleichen",
+        "Den Einsatz ohne weitere Prüfung zulassen, sobald das Publikum Platz genommen hat",
+        "Die Verwendung allein aufgrund einer mündlichen Zusicherung generell freigeben",
+        "Nur prüfen, ob die Veranstaltung pünktlich beginnen kann"
+      ],
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "multi",
+      "text": "Welche Informationen helfen der Bereichsalarmzentrale bei einer Brandmeldung? Wähle alle zutreffenden Antworten.",
+      "options": [
+        "Genauer Ort und betroffener Bereich",
+        "Art der Gefahr und erkennbare Lage",
+        "Angaben zu gefährdeten oder verletzten Personen",
+        "Höhe des Eintrittspreises"
+      ],
+      "correct": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "typ": "match",
+      "text": "Ordne die Zuständigkeiten bei einer Veranstaltung zu.",
+      "pairs": [
+        [
+          "Gemeinde",
+          "Behördliche Vorschreibung der BSW bei den gesetzlichen Voraussetzungen"
+        ],
+        [
+          "Veranstalter",
+          "Verantwortung für einen sicheren Veranstaltungsbetrieb"
+        ],
+        [
+          "Brandsicherheitswache",
+          "Brandschutzbezogene Überwachung und erforderliche Meldungen"
+        ]
+      ]
+    },
+    {
+      "typ": "tf",
+      "text": "Wird während einer Brandsicherheitswache ein Brand erkannt, sind die erforderlichen Alarmierungsmaßnahmen unverzüglich einzuleiten.",
+      "correct": [
+        0
+      ]
+    },
+    {
+      "typ": "match",
+      "text": "Ordne die Tätigkeit der passenden Dienstphase zu.",
+      "pairs": [
+        [
+          "Vor Veranstaltungsbeginn",
+          "Bescheid, Auflagen und brandschutzrelevante Einrichtungen prüfen"
+        ],
+        [
+          "Während der Veranstaltung",
+          "Brandgefahren überwachen und Kontrollrundgänge durchführen"
+        ],
+        [
+          "Nach Veranstaltungsende",
+          "Schlussrundgang durchführen und Feststellungen dokumentieren"
+        ]
+      ]
+    },
+    {
+      "typ": "multi",
+      "text": "Welche Angaben gehören bei einer Brandsicherheitswache in die Dokumentation eines besonderen Vorkommnisses? Wähle alle zutreffenden Antworten.",
+      "options": [
+        "Beobachtete Gefahr oder festgestellter Mangel",
+        "Verständigte verantwortliche Personen bzw. Stellen",
+        "Gesetzte Maßnahmen und der weitere Verlauf",
+        "Private Kontodaten aller anwesenden Besucher"
+      ],
+      "correct": [
+        0,
+        1,
+        2
+      ]
+    }
+  ]
+}
