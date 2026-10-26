@@ -589,6 +589,15 @@ function gaChangeUserRole_(actor,d){
  if(unchanged)return {ok:true,message:'Rolle und Fachbereich sind bereits so eingestellt.'};
  const previous={Rolle:user.Rolle,Bereich:user.Bereich};
  gaReplace_('Benutzer',id,{Rolle:next,Bereich:area});
+ // Beim erneuten Einstieg in die Ausbilderrolle keine früheren Berechtigungen ungefragt reaktivieren.
+ if(next==='Ausbilder'&&user.Rolle!=='Ausbilder'){
+  const prior=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===id);
+  if(prior){
+   const reset={AktualisiertAm:gaNow_()};
+   GA_RIGHTS.forEach(k=>reset[k]='NEIN');
+   gaReplace_('Berechtigungen',prior.ID,reset);
+  }
+ }
  // Frühere Kursteilnahmen hängen an der Mitglieds-ID, nicht an der Benutzerrolle.
  // Die Passwort-/Login-Daten und das Mitgliederkonto bleiben deshalb unverändert.
  gaLog_(actor.ID,'ROLLENWECHSEL','Benutzer',id,{Vorher:previous,Nachher:{Rolle:next,Bereich:area}});
