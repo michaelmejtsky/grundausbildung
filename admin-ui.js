@@ -240,6 +240,7 @@ document.getElementById('gaBackdrop')?.addEventListener('click',()=>document.bod
 
 /* Zugang und Rollenverwaltung – V1.8: vorhandene Konten weiterverwenden */
 let GA_USER_QUERY='',GA_USER_ROLE='',GA_USER_LIMIT=40,GA_SELECTED_USER='';
+let GA_RIGHTS_FOCUS='';
 function gaUserRoleSelect(current,attr){
  return '<select '+attr+'>'+['Teilnehmer','Ausbilder','Fachverwaltung','Administrator'].map(r=>
   '<option value="'+r+'" '+(r===current?'selected':'')+'>'+r+'</option>').join('')+'</select>';
@@ -260,7 +261,7 @@ function gaUserEdit(u){
  '<div class="ga-account-reset"><h3>Passwort</h3><p class="muted small">Wenn das Passwort vergessen wurde, sende einen einmaligen Reset-Link. Der Benutzer legt sein neues Passwort selbst fest (30 Minuten gültig).</p>'+
  '<button type="button" class="secondary" data-reset-password="'+h(u.ID)+'">Passwort-Reset per E-Mail senden</button></div>'+
  (u.Rolle==='Ausbilder'?'<div class="ga-account-reset"><h3>Ausbilderrechte</h3><p class="small muted">Berechtigungen zum Anlegen, Freigeben und Bearbeiten von Kursen legst du separat fest.</p>'+
- '<button type="button" class="secondary" data-view="rights">Ausbilderrechte verwalten</button></div>':'')+'</section>';
+ '<button type="button" class="secondary" data-go-rights="'+h(u.ID)+'">Ausbilderrechte für diese Person öffnen</button></div>':'')+'</section>';
 }
 function users(){
  const all=STATE.benutzer||[],members=STATE.mitglieder||[];
@@ -298,6 +299,12 @@ function users(){
  (selected?gaUserEdit(selected):'<section class="panel ga-admin-placeholder"><h2>Zugang auswählen</h2>'+
  '<p>Wähle eine Person aus, um Rolle, Fachbereich und Passwort zurückzusetzen.</p></section>')+'</div></section>'+invite;
 }
+gaApp?.addEventListener('click',event=>{
+ const x=event.target.closest('[data-go-rights]');
+ if(!x)return;
+ GA_RIGHTS_FOCUS=x.dataset.goRights;
+ VIEW='rights';FORM='';EDIT=null;render();
+});
 gaApp?.addEventListener('click',event=>{
  const x=event.target.closest('[data-ga-user],[data-ga-close-user]');
  if(!x)return;
