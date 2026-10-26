@@ -1,3 +1,15 @@
+## Kurs öffnen, Abschlussdokumentation und freie Tätigkeiten – V1.10.0
+
+**Zwei getrennte Abläufe:** Unter **Termine → Kurs öffnen & Präsentation** wird der Ausbildungsinhalt und der Präsentationslink sofort angezeigt. Der Abschnitt „Ausbildung abschließen“ ist einklappbar und fordert bei Abschluss anwesende Teilnehmer, tatsächlichen Beginn und Ende, mitwirkende Ausbilder und *nur bei ausgewählter Fahrzeugverwendung* die Fahrzeuge samt Kilometern. Einladungen müssen für die Dokumentation eines tatsächlich mitwirkenden Ausbilders noch nicht akzeptiert sein. Die Anmeldung in der App bleibt bis zur Einladungserledigung gesperrt.
+
+**Ohne Kurs:** Unter **Freie Tätigkeiten** können Ausbilder/Administratoren eine Tätigkeit direkt mit Titel, Art (Ausbildung/Übung/Diensttätigkeit/Sonstige), Ort, Ist-Zeiten, beteiligten Mitgliedern, mitwirkenden Ausbildern, optionalen Fahrzeugen und Notizen erfassen. Sie verändert keine Kursteilnahmen oder GAB-Kursabschlüsse. Die Daten liegen in der neuen Tabelle `FreieTaetigkeiten` derselben Ausbildungs-Datenbasis.
+
+**PDF:** Ein vollständiger FDISK-Tätigkeitsbericht steht pro dokumentiertem Termin oder freier Tätigkeit zum Herunterladen bereit. Ein Termin/Modul ohne bereits erfasste Ist-Zeiten liefert nun einen explizit als **vorläufig/unvollständig** gekennzeichneten PDF-Auszug mit den geplanten Terminen, niemals erfundene Stunden. Dokumentierte Stunden und Kilometer werden weiterhin nur aus bestätigten Berichten summiert. Die PDF-Erzeugung setzt Apps-Script-Berechtigungen für Docs/Drive voraus.
+
+**Produktiv stellen:** GitHub Pages liefert die Oberfläche automatisch. Die **aktuelle Code.gs** muss zusätzlich im bestehenden, an die Google-Tabelle gebundenen Apps-Script-Projekt gespeichert und über die bestehende Web-App-Bereitstellung als **Neue Version** veröffentlicht werden. Die Tabelle `FreieTaetigkeiten` wurde bereits in der bestehenden Datenbasis erstellt. Kein neues Apps-Script-Projekt und keine neue Datenbank anlegen.
+
+**Teststand:** Frontend-JavaScript auf Syntax geprüft; Probedaten mit eingeladenem Ausbilder, zweistündiger freier Tätigkeit, Fahrzeugkilometern, vollständiger Kursdokumentation und PDF-Ausgabe ohne bestehende Stunden bestanden. Ein produktiver PDF-Export über den authentifizierten Worker muss nach dem Apps-Script-Deploy gesondert getestet werden.
+
 ## Ausbildungs-Tätigkeitsberichte für FDISK (V1.9.0)
 
 - **Ausbilder / Administrator → Durchführung:** Ein bereits geplanter Ausbildungstermin erhält tatsächliche Beginn-/Enduhrzeit (getrennt vom geplanten Termin), anwesende Mitglieder, mitwirkende Ausbilder, beliebig viele bis maximal zwölf benannte Fahrzeuge mit je km und eine optionale Bemerkung.
