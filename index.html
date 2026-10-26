@@ -17,6 +17,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 .push-result.bad{border-color:#efbbbb;background:#fff0f0;color:#982d31}.toast{position:fixed;right:16px;bottom:18px;z-index:3;padding:12px 15px;background:#143e63;color:white;border-radius:10px;box-shadow:0 6px 30px #10203044;max-width:370px}.toast.err{background:#a43d44}.mobilebar{display:none}
 @media(max-width:840px){.layout{display:block}.sidebar{height:auto;position:relative;padding:8px 12px}.brand{font-size:18px;padding-bottom:9px}.menu{flex-direction:row;overflow:auto;padding-bottom:4px}.menu button{width:auto;white-space:nowrap;font-size:13px;padding:10px}.sidebar-user{display:none}.main{padding:18px 13px}.top h1{font-size:24px}.grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.panel{padding:16px}.mobilebar{display:flex;justify-content:space-between;align-items:center;padding:10px}.brand small{font-size:11px}}
 
+.ga-term-card{background:#fff;border:1px solid #e0e8f0;border-radius:13px;padding:17px}.ga-term-card b{font-size:17px}.ga-term-card p{margin:7px 0}.ga-term-card .ga-readable{font-size:14px;line-height:1.65}
 /* Grundausbildung – Freigabecenter und Teilnehmer-Cockpit */
 .ga-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4d8dcc;margin:0 0 10px}
 .ga-review-banner{background:linear-gradient(115deg,#10283f,#1c5d8d);color:#fff;border-radius:20px;padding:25px;margin-bottom:15px;display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -57,7 +58,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.5</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.6</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -656,7 +657,35 @@ function mine(){
   '<p class="small muted">FDISK: '+h(q.FDISKPlatzhalter==='JA'?'Platzhalter erfasst – kein Ausbildungsnachweis':q.FDISKEintragDatum||'Noch kein Datum hinterlegt')+'</p></div></details>';
  return hero+stats+nextPanel+openCourses+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
 }
-function myterms(){return '<section class="panel"><h2>Kommende Kurse</h2>'+termCards(STATE.termine.filter(t=>t.Status==='Geplant').sort((a,b)=>a.Beginn.localeCompare(b.Beginn)))+'</section>'}
+function myterms(){
+ const all=(STATE.termine||[]).slice();
+ const now=Date.now();
+ const coming=all.filter(t=>t.Status==='Geplant'&&new Date(t.Beginn).getTime()>=now-3600000)
+  .sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn)));
+ const past=all.filter(t=>!coming.some(x=>x.ID===t.ID))
+  .sort((a,b)=>String(b.Beginn).localeCompare(String(a.Beginn)));
+ const attendances=STATE.teilnahmen||[];
+ const item=t=>{
+  const course=by(STATE.kurse,t.KursID);
+  const attended=attendances.some(a=>a.TerminID===t.ID&&a.Anwesend==='JA');
+  const old=new Date(t.Beginn).getTime()<now;
+  return '<article class="ga-term-card"><div class="row between"><div><b>'+h(course?.Titel||'Ausbildung')+'</b>'+
+   '<p class="small muted">'+dt(t.Beginn)+(t.Ende?' bis '+dt(t.Ende):'')+'</p></div>'+
+   '<span class="tag '+(attended?'ok':old?'blue':'warn')+'">'+h(attended?'Teilgenommen':old?'Vergangen':'Geplant')+'</span></div>'+
+   '<p class="small">📍 '+h(t.Ort||'Ort noch offen')+'</p>'+
+   (course?.Inhalt?'<details class="ga-mini-preview"><summary>Ausbildungsinhalt ansehen</summary><div class="msg ga-readable">'+h(course.Inhalt)+'</div></details>':'')+
+   (course?.Links&&safeLinks(course.Links)?'<details class="ga-mini-preview"><summary>Präsentation und Unterlagen</summary><ul class="url-list">'+safeLinks(course.Links)+'</ul></details>':'')+
+   '</article>';
+ };
+ return '<section class="ga-review-banner"><div><span class="ga-eyebrow">DEIN AUSBILDUNGSPLAN</span><h2>Meine Termine</h2><p>Termine, Ausbildungsinhalte und Unterlagen auf einen Blick.</p></div><strong>'+coming.length+' geplant</strong></section>'+
+  '<section class="panel"><h2>Nächste Ausbildungen ('+coming.length+')</h2><div class="ga-project-list">'+
+   (coming.length?coming.map(item).join(''):'<div class="ga-empty">Derzeit sind keine zukünftigen Ausbildungstermine geplant.</div>')+
+   '</div></section>'+
+  '<details class="ga-member-fold"><summary><span>Vergangene Termine</span><span class="tag blue">'+past.length+'</span></summary>'+
+   '<div class="ga-fold-body ga-project-list">'+
+   (past.length?past.map(item).join(''):'<p class="muted">Noch keine vergangenen Termine.</p>')+
+   '</div></details>';
+}
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
 
 function notifications(){
