@@ -59,7 +59,7 @@ async function gaSubmitFreeActivity(form,fd){
  TeilnehmerIDs:fd.getAll('participant'),AusbilderIDs:fd.getAll('trainer'),
  Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[]};
  if(!gaTrainingMin(data.BeginnIst,data.EndeIst))throw new Error('Bitte gültigen Beginn und ein späteres Ende eingeben.');
- if(data.FahrzeugeVerwendet==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte ein Fahrzeug erfassen.');
+ if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte ein Fahrzeug erfassen.');
  if(!data.AusbilderIDs.length)throw new Error('Bitte mindestens einen Verantwortlichen auswählen.');
  if(STATE.user.Rolle==='Ausbilder'&&!data.AusbilderIDs.includes(STATE.user.ID))
   throw new Error('Der erfassende Ausbilder muss sich selbst anhaken.');
