@@ -1,3 +1,18 @@
+## Version 1.8.0 – Rollen, Passwortreset, Quiz- und Sitzungstabellen (26.10.2026)
+
+**Einmalige Aktualisierung des vorhandenen Apps Scripts:** `Code.gs` aus dem Repository komplett in das bisherige, **an die Ausbildungs-Google-Tabelle gebundene** Apps-Script-Projekt übernehmen. Das Originalprojekt und die bestehende Web-App-`/exec`-Bereitstellung beibehalten. Die Web-App über **Bereitstellen → Bereitstellungen verwalten → Bearbeiten → Neue Version** aktualisieren. Die zugehörige Google-Tabelle neu laden und **Grundausbildung → 6 · Login- und Quiz-Tabellen einrichten** ausführen (oder im Skripteditor `gaErweiterungenEinrichten` direkt starten und Berechtigungen erteilen).
+
+Der neue Menüpunkt richtet ausschließlich diese privaten Google-Sheets-Blätter idempotent ein: `Sitzungen` (30-Tage-Anmeldung), `QuizKurse` (Quiz-Fragen und Konfiguration), `QuizVersuche` (Quiz-Antworten/Ergebnisse), `QuizFreigaben` (zusätzliche Quizversuche). Er ändert keine bestehenden Kurs- und Mitgliederdaten, erstellt keine Demo-Kurse und überschreibt keine abweichenden Tabellenüberschriften.
+
+**Zugänge & Rollen:** Administratoren wählen einen vorhandenen aktiven oder eingeladenen Benutzer aus und vergeben die Hauptrolle `Teilnehmer`, `Ausbilder`, `Fachverwaltung` oder `Administrator` mit einem Fachverwaltungsbereich (Zeugkammer, Administration, IT, Ausbildungsleitung). Das bestehende Benutzerkonto, E-Mail/Passwort und das unabhängig geführte Mitgliedsprofil bleiben erhalten. Ein ehemaliger Teilnehmer kann Ausbilder werden, ohne neu eingeladen zu werden oder frühere Ausbildungsnachweise zu verlieren. Die eigene Ausbildung wird bei mit der E-Mail verknüpftem Mitglied weiterhin angezeigt. Für einen Ausbilder werden konkrete Rechte separat im Menü `Ausbilderrechte` vergeben. Die frühere Rechtevergabe wird beim erneuten Wechsel in die Ausbilderrolle zurückgesetzt, damit alte Rechte nicht unerwartet wieder aufleben. Ein Administrator kann nicht den letzten aktiven Administrator herabstufen.
+
+**Passwort vergessen:** Neben dem bereits vorhandenen Admin-Reset im Menü `Zugänge & Rollen` gibt es auf dem Login-Bildschirm einen persönlichen Reset-Link per E-Mail. Die neue öffentliche API-Methode `gaRequestPasswordReset` ist auf neutralen Antworttext und eine Anfrage pro E-Mail/Stunde ausgelegt. Der Link ist einmalig und 30 Minuten gültig. Für diesen neuen Login-Button muss zusätzlich die aktuelle `cloudflare-worker.js` im bestehenden Cloudflare Worker **tatsächlich bereitgestellt** werden. GitHub Pages allein aktualisiert Cloudflare und Apps Script nicht automatisch; die produktiven Secrets müssen unverändert bleiben.
+
+**30-Tage-Anmeldung:** Nur mit aktiviertem Häkchen. Der Browser speichert ein zeitlich begrenztes Sitzungstoken; Google Sheets speichert dessen Hash. Abmelden, Passwortänderung oder Kontosperrung beenden den Zugriff. Auf gemeinsam genutzten Geräten nicht nutzen.
+
+**Freigabe-Status:** Frontend und Github-Quellcode sind implementiert. Erst nach Apps-Script- und für den öffentlichen Reset nach Cloudflare-Deployment sind alle Funktionen im produktiven Backend aktiv.
+
+---
 ## Verwaltungsübersicht, GAB-Bestätigung und 30-Tage-Anmeldung – V1.7.0
 
 **Stand: 26. Oktober 2026.** Implementiert in GitHub `main`: Gruppierte Navigation mit mobilem Seitenmenü, übersichtliches Admin-Dashboard, gefilterte Mitgliederlisten, nach Turnus/Status filterbare Checklisten und individuelle Qualifikationsformulare. Bei zahlreichen Mitgliedern werden nicht länger sämtliche Editierformulare gleichzeitig geöffnet. Die bestehenden Datensätze bleiben unverändert.
