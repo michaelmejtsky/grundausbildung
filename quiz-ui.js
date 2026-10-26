@@ -79,12 +79,12 @@ function qParticipant(){
  const quizzes=(STATE.quizKurse||[]).filter(c=>c.Aktiv==='JA'&&assigned.has(c.KursID));
  const cards=quizzes.map(q=>{
   const course=by(STATE.kurse,q.KursID);
-  const eligible=(STATE.teilnahmen||[]).some(a=>a.Anwesend==='JA'&&(STATE.termine||[]).some(t=>
+  const eligible=(STATE.teilnahmen||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.Anwesend==='JA'&&(STATE.termine||[]).some(t=>
     t.ID===a.TerminID&&t.KursID===q.KursID&&t.Status==='Durchgeführt'));
-  const attempts=(STATE.quizVersuche||[]).filter(a=>a.KursID===q.KursID&&String(a.QuizVersion)===String(q.Version));
+  const attempts=(STATE.quizVersuche||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID&&String(a.QuizVersion)===String(q.Version));
   const passed=attempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
   const last=attempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
-  const extra=(STATE.quizFreigaben||[]).filter(u=>u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
+  const extra=(STATE.quizFreigaben||[]).filter(u=>STATE.meMember&&u.MitgliedID===STATE.meMember.ID&&u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
   return '<article class="ga-project-card"><div class="row between"><div><b>'+h(course?.Titel||'Kurs')+'</b>'+
    '<div class="detail">'+h(q.FrageAnzahl)+' Fragen · Bestehensgrenze '+h(q.Bestehensgrenze)+' %</div></div>'+
    '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?'Bestanden':!eligible?'Gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwillig')+'</span></div>'+
@@ -101,7 +101,7 @@ function qParticipant(){
  '<p>Fragen beantworten und den Lernfortschritt überprüfen.</p></div></div>'+result+
  '<section class="panel"><h2>Wissenstests</h2><div class="ga-project-list">'+(cards||'<div class="ga-empty">Für deine Kurse sind noch keine Quiz freigeschaltet.</div>')+'</div></section>';
 }
-function quizPage(){if(!Array.isArray(STATE?.quizKurse))return '<section class="panel"><h2>Quizfunktion vorbereiten</h2><p>GitHub Pages ist aktualisiert. Für Quizspeicherung und automatische Auswertung muss die neue Code.gs im bestehenden Google Apps Script bereitgestellt werden. Danach im Tabellenmenü <b>Grundausbildung → Tabellen prüfen/erstellen</b> ausführen.</p></section>';return role()==='Teilnehmer'?qParticipant():qAdmin();}
+function quizPage(){if(!Array.isArray(STATE?.quizKurse))return '<section class="panel"><h2>Quizfunktion vorbereiten</h2><p>GitHub Pages ist aktualisiert. Für Quizspeicherung und automatische Auswertung muss die neue Code.gs im bestehenden Google Apps Script bereitgestellt werden. Danach im Tabellenmenü <b>Grundausbildung → Tabellen prüfen/erstellen</b> ausführen.</p></section>';return VIEW==='myquiz'||role()==='Teilnehmer'?qParticipant():qAdmin();}
 async function qOpenEditor(id){
  const c=by(STATE.kurse,id);if(!c)return tip('Kurs nicht gefunden.',true);
  Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];VIEW='quizzes';render();
