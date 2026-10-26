@@ -1,3 +1,13 @@
+## PDF-Berichtsvorlagen V1.10.1 – strukturiertes Feuerwehr-Layout
+
+Die bestehenden serverseitigen Funktionen `gaExportTrainingPdf_` und `gaExportFreeActivityPdf_` erzeugen ab dieser Version im **bestehenden Google Apps Script** einen einheitlichen FDISK-Auszug mit: dunkelblauem Feuerwehr-Kopfbereich, großem Titel, Stammdatenfeldern, vier hervorgehobenen Kennzahlen (Tätigkeitsdauer, Teilnehmerstunden, Ausbilderstunden, Fahrzeugkilometer), nummerierten Abschnitten und farbig wechselnden Tabellenzeilen. Mehrere Termine desselben Moduls erhalten zusätzlich eine Personen-/Fahrzeug-Summenübersicht und die zugehörigen Termin-Details.
+
+Berichte ohne vollständige Ist-Zeiten bleiben weiterhin abrufbar, sind aber ausdrücklich **VORLÄUFIG / UNVOLLSTÄNDIG** und enthalten keine erfundenen Leistungswerte. Teilnehmer-, Ausbilder-, Fahrzeug- und Zeitdaten werden unverändert aus den bisherigen Tabellen gelesen. Die Vorlage benötigt keine neuen Tabellen oder Datenmigration. Das Frontend sendet weiter dieselben API-Aktionen (`exportTrainingPdf`, `exportFreeActivityPdf`).
+
+**Aktivierung:** Die neueste `Code.gs` in das vorhandene, an die bisherige Ausbildungs-Google-Tabelle gebundene Apps Script übernehmen und die *bestehende* Web-App-Bereitstellung über „Neue Version“ aktualisieren. **GitHub-Pages-Deploy allein tauscht die PDF-Vorlage nicht aus.** Eine beispielhafte Gestaltungsvorschau mit ausschließlich Demo-Daten ist keine produktive PDF aus Apps Script und dient nur zur visuellen Orientierung.
+
+**Tests:** Funktionsaufrufe mit simuliertem Google-Docs-/Drive-Dienst für Modulauszug, Einzeltermin, freie Tätigkeit und vorläufigen PDF-Bericht ohne Ist-Stunden erfolgreich. Live-Google-Docs-Rendering und das produktive PDF-Konvertierungsergebnis müssen nach Aktualisierung von Apps Script auf einem echten Termin geprüft werden.
+
 ## Kurs öffnen, Abschlussdokumentation und freie Tätigkeiten – V1.10.0
 
 **Zwei getrennte Abläufe:** Unter **Termine → Kurs öffnen & Präsentation** wird der Ausbildungsinhalt und der Präsentationslink sofort angezeigt. Der Abschnitt „Ausbildung abschließen“ ist einklappbar und fordert bei Abschluss anwesende Teilnehmer, tatsächlichen Beginn und Ende, mitwirkende Ausbilder und *nur bei ausgewählter Fahrzeugverwendung* die Fahrzeuge samt Kilometern. Einladungen müssen für die Dokumentation eines tatsächlich mitwirkenden Ausbilders noch nicht akzeptiert sein. Die Anmeldung in der App bleibt bis zur Einladungserledigung gesperrt.
