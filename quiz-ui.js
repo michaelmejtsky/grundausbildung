@@ -3,6 +3,30 @@
 let Q_EDIT='',Q_META=null,Q_ITEMS=[],Q_SESSION=null,Q_RESULT=null,Q_PREVIEW_LIMIT=80;
 const qCfg=id=>(STATE.quizKurse||[]).find(q=>q.KursID===id);
 
+/** Abgeleiteter Ausbildungsabschluss: keine künstliche Kursabschluss-Tabelle und keine geänderten Nachweise. */
+function qCourseStatus(courseId,memberId,turnusId){
+ const config=qCfg(courseId);
+ const member=memberId?(STATE.mitglieder||[]).find(m=>m.ID===memberId):null;
+ const turnus=turnusId||member?.TurnusID||STATE.meMember?.TurnusID||'';
+ const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||t.TurnusID===turnus));
+ const attended=(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&terms.some(t=>t.ID===a.TerminID));
+ const active=config?.Aktiv==='JA',required=active&&config.Pflicht==='JA';
+ const success=active&&(STATE.quizVersuche||[]).some(a=>a.KursID===courseId&&a.MitgliedID===memberId&&
+  String(a.QuizVersion)===String(config.Version)&&a.Bestanden==='JA');
+ const complete=attended&&(!required||success);
+ return {attended,required,success,complete,
+   label:complete?'Kurs positiv abgeschlossen':attended&&required?'Theorie abgeschlossen · Pflichtquiz offen':'Noch nicht abgeschlossen',
+   note:attended&&required&&success?'Pflichtquiz bestanden':attended&&active&&!required&&success?'Freiwilliges Quiz bestanden':
+    attended&&active&&!required?'Freiwilliges Quiz möglich':attended&&required?'Pflichtquiz ausständig':''};
+}
+function qCourseBadge(courseId,memberId,turnusId){
+ const s=qCourseStatus(courseId,memberId,turnusId);
+ const tone=s.complete?'ok':s.attended?'warn':'blue';
+ return '<span class="q-course-status"><span class="tag '+tone+'">'+h(s.label)+'</span>'+
+   (s.note?'<span class="tag '+(s.success?'ok':'blue')+'">'+h(s.note)+'</span>':'')+'</span>';
+}
+
+
 /* Editor V2.0: Einzelantworten, sichere Entwurfssicherung und lokale Testvorschau. */
 let Q_PREVIEW=false,Q_PREVIEW_RESULT=null,Q_PREVIEW_ANSWERS=null,Q_OPEN=0;
 const qNew=(typ='single')=>({typ,text:'',options:['','','',''],correct:typ==='multi'?[0,1]:[0],pairs:[['',''],['','']]});
@@ -10,7 +34,9 @@ const qDraftKey=id=>'ga-quiz-draft-v2-'+String(STATE?.user?.ID||'')+'-'+String(i
 const qLetter=n=>String.fromCharCode(65+n);
 function qAutoDraft(){
  if(!Q_EDIT)return;
- try{sessionStorage.setItem(qDraftKey(Q_EDIT),JSON.stringify({saved:Date.now(),items:Q_ITEMS,meta:Q_META||qCfg(Q_EDIT)||{}}));}
+ try{const form=document.querySelector('form[data-form="quizSave"]');
+  const meta=form?qCurrentMeta(form):(Q_META||qCfg(Q_EDIT)||{});
+  sessionStorage.setItem(qDraftKey(Q_EDIT),JSON.stringify({saved:Date.now(),items:Q_ITEMS,meta}));}
  catch(e){/* Unavailable storage must never prevent saving on the server. */}
 }
 function qClearDraft(id){try{sessionStorage.removeItem(qDraftKey(id));}catch(e){}}
@@ -256,10 +282,12 @@ function qParticipant(){
   const passed=attempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
   const last=attempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
   const extra=(STATE.quizFreigaben||[]).filter(u=>STATE.meMember&&u.MitgliedID===STATE.meMember.ID&&u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
+  const courseStatus=qCourseStatus(q.KursID,STATE.meMember?.ID,STATE.meMember?.TurnusID);
   return '<article class="ga-project-card"><div class="row between"><div><b>'+h(course?.Titel||'Kurs')+'</b>'+
    '<div class="detail">'+h(q.FrageAnzahl)+' Fragen · Bestehensgrenze '+h(q.Bestehensgrenze)+' %</div></div>'+
-   '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?'Bestanden':!eligible?'Gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwillig')+'</span></div>'+
+   '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?(q.Pflicht==='JA'?'Pflichtquiz bestanden':'Freiwilliges Quiz bestanden'):!eligible?'Noch gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwilliges Quiz')+'</span></div>'+
    (last?'<p>Letztes Ergebnis: <b>'+h(last.Prozent)+' %</b></p>':'')+
+  (courseStatus.attended?'<p class="q-course-status">'+qCourseBadge(q.KursID,STATE.meMember?.ID,STATE.meMember?.TurnusID)+'</p>':'')+
    (passed?'<p class="muted small">Dein Ergebnis wurde gespeichert.</p>':!eligible?'<p class="muted small">Nach bestätigter Kursteilnahme verfügbar.</p>':
    attempts.length<Number(q.MaxVersuche)+extra?'<div class="btnline"><button class="primary" type="button" data-qstart="'+h(q.KursID)+'">'+(started?'Fortsetzen':'Quiz starten')+'</button></div>':
    '<p class="muted small">Maximale Versuche erreicht. Ausbilder kontaktieren.</p>')+'</article>';
