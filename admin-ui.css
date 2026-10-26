@@ -145,3 +145,10 @@
  .q-studio-footer button{flex:1}
  .q-preview-result{margin:15px}
 }
+
+/* Positiver Kursabschluss vs. noch offenes Pflichtquiz */
+.q-attendance-person{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e5edf3}
+.q-attendance-person>.inline-check{margin:0}
+.q-course-status{max-width:100%;line-height:1.35}
+.q-course-status .tag{display:inline-flex;align-items:center;white-space:normal}
+@media(max-width:700px){.q-attendance-person{align-items:flex-start;flex-direction:column}.q-course-status .tag{font-size:12px}}
