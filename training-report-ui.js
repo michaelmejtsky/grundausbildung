@@ -35,6 +35,7 @@ function gaTrainingStatsForTerm(term){
 }
 function gaAttendancePage(){
  if(!['Administrator','Ausbilder'].includes(role()))return '<section class="panel"><p>Keine Berechtigung.</p></section>';
+ if(!Array.isArray(STATE.ausbildungsberichte))return '<section class="panel"><h2>Ausbildungsdokumentation aktualisieren</h2><div class="ga-alert">Die neue Tätigkeitsbericht-Funktion ist am Server noch nicht aktiv. Bitte die aktuelle Code.gs in deinem bestehenden Google Apps Script als neue Version veröffentlichen und danach die App aktualisieren. Anwesenheiten und bisherige Daten bleiben erhalten.</div></section>';
  const term=TERM&&by(STATE.termine,TERM);
  if(!term)return '<div class="ga-page-heading"><div><h2>Ausbildung durchführen</h2>'+
   '<p>Termin auswählen, anwesende Teilnehmer, tatsächliche Zeiten, Ausbilder und Fahrzeuge dokumentieren.</p></div>'+
@@ -181,6 +182,7 @@ function gaTrainingVehiclesFromForm(form){
  }).filter(Boolean);
 }
 async function gaSaveTrainingAttendance(form,fd){
+ if(!Array.isArray(STATE.ausbildungsberichte))throw new Error('Der Tätigkeitsbericht ist am Apps-Script-Backend noch nicht aktiviert. Bitte zuerst die Code.gs aktualisieren.');
  const term=by(STATE.termine,TERM);
  if(!term)throw new Error('Bitte einen Ausbildungstermin auswählen.');
  const members=(STATE.mitglieder||[]).filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA');
