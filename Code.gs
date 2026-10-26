@@ -590,7 +590,7 @@ function gaChangeUserRole_(actor,d){
  const previous={Rolle:user.Rolle,Bereich:user.Bereich};
  gaReplace_('Benutzer',id,{Rolle:next,Bereich:area});
  // Beim erneuten Einstieg in die Ausbilderrolle keine früheren Berechtigungen ungefragt reaktivieren.
- if(next==='Ausbilder'&&user.Rolle!=='Ausbilder'){
+ if(next==='Ausbilder'&&previous.Rolle!=='Ausbilder'){
   const prior=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===id);
   if(prior){
    const reset={AktualisiertAm:gaNow_()};
