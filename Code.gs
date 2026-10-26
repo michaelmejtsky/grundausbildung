@@ -182,6 +182,7 @@ function gaApi(method,data,token){
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
   if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
+  if(method==='getQuizEdit')return gaGetQuizEdit_(u,d);
   if(method==='startQuiz')return gaLock_(()=>gaStartQuiz_(u,d));
   if(method==='submitQuiz')return gaLock_(()=>gaSubmitQuiz_(u,d));
   if(method==='saveQuestionnaire')return gaLock_(()=>gaSaveQuestionnaire_(u,d));
@@ -1294,6 +1295,12 @@ function gaQuizPublicQuestions_(questions){
   {nr:i+1,typ:q.typ,text:q.text,left:q.pairs.map(p=>p[0]),
    right:q.pairs.map((p,j)=>({id:j,text:p[1]})).reverse()}:
   {nr:i+1,typ:q.typ,text:q.text,options:q.options});
+}
+function gaGetQuizEdit_(u,d){
+ gaQuizRights_(u);gaQuizInstalled_();
+ const c=gaOptionalRows_('QuizKurse').find(x=>x.KursID===gaNeed_(d.KursID,'Kurs-ID',100));
+ if(!c)return null;
+ return {...gaQuizPublicConfig_(c),Fragen:JSON.parse(c.FragenJSON||'[]')};
 }
 function gaQuizRights_(u){if(u.Rolle==='Administrator')return;
  if(u.Rolle!=='Ausbilder'||!(gaCan_(u,'KurseGestalten')||gaCan_(u,'KurseBearbeiten')))
