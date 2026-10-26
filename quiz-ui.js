@@ -146,7 +146,9 @@ function qEditPage(){
   '<div class="q-editor-head"><div><h3>Fragenkatalog <span class="q-count" id="qTotal">'+total+'</span></h3>'+
   '<p><span id="qReady">'+done+'</span> von '+total+' Fragen vollständig</p></div>'+
   '<div class="q-editor-actions"><button type="button" class="secondary" data-qadd="1" '+(total>=20?'disabled':'')+'>+ Frage hinzufügen</button>'+
-  '<button type="button" class="secondary" data-qbackup="1">Entwurf exportieren</button></div></div>'+
+  '<button type="button" class="secondary" data-qbackup="1">Entwurf exportieren</button>'+ 
+  '<button type="button" class="secondary" data-qimport="1">Entwurf importieren</button>'+ 
+  '<input id="gaQuizDraftImport" type="file" accept="application/json,.json" data-quiz-import-file hidden></div></div>'+
   '<div class="q-editor-meter"><span style="width:'+(total?Math.round(done/total*100):0)+'%"></span></div>'+
   '<p class="q-draft-note"><span>●</span> Der Entwurf wird während dieser Browser-Sitzung automatisch zwischengespeichert. Exportiere ihn zusätzlich, wenn du später auf einem anderen Gerät weitermachen möchtest.</p>'+
   '<div id="q-editor-rows" class="q-editor-list">'+qEditorRows()+'</div>'+
@@ -271,23 +273,87 @@ function qParticipant(){
  '<section class="panel"><h2>Wissenstests</h2><div class="ga-project-list">'+(cards||'<div class="ga-empty">Für deine Kurse sind noch keine Quiz freigeschaltet.</div>')+'</div></section>';
 }
 function quizPage(){if(!Array.isArray(STATE?.quizKurse))return '<section class="panel"><h2>Quizfunktion vorbereiten</h2><p>GitHub Pages ist aktualisiert. Für Quizspeicherung und automatische Auswertung muss die neue Code.gs im bestehenden Google Apps Script bereitgestellt werden. Danach im Tabellenmenü <b>Grundausbildung → Tabellen prüfen/erstellen</b> ausführen.</p></section>';return VIEW==='myquiz'||role()==='Teilnehmer'?qParticipant():qAdmin();}
+
+function qCurrentMeta(form){
+ const fd=new FormData(form);
+ return {...(Q_META||qCfg(Q_EDIT)||{}),
+  Aktiv:fd.has('Aktiv')?'JA':'NEIN',Pflicht:fd.has('Pflicht')?'JA':'NEIN',
+  Bestehensgrenze:Number(fd.get('Bestehensgrenze')||80),
+  MaxVersuche:Number(fd.get('MaxVersuche')||3),
+  ZeitlimitMinuten:Number(fd.get('ZeitlimitMinuten')||0)};
+}
 async function qOpenEditor(id){
- const c=by(STATE.kurse,id);if(!c)return tip('Kurs nicht gefunden.',true);
- Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];VIEW='quizzes';render();
- try{const old=await api('getQuizEdit',{KursID:id});
+ const course=by(STATE.kurse,id);
+ if(!course)return tip('Kurs nicht gefunden.',true);
+ Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];Q_OPEN=0;Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ VIEW='quizzes';render();
+ try{
+  const saved=await api('getQuizEdit',{KursID:id});
   if(Q_EDIT!==id)return;
-  if(old){Q_META=old;Q_ITEMS=Array.isArray(old.Fragen)?old.Fragen:[qNew()];}
+  Q_META=saved||qCfg(id)||{};
+  Q_ITEMS=saved?.Fragen?.length?saved.Fragen:[qNew()];
+  const draft=qGetDraft(id);
+  if(draft&&draft.saved&&draft.saved>Date.now()-14*86400000){
+   Q_ITEMS=draft.items;Q_META={...Q_META,...draft.meta};
+   tip('Dein zwischengespeicherter Quiz-Entwurf wurde wiederhergestellt.');
+  }
   render();
- }catch(err){Q_EDIT='';tip(err.message,true);render();}
+ }catch(error){
+  const draft=qGetDraft(id);
+  if(draft){Q_ITEMS=draft.items;Q_META=draft.meta;render();tip('Server derzeit nicht erreichbar. Lokaler Entwurf geöffnet.',true);}
+  else{Q_EDIT='';render();tip(error.message,true);}
+ }
 }
 async function qSave(form,fd){
  qCapture();
  qValidateBeforeSave();
- const d={KursID:form.dataset.course,Aktiv:fd.has('Aktiv')?'JA':'NEIN',Pflicht:fd.has('Pflicht')?'JA':'NEIN',
- Bestehensgrenze:fd.get('Bestehensgrenze'),MaxVersuche:fd.get('MaxVersuche'),ZeitlimitMinuten:fd.get('ZeitlimitMinuten'),Fragen:Q_ITEMS};
- const result=await api('saveQuiz',d);
- Q_EDIT='';Q_META=null;Q_ITEMS=[];tip(result.message);await reload();
+ const meta=qCurrentMeta(form);
+ const payload={KursID:form.dataset.course,Aktiv:meta.Aktiv,Pflicht:meta.Pflicht,
+  Bestehensgrenze:meta.Bestehensgrenze,MaxVersuche:meta.MaxVersuche,
+  ZeitlimitMinuten:meta.ZeitlimitMinuten,Fragen:Q_ITEMS};
+ const response=await api('saveQuiz',payload);
+ qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];
+ Q_PREVIEW=false;Q_PREVIEW_RESULT=null;
+ tip(response.message||'Quiz gespeichert.');
+ await reload();
 }
+function qLocalExport(){
+ qCapture();
+ const meta=qCurrentMeta(document.querySelector('form[data-form="quizSave"]'));
+ const data=JSON.stringify({format:'ga-quiz-draft',version:2,kursId:Q_EDIT,exportiert:new Date().toISOString(),meta,fragen:Q_ITEMS},null,2);
+ const blob=new Blob([data],{type:'application/json;charset=utf-8'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='quiz-entwurf-'+String(Q_EDIT||'kurs').replace(/[^a-zA-Z0-9_-]/g,'')+'.json';
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),2500);
+ tip('Quiz-Entwurf als JSON gesichert.');
+}
+async function qLocalImport(file){
+ if(!file)return;
+ if(file.size>100000)throw new Error('Die Entwurfsdatei ist zu groß.');
+ const parsed=JSON.parse(await file.text());
+ if(parsed?.format!=='ga-quiz-draft'||!Array.isArray(parsed.fragen)||!parsed.fragen.length||parsed.fragen.length>20)
+  throw new Error('Keine gültige Quiz-Entwurfsdatei.');
+ if(parsed.kursId!==Q_EDIT&&!confirm('Dieser Entwurf gehört zu einem anderen Kurs. Trotzdem importieren?'))return;
+ qCapture();
+ if(!confirm('Aktuellen ungespeicherten Entwurf durch die importierten Fragen ersetzen?'))return;
+ Q_ITEMS=parsed.fragen;Q_META={...Q_META,...parsed.meta};
+ Q_OPEN=0;qAutoDraft();render();tip(parsed.fragen.length+' Fragen aus Entwurf geladen.');
+}
+function qGoPreview(){
+ qCapture();
+ qValidateBeforeSave();
+ const form=document.querySelector('form[data-form="quizSave"]');
+ const meta=qCurrentMeta(form);
+ Q_PREVIEW_LIMIT=Number(meta.Bestehensgrenze)||80;
+ Q_META=meta;Q_PREVIEW=true;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ qAutoDraft();render();
+}
+function qExitPreview(){
+ Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ render();
+}
+
 async function qStart(id){
  Q_SESSION=await api('startQuiz',{KursID:id});Q_RESULT=null;VIEW='myquiz';render();
 }
@@ -306,20 +372,89 @@ async function qSubmit(form){
  const result=await api('submitQuiz',{VersuchID:Q_SESSION.VersuchID,Antworten:answer});
  Q_SESSION=null;Q_RESULT=result;await reload();
 }
-document.getElementById('app')?.addEventListener('click',async e=>{
- const x=e.target.closest('[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
- if(!x)return;
- if(x.dataset.qadd!==undefined){qCapture();if(Q_ITEMS.length>=20)return tip('Maximal 20 Fragen möglich.',true);Q_ITEMS.push(qNew());qRepaint();return;}
- if(x.dataset.qdel!==undefined){qCapture();Q_ITEMS.splice(Number(x.dataset.qdel),1);qRepaint();return;}
- if(x.dataset.qback!==undefined){Q_EDIT='';Q_META=null;Q_ITEMS=[];render();return;}
- if(x.dataset.qresultClose!==undefined){Q_RESULT=null;render();return;}
- if(x.dataset.qedit||x.dataset.courseQuiz){await qOpenEditor(x.dataset.qedit||x.dataset.courseQuiz);return;}
- if(x.dataset.qunlock){const [KursID,MitgliedID]=x.dataset.qunlock.split('|');if(!confirm('Für dieses Mitglied einen zusätzlichen Quizversuch freigeben?'))return;
- x.disabled=true;try{const result=await api('unlockQuiz',{KursID,MitgliedID});tip(result.message);await reload();}catch(err){tip(err.message,true);}finally{x.disabled=false;}return;}
- if(x.dataset.qstart){x.disabled=true;try{await qStart(x.dataset.qstart);}catch(err){tip(err.message,true);x.disabled=false;}}
+
+document.getElementById('app')?.addEventListener('submit',event=>{
+ const form=event.target.closest('form[data-form="quizPreview"]');
+ if(!form)return;
+ event.preventDefault();
+ try{qPreviewSubmit(form);}catch(error){tip(error.message,true);}
 });
-document.getElementById('app')?.addEventListener('change',e=>{
- const x=e.target.closest('[data-qtype]');if(!x)return;
- const i=Number(x.dataset.qtype);
- qCapture();const text=Q_ITEMS[i]?.text||'';Q_ITEMS[i]={...qNew(x.value),text};qRepaint();
+document.getElementById('app')?.addEventListener('click',async event=>{
+ const x=event.target.closest(
+  '[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qmove],[data-qcopy],'+
+  '[data-qpair-add],[data-qpair-delete],[data-qpreview],[data-qpreview-back],[data-qpreview-again],'+
+  '[data-qbackup],[data-qimport],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
+ if(!x)return;
+ if(x.dataset.qresultClose!==undefined){Q_RESULT=null;render();return;}
+ if(x.dataset.qpreviewBack!==undefined){qExitPreview();return;}
+ if(x.dataset.qpreviewAgain!==undefined){Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;render();return;}
+ if(x.dataset.qback!==undefined){
+  qCapture();
+  if(Q_ITEMS.some(q=>q.text||q.options?.some(Boolean)||q.pairs?.some(p=>p[0]||p[1]))&&!confirm('Editor verlassen? Der Entwurf ist nur in diesem Browser zwischengespeichert.'))return;
+  Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_PREVIEW=false;render();return;
+ }
+ if(x.dataset.qpreview!==undefined){try{qGoPreview();}catch(e){tip(e.message,true);}return;}
+ if(x.dataset.qbackup!==undefined){try{qLocalExport();}catch(e){tip(e.message,true);}return;}
+ if(x.dataset.qimport!==undefined){document.getElementById('gaQuizDraftImport')?.click();return;}
+ if(x.dataset.qedit||x.dataset.courseQuiz){await qOpenEditor(x.dataset.qedit||x.dataset.courseQuiz);return;}
+ const card=x.closest('[data-qitem]');
+ if(card){
+  qCapture();
+  const i=Number(card.dataset.qitem),q=Q_ITEMS[i];
+  Q_OPEN=i;
+  if(x.dataset.qdel!==undefined){
+   if(Q_ITEMS.length<=1)return tip('Mindestens eine Quizfrage muss bestehen bleiben.',true);
+   if(!confirm('Frage '+(i+1)+' entfernen?'))return;
+   Q_ITEMS.splice(i,1);Q_OPEN=Math.max(0,Math.min(i,Q_ITEMS.length-1));
+  }else if(x.dataset.qmove!==undefined){
+   const at=i+Number(x.dataset.qmove);
+   if(at>=0&&at<Q_ITEMS.length)[Q_ITEMS[i],Q_ITEMS[at]]=[Q_ITEMS[at],Q_ITEMS[i]];
+   Q_OPEN=Math.max(0,Math.min(at,Q_ITEMS.length-1));
+  }else if(x.dataset.qcopy!==undefined){
+   if(Q_ITEMS.length>=20)return tip('Maximal 20 Fragen.',true);
+   Q_ITEMS.splice(i+1,0,JSON.parse(JSON.stringify(q)));Q_OPEN=i+1;
+  }else if(x.dataset.qpairAdd!==undefined){
+   if(q.typ!=='match'||q.pairs.length>=6)return;
+   q.pairs.push(['','']);
+  }else if(x.dataset.qpairDelete!==undefined){
+   if(q.typ!=='match'||q.pairs.length<=2)return;
+   q.pairs.splice(Number(x.dataset.qpairDelete),1);
+  }
+  qAutoDraft();qRepaint();return;
+ }
+ if(x.dataset.qadd!==undefined){
+  qCapture();if(Q_ITEMS.length>=20)return tip('Maximal 20 Fragen.',true);
+  Q_ITEMS.push(qNew());Q_OPEN=Q_ITEMS.length-1;qAutoDraft();qRepaint();return;
+ }
+ if(x.dataset.qunlock){
+  const [KursID,MitgliedID]=x.dataset.qunlock.split('|');
+  if(!confirm('Einen zusätzlichen Quizversuch für dieses Mitglied freigeben?'))return;
+  x.disabled=true;
+  try{const r=await api('unlockQuiz',{KursID,MitgliedID});tip(r.message);await reload();}
+  catch(error){tip(error.message,true);}
+  finally{x.disabled=false;}
+  return;
+ }
+ if(x.dataset.qstart){
+  x.disabled=true;
+  try{await qStart(x.dataset.qstart);}catch(error){tip(error.message,true);x.disabled=false;}
+ }
+});
+document.getElementById('app')?.addEventListener('input',event=>{
+ const field=event.target.closest('[data-qitem] input, [data-qitem] textarea, .q-studio-settings input');
+ if(!field||!Q_EDIT||Q_PREVIEW)return;
+ const card=field.closest('[data-qitem]');
+ if(card)Q_OPEN=Number(card.dataset.qitem);
+ qCapture();qUpdateStats();
+});
+document.getElementById('app')?.addEventListener('change',event=>{
+ const el=event.target.closest('[data-qtype]');
+ if(el){
+  qCapture();const i=Number(el.closest('[data-qitem]').dataset.qitem);
+  const previous=Q_ITEMS[i],fresh=qNew(el.value);
+  Q_ITEMS[i]={...fresh,text:previous?.text||''};
+  Q_OPEN=i;qAutoDraft();qRepaint();return;
+ }
+ const file=event.target.closest('[data-quiz-import-file]');
+ if(file){qLocalImport(file.files?.[0]).catch(e=>tip(e.message,true));}
 });
