@@ -18,6 +18,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 @media(max-width:840px){.layout{display:block}.sidebar{height:auto;position:relative;padding:8px 12px}.brand{font-size:18px;padding-bottom:9px}.menu{flex-direction:row;overflow:auto;padding-bottom:4px}.menu button{width:auto;white-space:nowrap;font-size:13px;padding:10px}.sidebar-user{display:none}.main{padding:18px 13px}.top h1{font-size:24px}.grid{grid-template-columns:1fr}.grid .wide{grid-column:auto}.panel{padding:16px}.mobilebar{display:flex;justify-content:space-between;align-items:center;padding:10px}.brand small{font-size:11px}}
 
 .ga-term-card{background:#fff;border:1px solid #e0e8f0;border-radius:13px;padding:17px}.ga-term-card b{font-size:17px}.ga-term-card p{margin:7px 0}.ga-term-card .ga-readable{font-size:14px;line-height:1.65}
+.ga-quiz-config{border:1px solid #dce5ee;border-radius:14px;padding:18px;background:#f7fafd;margin:18px 0}.q-editor-item{padding:18px;border:1px solid #dce5ee;border-radius:14px;margin:13px 0;background:#fff}.q-editor-item>label{margin-top:11px}.ga-q-card{border:1px solid #dce5ee;border-radius:14px;margin:15px 0;padding:19px;background:#fff}.ga-q-card h3{font-size:18px;line-height:1.5}.q-answer{display:flex;gap:12px;align-items:center;border:1px solid #e1e8f1;padding:12px;border-radius:10px;cursor:pointer;font-weight:500}.q-answer input{width:18px;height:18px}.ga-quiz-exam{max-width:880px}.ga-q-result{border:1px solid #b9d9c9;background:#f3fbf7;border-radius:16px;padding:23px;margin:12px 0}.ga-q-result strong{font-size:33px;color:#187348}.ga-quiz-teaser{border-left:4px solid #316db7}
 /* Grundausbildung – Freigabecenter und Teilnehmer-Cockpit */
 .ga-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4d8dcc;margin:0 0 10px}
 .ga-review-banner{background:linear-gradient(115deg,#10283f,#1c5d8d);color:#fff;border-radius:20px;padding:25px;margin-bottom:15px;display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -58,7 +59,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.5.6</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.6.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -195,24 +196,25 @@ function role(){return STATE?.user?.Rolle}
 function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
  const base=admin?[
- ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
+ ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],['quizzes','Quizverwaltung'],
  ['terms','Termine'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
  ['courses','Kurskatalog'],['projects','Kursprojekte'],
+ ...(can.KurseGestalten||can.KurseBearbeiten?[['quizzes','Quizverwaltung']]:[]),
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
  ['attendance','Durchführung'],['reports','Mängel & Ideen'],
  ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[]),
  ...(can.FrageboegenBearbeiten?[['questionnaires','Fragebögen']]:[])
  ]:r==='Teilnehmer'?[
- ['mine','Meine Übersicht'],['myterms','Ausbildungstermine'],
+ ['mine','Meine Übersicht'],['myterms','Ausbildungstermine'],['myquiz','Wissenstests'],
  ['ratings','Kurs bewerten'],['messages','Nachrichten']
  ]:[['tasks','Meine Aufgaben']];
  return base.concat([['notifications','Benachrichtigungen']]);
 }
 function title(){return ({
- overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',
+ overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
@@ -220,7 +222,7 @@ function title(){return ({
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=tabs.map(t=>'<button type="button" data-view="'+t[0]+'" class="'+(VIEW===t[0]?'active':'')+'">'+h(t[1])+(t[0]==='notifications'&&STATE.benachrichtigungen.some(n=>!n.GelesenAm)?' <span class="pillcount">'+STATE.benachrichtigungen.filter(n=>!n.GelesenAm).length+'</span>':'')+'</button>').join('');$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?attendance():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -263,7 +265,7 @@ function courses(){
  '</div><p class="small muted">Die Änderung wird sofort veröffentlicht und protokolliert. Bestehende Teilnahmen bleiben erhalten.</p>'+
  '<div class="btnline"><button class="primary">Änderungen veröffentlichen</button><button type="button" class="secondary" data-cancel="1">Abbrechen</button></div></form></section>':'';
  return form+'<section class="panel"><h2>Veröffentlichter Kurskatalog ('+cards.length+')</h2>'+
- '<div class="items">'+(cards.length?cards.map(c=>courseCard(c)+(STATE.rechte?.KurseBearbeiten?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Kurs bearbeiten</button></div>':'')).join(''):'Noch keine veröffentlichten Kurse.')+'</div></section>';
+ '<div class="items">'+(cards.length?cards.map(c=>courseCard(c)+(STATE.rechte?.KurseBearbeiten?'<div class="btnline"><button class="smallbtn" data-edit="course" data-id="'+h(c.ID)+'">Kurs bearbeiten</button><button class="smallbtn" type="button" data-course-quiz="'+h(c.ID)+'">Quiz verwalten</button></div>':'')).join(''):'Noch keine veröffentlichten Kurse.')+'</div></section>';
 }
 
 function gaProjectDocumentLinks(p){
@@ -655,7 +657,7 @@ function mine(){
   '<div class="ga-fold-body"><p class="small muted">Deine Nachweise kannst du hier hochladen oder ihren Prüfstatus ansehen.</p>'+
   aidPanel(false)+
   '<p class="small muted">FDISK: '+h(q.FDISKPlatzhalter==='JA'?'Platzhalter erfasst – kein Ausbildungsnachweis':q.FDISKEintragDatum||'Noch kein Datum hinterlegt')+'</p></div></details>';
- return hero+stats+nextPanel+openCourses+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
+ return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
 }
 function myterms(){
  const all=(STATE.termine||[]).slice();
@@ -928,7 +930,9 @@ $('app').addEventListener('change',e=>{
  const form=selector.closest('form');form.querySelectorAll('[data-recipient-target]').forEach(el=>{el.style.display=el.dataset.recipientTarget===selector.value?'block':'none';});
 });
 $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[data-form]');if(!form)return;e.preventDefault();const fd=new FormData(form),type=form.dataset.form,data=Object.fromEntries(fd.entries());const btn=form.querySelector('button[type=submit],button:not([type])');if(btn)btn.disabled=true;
- try{if(type==='projectReview'){
+ try{if(type==='quizSave')await qSave(form,fd);
+ else if(type==='quizAttempt')await qSubmit(form);
+ else if(type==='projectReview'){
   if(!fd.has('Kontrolliert'))throw new Error('Bitte bestätige, dass du die Unterlagen geprüft hast.');
   if(data.Entscheidung==='Zurückgeben'&&!String(data.Rueckmeldung||'').trim())throw new Error('Bitte konkrete Änderungswünsche eintragen.');
   if(data.Entscheidung==='Freigeben'&&!confirm('Alle Inhalte geprüft? Das Modul wird jetzt veröffentlicht.'))return;
@@ -990,4 +994,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='attendance'){const ids=STATE.mitglieder.filter(m=>m.TurnusID===by(STATE.termine,TERM)?.TurnusID&&m.Aktiv==='JA').map(m=>m.ID);const checked=new Set(fd.getAll('member'));const trainers=fd.getAll('trainer');await doSave('saveAttendance',{TerminID:TERM,Anwesend:ids.map(id=>({MitgliedID:id,Anwesend:checked.has(id)})),AusbilderIDs:trainers});}
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script></body></html>
