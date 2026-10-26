@@ -1283,9 +1283,14 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
  const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung';
  // Die ausdrückliche Bestätigung des Administrators ist eine eigenständige Freigabe.
  // Fehlende Pflichtmodule bleiben sichtbar, werden aber nicht als unbeabsichtigte Sperre verwendet.
- const adminConfirmed=valid(q.GABFreigabe),gabDone=valid(m.Aktiv)&&(advanced||adminConfirmed);
+ const adminConfirmed=valid(q.GABFreigabe);
+ const blockAOk=complete('GAB-ABSCHNITT-BLOCK-A'),blockBOk=complete('GAB-ABSCHNITT-BLOCK-B');
+ // Beide externen Hauptmodule sind zwingend, selbst bei manuell bestätigter GAB.
+ // Die explizite Anerkennung bereits absolvierter GAB für erweiterte Ausbildung bleibt als Sonderfall gültig.
+ const gabDone=valid(m.Aktiv)&&(advanced||(adminConfirmed&&blockAOk&&blockBOk));
  const gabDocsComplete=gab.length>0&&gabOpen.length===0;
- const gabNotice=!gab.length?'Noch keine GAB-Pflichtmodule definiert.':gabOpen.length?
+ const gabNotice=(!blockAOk||!blockBOk)?'Abschnittsmodul Block A und/oder Block B mit Abschluss Truppmann noch ausständig.':
+  !gab.length?'Noch keine GAB-Pflichtmodule definiert.':gabOpen.length?
    gabOpen.length+' GAB-Pflichtmodul(e) ohne bestätigten Abschluss.':'Alle definierten GAB-Pflichtmodule absolviert.';
  // GAB ist die erste Stufe; nach belegtem Abschluss folgt automatisch die Erweiterte Ausbildung.
  // Wer GAB macht, darf bereits vorher freiwillig an erweiterten Kursen teilnehmen.
@@ -1296,7 +1301,8 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
-  GABAbgeschlossen:gabDone,GABDokuVollstaendig:gabDocsComplete,GABHinweis:gabNotice,GABManuellBestaetigt:adminConfirmed,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
+  GABAbgeschlossen:gabDone,GABDokuVollstaendig:gabDocsComplete,GABHinweis:gabNotice,GABManuellBestaetigt:adminConfirmed,
+  AbschnittBlockA:!!blockAOk,AbschnittBlockB:!!blockBOk,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
   BSWDienstMoeglich:gabDone&&bswDone&&!!age16,
   Fortschritt:requirements.length?Math.round(done*100/requirements.length):0,
   PflichtGesamt:requirements.length,PflichtAbsolviert:done,
