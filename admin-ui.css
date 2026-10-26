@@ -33,3 +33,14 @@
  .ga-member-row{grid-template-columns:1fr auto}.ga-member-row>.tag{justify-self:end}.ga-row-actions{grid-column:1/-1;justify-content:flex-start}
 }
 @media(max-width:520px){.ga-admin-toolbar{grid-template-columns:1fr}.ga-admin-toolbar>div:first-child{grid-column:auto}.ga-task-form{grid-template-columns:1fr}.ga-task-form button{width:100%}.ga-admin-two{display:block}.ga-page-heading{align-items:flex-start}.ga-page-heading>.primary{max-width:150px}.ga-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.ga-kpi strong{font-size:26px}}
+
+/* V1.8 – Zugang & Rollenverwaltung */
+.ga-forgot-panel{margin-top:13px;border:1px solid #d4e3ef;border-radius:12px;padding:12px 14px;background:#f7fbff}
+.ga-forgot-panel summary{cursor:pointer;color:#15558a;font-weight:750}
+.ga-forgot-panel form{margin-top:12px}
+.ga-forgot-panel input{margin:7px 0 10px}
+.ga-forgot-panel .secondary{margin-top:10px}
+.ga-account-reset{margin-top:18px;padding-top:15px;border-top:1px solid #dce6ef}
+.ga-account-reset h3{margin:0 0 7px}
+.ga-account-reset .secondary{margin-top:8px}
+.ga-person-detail form[data-form="roleChange"]{margin-top:15px}
