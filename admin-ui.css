@@ -164,3 +164,138 @@
 .ga-rights-grid>.inline-check{padding:11px;background:#f7fafc;border:1px solid #e3eaf1;border-radius:9px;margin:0;font-size:13px;line-height:1.4}
 .ga-rights-grid input[type=checkbox]{flex:0 0 auto}
 @media(max-width:780px){.ga-rights-grid{grid-template-columns:1fr}.ga-rights-account>summary{align-items:flex-start;flex-direction:column}}
+
+
+/* Quiz option layout V2.1: radio buttons must NOT inherit full-width input styles. */
+/* Three anchored columns prevent circles from drifting into the middle and text to the right. */
+.q-preview-choice,
+.q-quiz-choice,
+.ga-quiz-exam .q-preview-choice {
+  display:grid;
+  grid-template-columns: 32px 21px minmax(0, 1fr);
+  column-gap:13px;
+  align-items:center;
+  min-height:58px;
+  width:100%;
+  margin:8px 0;
+  padding:11px 15px;
+  text-align:left;
+  border:1px solid #dce6ef;
+  border-radius:12px;
+  background:#fff;
+  color:#163b59;
+  font-size:14px;
+  font-weight:600;
+  line-height:1.5;
+  cursor:pointer;
+  box-sizing:border-box;
+}
+.q-preview-choice:hover,
+.q-quiz-choice:hover {background:#f5faff;border-color:#b7d1e8;}
+.q-preview-choice:has(input:checked),
+.q-quiz-choice:has(input:checked) {
+  background:#eaf5ff;
+  border-color:#4c90ca;
+  box-shadow:inset 0 0 0 1px #4c90ca;
+}
+.q-choice-letter{
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:9px;
+  background:#eaf1f8;
+  color:#356583;
+  font-weight:800;
+  font-size:13px;
+}
+.q-preview-choice:has(input:checked) .q-choice-letter{
+  color:#fff;
+  background:#276a9c;
+}
+.q-preview-choice input[type="radio"],
+.q-preview-choice input[type="checkbox"],
+.ga-quiz-exam .q-preview-choice input[type="radio"],
+.ga-quiz-exam .q-preview-choice input[type="checkbox"] {
+  display:block;
+  position:static;
+  margin:0;
+  padding:0;
+  width:20px;
+  height:20px;
+  min-width:20px;
+  max-width:20px;
+  flex:0 0 20px;
+  justify-self:center;
+  align-self:center;
+  accent-color:#1768a2;
+  cursor:pointer;
+}
+.q-choice-text{
+  min-width:0;
+  max-width:100%;
+  display:block;
+  overflow-wrap:anywhere;
+  white-space:normal;
+  text-align:left;
+  color:#1c3c57;
+}
+.q-question-count {
+  display:block;
+  font-size:12px;
+  letter-spacing:.02em;
+  font-weight:800;
+  color:#4c7697;
+}
+.q-preview-question,
+.ga-q-card{
+  padding:22px;
+  border-radius:16px;
+  background:#fff;
+  border:1px solid #d9e5f0;
+}
+.q-preview-question h3,
+.ga-q-card h3{
+  color:#17344f;
+  font-size:17px;
+  font-weight:750;
+  line-height:1.5;
+  margin:9px 0 16px;
+  max-width:95ch;
+}
+.q-preview-matches{
+  display:grid;
+  gap:10px;
+}
+.q-preview-matches .q-match-choice,
+.q-preview-matches label{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  align-items:center;
+  gap:16px;
+  padding:11px 14px;
+  border-radius:11px;
+  border:1px solid #dce6ef;
+  background:#f8fbfe;
+  margin:0;
+}
+.q-preview-matches .q-match-prompt{font-weight:650;text-align:left;overflow-wrap:anywhere;}
+.q-preview-matches select{min-width:0;width:100%;margin:0}
+.q-quiz-choice input:focus-visible,
+.q-preview-choice input:focus-visible{outline:3px solid #8cc5ef;outline-offset:3px;}
+.q-quiz-choice:has(input:disabled),
+.q-preview-choice:has(input:disabled){cursor:default;opacity:1;}
+@media(max-width:650px){
+  .q-preview-question,.ga-q-card{padding:15px 12px;margin:13px 0}
+  .q-preview-choice,.q-quiz-choice,.ga-quiz-exam .q-preview-choice{
+    grid-template-columns:26px 20px minmax(0,1fr);
+    column-gap:9px;
+    padding:11px 10px;
+    font-size:13px;
+    min-height:54px;
+  }
+  .q-choice-letter{width:26px;height:28px}
+  .q-preview-matches .q-match-choice,.q-preview-matches label{grid-template-columns:1fr;gap:7px}
+  .q-preview-question h3,.ga-q-card h3{font-size:16px}
+}
