@@ -1,6 +1,7 @@
 /* Grundausbildung V1.6 · Quiz-Verwaltung und Wissenstests */
 'use strict';
 let Q_EDIT='',Q_META=null,Q_ITEMS=[],Q_SESSION=null,Q_RESULT=null,Q_PREVIEW_LIMIT=80;
+let Q_TEMPLATE_BACKUP=null;
 const qCfg=id=>(STATE.quizKurse||[]).find(q=>q.KursID===id);
 
 /** Abgeleiteter Ausbildungsabschluss: keine künstliche Kursabschluss-Tabelle und keine geänderten Nachweise. */
@@ -174,6 +175,8 @@ function qEditPage(){
   '<div class="q-editor-actions"><button type="button" class="secondary" data-qadd="1" '+(total>=20?'disabled':'')+'>+ Frage hinzufügen</button>'+
   '<button type="button" class="secondary" data-qbackup="1">Entwurf exportieren</button>'+ 
   '<button type="button" class="secondary" data-qimport="1">Entwurf importieren</button>'+ 
+  ((/brandsicherheitswach|\bbsw\b/i).test(String(course?.Titel||''))?'<button type="button" class="primary" data-qbsw-template="1">🚒 13 BSW-Fragen laden</button>':'')+
+  (Q_TEMPLATE_BACKUP?.courseId===Q_EDIT?'<button type="button" class="secondary" data-qbsw-undo="1">Vorlage rückgängig</button>':'')+
   '<input id="gaQuizDraftImport" type="file" accept="application/json,.json" data-quiz-import-file hidden></div></div>'+
   '<div class="q-editor-meter"><span style="width:'+(total?Math.round(done/total*100):0)+'%"></span></div>'+
   '<p class="q-draft-note"><span>●</span> Der Entwurf wird während dieser Browser-Sitzung automatisch zwischengespeichert. Exportiere ihn zusätzlich, wenn du später auf einem anderen Gerät weitermachen möchtest.</p>'+
@@ -313,7 +316,7 @@ function qCurrentMeta(form){
 async function qOpenEditor(id){
  const course=by(STATE.kurse,id);
  if(!course)return tip('Kurs nicht gefunden.',true);
- Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];Q_OPEN=0;Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];Q_OPEN=0;Q_TEMPLATE_BACKUP=null;Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
  VIEW='quizzes';render();
  try{
   const saved=await api('getQuizEdit',{KursID:id});
@@ -340,7 +343,7 @@ async function qSave(form,fd){
   Bestehensgrenze:meta.Bestehensgrenze,MaxVersuche:meta.MaxVersuche,
   ZeitlimitMinuten:meta.ZeitlimitMinuten,Fragen:Q_ITEMS};
  const response=await api('saveQuiz',payload);
- qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];
+ qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_TEMPLATE_BACKUP=null;
  Q_PREVIEW=false;Q_PREVIEW_RESULT=null;
  tip(response.message||'Quiz gespeichert.');
  await reload();
@@ -356,6 +359,36 @@ function qLocalExport(){
  setTimeout(()=>URL.revokeObjectURL(url),2500);
  tip('Quiz-Entwurf als JSON gesichert.');
 }
+/**
+ * Einmaliger BSW-Vorlagenpatch: lädt nur Quizfragen vom selben GitHub-Pages-Ursprung.
+ * Speichert niemals automatisch in Google Sheets und verändert keine Live-Teilnahmen.
+ */
+async function qLoadBswTemplate(){
+ const course=by(STATE.kurse,Q_EDIT);
+ if(!course||!/(brandsicherheitswach|\bbsw\b)/i.test(String(course.Titel||'')))
+  throw new Error('Die BSW-Vorlage ist nur für das Modul Brandsicherheitswachen gedacht.');
+ const response=await fetch('./bsw-quiz-vorlage.json',{cache:'no-store'});
+ if(!response.ok)throw new Error('BSW-Vorlage konnte nicht geladen werden. Bitte Internetverbindung und GitHub-Veröffentlichung prüfen.');
+ const template=await response.json();
+ if(template?.format!=='ga-quiz-draft'||!Array.isArray(template.fragen)||template.fragen.length!==13)
+  throw new Error('Die BSW-Vorlagendatei ist beschädigt oder unvollständig.');
+ const invalid=template.fragen.findIndex(q=>qValidity(q));
+ if(invalid>=0)throw new Error('Die BSW-Vorlage enthält in Frage '+(invalid+1)+' einen Fehler.');
+ qCapture();
+ if(!confirm('13 vorbereitete BSW-Fragen laden? Der aktuelle Entwurf wird im Editor ersetzt. Das gespeicherte Kursquiz bleibt bis zu deinem Klick auf „Quiz speichern“ unverändert.'))return;
+ Q_TEMPLATE_BACKUP={courseId:Q_EDIT,items:JSON.parse(JSON.stringify(Q_ITEMS)),meta:{...Q_META}};
+ Q_ITEMS=template.fragen.map(q=>JSON.parse(JSON.stringify(q)));
+ Q_OPEN=0;qAutoDraft();render();
+ tip('13 BSW-Fragen geladen. Bitte durchsehen, mit „Quiz testen“ prüfen und dann speichern.');
+}
+function qUndoBswTemplate(){
+ if(!Q_TEMPLATE_BACKUP||Q_TEMPLATE_BACKUP.courseId!==Q_EDIT)return;
+ if(!confirm('Wieder den Entwurf vor dem Laden der BSW-Vorlage anzeigen?'))return;
+ Q_ITEMS=Q_TEMPLATE_BACKUP.items;Q_META=Q_TEMPLATE_BACKUP.meta;
+ Q_TEMPLATE_BACKUP=null;Q_OPEN=0;qAutoDraft();render();
+ tip('Vorheriger Entwurf wurde wiederhergestellt.');
+}
+
 async function qLocalImport(file){
  if(!file)return;
  if(file.size>100000)throw new Error('Die Entwurfsdatei ist zu groß.');
@@ -411,7 +444,7 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  const x=event.target.closest(
   '[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qmove],[data-qcopy],'+
   '[data-qpair-add],[data-qpair-delete],[data-qpreview],[data-qpreview-back],[data-qpreview-again],'+
-  '[data-qbackup],[data-qimport],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
+  '[data-qbackup],[data-qimport],[data-qbsw-template],[data-qbsw-undo],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
  if(!x)return;
  if(x.dataset.qresultClose!==undefined){Q_RESULT=null;render();return;}
  if(x.dataset.qpreviewBack!==undefined){qExitPreview();return;}
@@ -424,6 +457,8 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  if(x.dataset.qpreview!==undefined){try{qGoPreview();}catch(e){tip(e.message,true);}return;}
  if(x.dataset.qbackup!==undefined){try{qLocalExport();}catch(e){tip(e.message,true);}return;}
  if(x.dataset.qimport!==undefined){document.getElementById('gaQuizDraftImport')?.click();return;}
+ if(x.dataset.qbswUndo!==undefined){qUndoBswTemplate();return;}
+ if(x.dataset.qbswTemplate!==undefined){x.disabled=true;try{await qLoadBswTemplate();}catch(error){tip(error.message,true);}finally{x.disabled=false;}return;}
  if(x.dataset.qedit||x.dataset.courseQuiz){await qOpenEditor(x.dataset.qedit||x.dataset.courseQuiz);return;}
  const card=x.closest('[data-qitem]');
  if(card){
