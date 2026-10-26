@@ -325,7 +325,7 @@ function gaState_(u){
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
   benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(gaPublicUser_):[],
   kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[],
-  berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
+  berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
   eigeneBewertungen:ownRatings,
@@ -882,8 +882,10 @@ function gaCan_(user,right){return !!gaPermissions_(user)[right];}
 function gaRequireRight_(user,right){if(!gaCan_(user,right))throw new Error('Für diese Funktion fehlt die Berechtigung: '+right+'.');}
 function gaSetPermission_(actor,d){
  gaRequire_(actor,['Administrator']);
- const user=gaRows_('Benutzer').find(x=>x.ID===gaText_(d.BenutzerID,100)&&x.Rolle==='Ausbilder'&&gaBool_(x.Aktiv));
- if(!user)throw new Error('Bitte einen aktiven Ausbilder wählen.');
+ const user=gaRows_('Benutzer').find(x=>x.ID===gaText_(d.BenutzerID,100)&&x.Rolle==='Ausbilder');
+ if(!user)throw new Error('Bitte einen Benutzer mit der Rolle Ausbilder wählen.');
+ // Rechte für noch nicht aktivierte Einladungen dürfen vorbereitet werden;
+ // die Anmeldung und damit die Ausübung dieser Rechte bleiben bis zur Aktivierung gesperrt.
  const values={};GA_RIGHTS.forEach(k=>values[k]=d[k]===true||d[k]==='JA'?'JA':'NEIN');
  values.AktualisiertAm=gaNow_();
  const old=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===user.ID);
