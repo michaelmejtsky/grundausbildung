@@ -299,3 +299,17 @@
   .q-preview-matches .q-match-choice,.q-preview-matches label{grid-template-columns:1fr;gap:7px}
   .q-preview-question h3,.ga-q-card h3{font-size:16px}
 }
+
+/* Dedicated external mandatory-course confirmation */
+.ga-external-link{display:flex;justify-content:space-between;align-items:center;gap:18px;border-left:4px solid #2d6f9e;margin:16px 0;background:#f5faff}
+.ga-external-link h3{font-size:18px;margin:0 0 7px}
+.ga-external-link p{font-size:13px;line-height:1.5;color:#557189;margin:0}
+.ga-external-link button{white-space:nowrap}
+.ga-abschnitt-head{margin:18px 0 12px;background:#f2f8fe;border-radius:11px;padding:15px}
+.ga-abschnitt-head h3{font-size:17px;margin:0 0 7px}
+.ga-abschnitt-head p{margin:0}
+.ga-external-block{border:1px solid #d9e5ef;margin-bottom:12px;border-radius:13px;background:#fff}
+.ga-external-block>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;cursor:pointer}
+.ga-external-block[open]>summary{border-bottom:1px solid #d9e5ef;background:#f6fbff}
+.ga-external-block .ga-fold-body{padding:15px}
+@media(max-width:750px){.ga-external-link{flex-direction:column;align-items:stretch}.ga-external-link button{width:100%}}
