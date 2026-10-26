@@ -375,8 +375,10 @@ async function qLoadBswTemplate(){
  const invalid=template.fragen.findIndex(q=>qValidity(q));
  if(invalid>=0)throw new Error('Die BSW-Vorlage enthält in Frage '+(invalid+1)+' einen Fehler.');
  qCapture();
+ const liveSettings=qCurrentMeta(document.querySelector('form[data-form="quizSave"]'));
  if(!confirm('13 vorbereitete BSW-Fragen laden? Der aktuelle Entwurf wird im Editor ersetzt. Das gespeicherte Kursquiz bleibt bis zu deinem Klick auf „Quiz speichern“ unverändert.'))return;
- Q_TEMPLATE_BACKUP={courseId:Q_EDIT,items:JSON.parse(JSON.stringify(Q_ITEMS)),meta:{...Q_META}};
+ Q_TEMPLATE_BACKUP={courseId:Q_EDIT,items:JSON.parse(JSON.stringify(Q_ITEMS)),meta:{...liveSettings}};
+ Q_META=liveSettings;
  Q_ITEMS=template.fragen.map(q=>JSON.parse(JSON.stringify(q)));
  Q_OPEN=0;qAutoDraft();render();
  tip('13 BSW-Fragen geladen. Bitte durchsehen, mit „Quiz testen“ prüfen und dann speichern.');
