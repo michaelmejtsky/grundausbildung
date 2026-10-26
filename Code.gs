@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.7.0',
+  VERSION: '1.8.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -47,7 +47,8 @@ function onOpen() {
     .addItem('2 · Ersten Administrator einrichten','gaErstenAdminEinrichten')
     .addItem('3 · Systemprüfung','gaSystemPruefen')
     .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten')
-    .addItem('5 · Push-Speicher und Trigger einrichten','gaPushEinrichten').addToUi();
+    .addItem('5 · Push-Speicher und Trigger einrichten','gaPushEinrichten')
+    .addItem('6 · Login- und Quiz-Tabellen einrichten','gaErweiterungenEinrichten').addToUi();
 }
 
 function gaSheet_() {
@@ -88,6 +89,36 @@ function gaEinrichten() {
   });});
   SpreadsheetApp.getUi().alert('Grundausbildung bereit: '+Object.keys(GA.SHEETS).length+' Datentabellen, Beispielkurs und Checklistenpunkte geprüft. Vorhandene Daten wurden nicht gelöscht.');
 }
+/**
+ * Zusatzinstallation, ohne bestehende Daten oder Beispielkurse zu verändern.
+ * Start: Grundausbildung → 6 · Login- und Quiz-Tabellen einrichten
+ */
+function gaErweiterungenEinrichten(){
+ const ss=gaSheet_();
+ const names=['Sitzungen','QuizKurse','QuizVersuche','QuizFreigaben'];
+ const created=[],verified=[];
+ names.forEach(name=>{
+  const header=GA.SHEETS[name];
+  if(!header)throw new Error('Schema fehlt: '+name);
+  let sh=ss.getSheetByName(name);
+  if(!sh){sh=ss.insertSheet(name);created.push(name);}
+  else verified.push(name);
+  if(sh.getMaxColumns()<header.length)sh.insertColumnsAfter(sh.getMaxColumns(),header.length-sh.getMaxColumns());
+  if(sh.getLastRow()===0)sh.getRange(1,1,1,header.length).setValues([header]);
+  else {
+   const existing=sh.getRange(1,1,1,header.length).getDisplayValues()[0];
+   if(existing.some((value,index)=>value!==header[index]))
+    throw new Error('Spaltenüberschrift von '+name+' weicht ab. Bestehende Tabelle nicht überschrieben; bitte manuell prüfen.');
+  }
+  sh.setFrozenRows(1);sh.getRange(1,1,1,header.length).setBackground('#E8EDF3').setFontWeight('bold');
+ });
+ const message='Zusatz-Tabellen fertig.\nNeu: '+(created.join(', ')||'keine')+
+ '\nBereits vorhanden: '+(verified.join(', ')||'keine')+
+ '\nBestehende Kurs- und Teilnehmerdaten wurden nicht verändert.';
+ SpreadsheetApp.getUi().alert(message);
+ return {ok:true,created,verified};
+}
+
 function gaErstenAdminEinrichten() {
   const ui=SpreadsheetApp.getUi();
   if(!gaSheet_().getSheetByName('Benutzer')) throw new Error('Zuerst Menüpunkt 1 ausführen.');
@@ -232,6 +263,7 @@ function gaApi(method,data,token){
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
   if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
   if(method==='resetPassword')return gaLock_(()=>gaResetPassword_(u,d));
+  if(method==='changeUserRole')return gaLock_(()=>gaChangeUserRole_(u,d));
   if(method==='sendMessage')return gaLock_(()=>gaSendMessage_(u,d));
   if(method==='readNotification')return gaLock_(()=>gaReadNotification_(u,d));
   if(method==='registerPush')return gaLock_(()=>gaRegisterPush_(u,d));
@@ -251,8 +283,8 @@ function gaState_(u){
  const allTurnusse=gaRows_('Turnusse'),allKurse=gaRows_('Kurse'),
   allTermine=gaRows_('Termine'),allMembers=gaRows_('Mitglieder'),
   allItems=gaRows_('Checklistenpunkte'),allChecks=gaRows_('MitgliedChecks');
- const own=participant?allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv)):null;
- const aidRows=admin||participant?gaOptionalRows_('ErsteHilfeNachweise'):[];
+ const own=allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv))||null;
+ const aidRows=admin||!!own?gaOptionalRows_('ErsteHilfeNachweise'):[];
  const aidRowsVisible=(admin?aidRows:own?aidRows.filter(x=>x.MitgliedID===own.ID):[])
    .map(({DriveDateiID,EmailEmpfaenger,...r})=>admin?{...r,EmailEmpfaenger}:r);
  const rightsRows=(admin||trainer)?gaOptionalRows_('Berechtigungen'):[];
@@ -263,9 +295,9 @@ function gaState_(u){
  const ratings=(participant||rights.BewertungenAnsehen)?gaOptionalRows_('Bewertungen'):[];
  const questionnaires=(admin||trainer||participant)?gaOptionalRows_('BewertungsFrageboegen'):[];
  const devices=gaOptionalRows_('PushGeraete'),pushRulesRows=gaOptionalRows_('PushRegeln');
- const ownTerm=participant&&own?allTermine.filter(t=>t.TurnusID===own.TurnusID):[];
- const ownAttendance=participant&&own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
- const ownRatings=participant&&own?ratings.filter(r=>r.MitgliedID===own.ID):[];
+ const ownTerm=own?allTermine.filter(t=>t.TurnusID===own.TurnusID):[];
+ const ownAttendance=own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
+ const ownRatings=own?ratings.filter(r=>r.MitgliedID===own.ID):[];
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
@@ -274,8 +306,8 @@ function gaState_(u){
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
-  turnusse:admin||trainer?allTurnusse:participant&&own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
-  kurse:admin||trainer?allKurse:participant?allKurse.filter(c=>ownTerm.some(t=>t.KursID===c.ID)):[],
+  turnusse:admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
+  kurse:admin||trainer?allKurse:own?allKurse.filter(c=>ownTerm.some(t=>t.KursID===c.ID)):[],
   termine:admin||trainer?allTermine:ownTerm,
   mitglieder:admin||trainer?allMembers:special?allMembers.filter(m=>gaBool_(m.Aktiv)).map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[],
   checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
@@ -298,11 +330,11 @@ function gaState_(u){
   offeneBewertungen:participant&&own?ownAttendance.filter(t=>gaBool_(t.Anwesend)).map(t=>allTermine.find(term=>term.ID===t.TerminID)).filter(term=>
     term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
-  meMember:participant&&own?own:null,
+  meMember:own,
   qualifikationen,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
-  quizFreigaben:(participant&&own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):admin||trainer?quizUnlocks:[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
-  quizVersuche:(participant&&own?quizAttempts.filter(a=>a.MitgliedID===own.ID):admin||trainer?quizAttempts:[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
+  quizFreigaben:(admin||trainer?quizUnlocks:own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
+  quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
   ersteHilfeNachweise:aidRowsVisible,
   ersteHilfeMail:admin?gaAidSettings_():null,
   kursAnforderungen:admin?reqs:[],
@@ -534,6 +566,35 @@ function gaInviteUser_(actor,d) {
   gaLog_(actor.ID,'EINLADUNG_GESENDET','Benutzer',user.ID,{Email:email,Rolle:role});
   return {ok:true,message:'Einladung per E-Mail gesendet (7 Tage gültig).'};
 }
+
+/** Eine Person, ein Zugang: Rollenwechsel statt doppeltem Benutzer. */
+function gaChangeUserRole_(actor,d){
+ gaRequire_(actor,['Administrator']);
+ const id=gaNeed_(d.BenutzerID,'Benutzer-ID',100);
+ const user=gaFind_('Benutzer',id);
+ if(!user)throw new Error('Benutzer nicht gefunden.');
+ const next=gaChoice_(gaNeed_(d.Rolle,'Rolle',50),GA.ROLES,'Rolle');
+ const area=next==='Fachverwaltung'?
+  gaChoice_(gaNeed_(d.Bereich,'Fachbereich',100),['Zeugkammer','Administration','IT','Ausbildungsleitung'],'Fachbereich'):'';
+ if(user.ID===actor.ID&&next!=='Administrator')
+  throw new Error('Den eigenen Administratorzugang kannst du nicht selbst herabstufen.');
+ if(user.Rolle==='Administrator'&&next!=='Administrator'){
+  const otherAdmins=gaRows_('Benutzer').filter(x=>x.ID!==id&&x.Rolle==='Administrator'&&gaBool_(x.Aktiv));
+  if(!otherAdmins.length)throw new Error('Mindestens ein aktiver Administrator muss erhalten bleiben.');
+ }
+ if(next==='Teilnehmer'&&!gaRows_('Mitglieder').some(m=>gaBool_(m.Aktiv)&&
+  String(m.Email||'').toLowerCase()===String(user.Email||'').toLowerCase()))
+   throw new Error('Für eine reine Teilnehmerrolle muss ein aktives Mitglied mit derselben E-Mail existieren.');
+ const unchanged=next===user.Rolle&&area===String(user.Bereich||'');
+ if(unchanged)return {ok:true,message:'Rolle und Fachbereich sind bereits so eingestellt.'};
+ const previous={Rolle:user.Rolle,Bereich:user.Bereich};
+ gaReplace_('Benutzer',id,{Rolle:next,Bereich:area});
+ // Frühere Kursteilnahmen hängen an der Mitglieds-ID, nicht an der Benutzerrolle.
+ // Die Passwort-/Login-Daten und das Mitgliederkonto bleiben deshalb unverändert.
+ gaLog_(actor.ID,'ROLLENWECHSEL','Benutzer',id,{Vorher:previous,Nachher:{Rolle:next,Bereich:area}});
+ return {ok:true,message:'Rolle aktualisiert. Bestehender Login, Kursabschlüsse und Nachweise bleiben erhalten.'};
+}
+
 function gaResetPassword_(actor,d){
   gaRequire_(actor,['Administrator']);
   const id=gaNeed_(d.BenutzerID,'Benutzer-ID',100);
@@ -566,6 +627,40 @@ function gaResetPassword_(actor,d){
   gaLog_(actor.ID,'PASSWORTRESET_ANGEFORDERT','Benutzer',user.ID,{});
   return {ok:true,message:'Passwort-Zurücksetzungslink wurde an die hinterlegte E-Mail-Adresse gesendet (30 Minuten gültig).'};
 }
+
+/** Öffentlich startbarer Passwortreset. Keine Benutzerexistenz preisgeben. */
+function gaRequestPasswordReset(email){
+ const e=gaText_(email,240).toLowerCase();
+ const neutral={ok:true,message:'Falls ein aktiver Zugang besteht, erhältst du eine E-Mail mit einem Reset-Link (30 Minuten gültig).'};
+ if(!gaEmail_(e))return neutral;
+ const key='pwdreset_'+Utilities.base64EncodeWebSafe(
+  Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,e)).slice(0,42);
+ const cache=CacheService.getScriptCache();
+ if(cache.get(key))return neutral;
+ cache.put(key,'1',3600);
+ const user=gaRows_('Benutzer').find(x=>gaBool_(x.Aktiv)&&x.Email.toLowerCase()===e);
+ if(!user)return neutral;
+ const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
+ const invite={ID:gaId_(),BenutzerID:user.ID,Email:user.Email,TokenHash:gaInviteDigest_(token),
+  ExpiresAt:String(Date.now()+30*60000),UsedAt:'',Status:'Passwortreset',ErstelltVon:'SELF',ErstelltAm:gaNow_()};
+ gaRows_('Einladungen').filter(i=>i.BenutzerID===user.ID&&i.Status==='Passwortreset')
+  .forEach(i=>gaReplace_('Einladungen',i.ID,{Status:'Ersetzt'}));
+ gaAppend_('Einladungen',invite);
+ try{
+  MailApp.sendEmail({to:user.Email,subject:'Feuerwehr St. Pölten – Passwort zurücksetzen',
+   body:'Hallo '+user.Name+',\n\nfür deinen Zugang wurde eine Passwort-Zurücksetzung angefordert.'+
+    '\n\nNeues Passwort über diesen persönlichen Link festlegen:\n'+gaInviteLink_(token)+
+    '\n\nDer Link ist einmalig gültig und läuft nach 30 Minuten ab.'+
+    '\nWenn du das nicht selbst angefordert hast, ignoriere diese Nachricht und informiere bei Bedarf den Administrator.'+
+    '\n\nFeuerwehr St. Pölten – Ausbildung'});
+  gaLog_(user.ID,'PASSWORTRESET_SELF_SERVICE','Benutzer',user.ID,{});
+ }catch(error){
+  gaReplace_('Einladungen',invite.ID,{Status:'Versandfehler'});
+  gaLog_('SYSTEM','PASSWORTRESET_VERSANDFEHLER','Benutzer',user.ID,{});
+ }
+ return neutral;
+}
+
 function gaInviteCheck_(token){
   token=String(token||'');
   if(!/^[a-fA-F0-9]{64}$/.test(token))throw new Error('Ungültiger Einladungslink.');
@@ -617,7 +712,8 @@ function doPost(e){
     const args=Array.isArray(q.args)?q.args:[];
     let result;
     switch(q.method){
-      case 'gaLogin':result=gaLogin(args[0],args[1]);break;
+      case 'gaLogin':result=gaLogin(args[0],args[1],args[2]);break;
+      case 'gaRequestPasswordReset':result=gaRequestPasswordReset(args[0]);break;
       case 'gaApi':result=gaApi(args[0],args[1],args[2]);break;
       case 'gaCheckInvite':result=gaCheckInvite(args[0]);break;
       case 'gaAcceptInvite':result=gaAcceptInvite(args[0],args[1]);break;
@@ -1365,7 +1461,7 @@ function gaSaveQuiz_(u,d){
  return {ok:true,message:enabled?'Quiz gespeichert. Neue Quizversion '+val.Version+' ist aktiv.':'Quiz deaktiviert; bisherige Versuche bleiben erhalten.'};
 }
 function gaQuizMember_(u){
- gaRequire_(u,['Teilnehmer']);
+ gaRequire_(u,['Teilnehmer','Ausbilder','Fachverwaltung','Administrator']);
  const m=gaRows_('Mitglieder').find(x=>gaBool_(x.Aktiv)&&String(x.Email||'').toLowerCase()===String(u.Email||'').toLowerCase());
  if(!m)throw new Error('Dein Mitgliedsprofil wurde nicht gefunden.');
  return m;
