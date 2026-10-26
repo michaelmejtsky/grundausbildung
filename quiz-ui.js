@@ -1,80 +1,217 @@
 /* Grundausbildung V1.6 · Quiz-Verwaltung und Wissenstests */
 'use strict';
-let Q_EDIT='',Q_META=null,Q_ITEMS=[],Q_SESSION=null,Q_RESULT=null;
+let Q_EDIT='',Q_META=null,Q_ITEMS=[],Q_SESSION=null,Q_RESULT=null,Q_PREVIEW_LIMIT=80;
 const qCfg=id=>(STATE.quizKurse||[]).find(q=>q.KursID===id);
-const qNew=(typ='single')=>({typ,text:'',options:['','','',''],correct:[0],pairs:[['',''],['','']]});
-function qEditorRows(){
- return Q_ITEMS.map((q,i)=>'<div class="q-editor-item" data-qitem="'+i+'">'+
- '<div class="row between"><b>Frage '+(i+1)+'</b><button type="button" class="smallbtn" data-qdel="'+i+'">Entfernen</button></div>'+
- '<label>Fragetyp</label><select data-qtype="'+i+'">'+[['single','Eine richtige Antwort'],['multi','Mehrere richtige Antworten'],['tf','Richtig/Falsch'],['match','Begriffe zuordnen']].map(a=>'<option value="'+a[0]+'" '+(a[0]===q.typ?'selected':'')+'>'+a[1]+'</option>').join('')+'</select>'+
- '<label>Frage</label><input name="qtext" maxlength="450" required value="'+h(q.text||'')+'">'+
- (q.typ==='match'?'<label>Zuordnungspaare, pro Zeile: Begriff | Zuordnung</label><textarea rows="4" name="qpairs">'+h((q.pairs||[]).map(p=>p.join(' | ')).join('\n'))+'</textarea>':
- q.typ==='tf'?'<label>Richtige Lösung</label><select name="qtf"><option value="0" '+(q.correct?.[0]===0?'selected':'')+'>Richtig</option><option value="1" '+(q.correct?.[0]===1?'selected':'')+'>Falsch</option></select>':
- '<label>Vier Antwortmöglichkeiten (alle erforderlich, eine je Zeile)</label><textarea name="qoptions" rows="4" placeholder="Antwort 1&#10;Antwort 2&#10;Antwort 3&#10;Antwort 4">'+h((q.options||[]).join('\n'))+'</textarea>'+
- '<label>Richtige Antwortnummern (1–4'+(q.typ==='multi'?', z. B. 1,3':'')+')</label><input name="qcorrect" value="'+h((q.correct||[0]).map(n=>Number(n)+1).join(','))+'">')+
- '</div>').join('');
+
+/* Editor V2.0: Einzelantworten, sichere Entwurfssicherung und lokale Testvorschau. */
+let Q_PREVIEW=false,Q_PREVIEW_RESULT=null,Q_PREVIEW_ANSWERS=null,Q_OPEN=0;
+const qNew=(typ='single')=>({typ,text:'',options:['','','',''],correct:typ==='multi'?[0,1]:[0],pairs:[['',''],['','']]});
+const qDraftKey=id=>'ga-quiz-draft-v2-'+String(STATE?.user?.ID||'')+'-'+String(id||'');
+const qLetter=n=>String.fromCharCode(65+n);
+function qAutoDraft(){
+ if(!Q_EDIT)return;
+ try{sessionStorage.setItem(qDraftKey(Q_EDIT),JSON.stringify({saved:Date.now(),items:Q_ITEMS,meta:Q_META||qCfg(Q_EDIT)||{}}));}
+ catch(e){/* Unavailable storage must never prevent saving on the server. */}
+}
+function qClearDraft(id){try{sessionStorage.removeItem(qDraftKey(id));}catch(e){}}
+function qGetDraft(id){
+ try{const x=JSON.parse(sessionStorage.getItem(qDraftKey(id))||'null');
+  return x&&Array.isArray(x.items)&&x.items.length?x:null;
+ }catch(e){return null;}
 }
 function qCapture(){
- const root=document.getElementById('q-editor-rows');if(!root)return;
+ const root=document.getElementById('q-editor-rows');
+ if(!root)return;
  Q_ITEMS=Array.from(root.querySelectorAll('[data-qitem]')).map(el=>{
-  const typ=Q_ITEMS[Number(el.dataset.qitem)]?.typ||el.querySelector('[data-qtype]').value,text=el.querySelector('[name=qtext]').value;
-  if(typ==='match')return {typ,text,pairs:el.querySelector('[name=qpairs]').value.split('\n').map(s=>s.trim()).filter(Boolean).map(s=>{let i=s.indexOf('|');return i<0?[s,'']:[s.slice(0,i).trim(),s.slice(i+1).trim()]})};
-  if(typ==='tf')return {typ,text,correct:[Number(el.querySelector('[name=qtf]').value)]};
-  return {typ,text,options:el.querySelector('[name=qoptions]').value.split('\n').map(x=>x.trim()),
-    correct:el.querySelector('[name=qcorrect]').value.split(',').map(n=>Number(n.trim())-1)};
- });
-}
-
-/** Clear inline validation: server requires exactly four filled options for selection questions. */
-function qValidateBeforeSave(){
- if(!Q_ITEMS.length)throw new Error('Bitte mindestens eine Quizfrage anlegen.');
- const focus=(i,field)=>{
-  const el=document.querySelector('[data-qitem="'+i+'"] [name="'+field+'"]');
-  if(el){el.focus();el.scrollIntoView({block:'center',behavior:'smooth'});}
- };
- for(let i=0;i<Q_ITEMS.length;i++){
-  const q=Q_ITEMS[i],number=i+1;
-  if(!String(q.text||'').trim()){focus(i,'qtext');throw new Error('Frage '+number+': Bitte eine Fragestellung eintragen.');}
-  if(q.typ==='match'){
-   const pairs=q.pairs||[];
-   if(pairs.length<2||pairs.length>6||pairs.some(p=>!p[0]||!p[1])){
-    focus(i,'qpairs');throw new Error('Frage '+number+': Bitte 2 bis 6 vollständige Zuordnungspaare im Format „Begriff | Antwort“ eintragen.');
-   }
-  }else if(q.typ==='single'||q.typ==='multi'){
-   const options=q.options||[];
-   if(options.length!==4){focus(i,'qoptions');throw new Error('Frage '+number+': Es sind genau vier Antwortmöglichkeiten erforderlich, jeweils eine pro Zeile. Derzeit: '+options.length+'.');}
-   const missing=options.findIndex(o=>!String(o).trim());
-   if(missing!==-1){focus(i,'qoptions');throw new Error('Frage '+number+': Antwortmöglichkeit '+(missing+1)+' ist leer. Bitte alle vier Antworten ausfüllen.');}
-   if(new Set(options.map(o=>o.toLowerCase())).size!==4){focus(i,'qoptions');throw new Error('Frage '+number+': Alle vier Antwortmöglichkeiten müssen unterschiedlich sein.');}
-   const answers=q.correct||[];
-   if(!answers.length||answers.some(n=>!Number.isInteger(n)||n<0||n>3)||new Set(answers).size!==answers.length){
-    focus(i,'qcorrect');throw new Error('Frage '+number+': Bitte die Nummer der richtigen Antwort angeben (1–4).');
-   }
-   if(q.typ==='single'&&answers.length!==1){focus(i,'qcorrect');throw new Error('Frage '+number+': Genau eine Antwortnummer ist richtig.');}
-   if(q.typ==='multi'&&answers.length<2){focus(i,'qcorrect');throw new Error('Frage '+number+': Bei Mehrfachauswahl bitte mindestens zwei richtige Antwortnummern angeben, z. B. 1,3.');}
+  const typ=el.querySelector('[data-qtype]').value;
+  const text=el.querySelector('[name=qtext]').value;
+  if(typ==='match'){
+   const left=Array.from(el.querySelectorAll('[data-qleft]')).map(x=>x.value.trim());
+   const right=Array.from(el.querySelectorAll('[data-qright]')).map(x=>x.value.trim());
+   return {typ,text,pairs:left.map((value,i)=>[value,right[i]])};
   }
+  if(typ==='tf')return {typ,text,correct:[Number(el.querySelector('[name=qtf]').value)]};
+  const options=Array.from(el.querySelectorAll('[data-qanswer]')).map(x=>x.value.trim());
+  const correct=Array.from(el.querySelectorAll('[data-qcorrect]:checked')).map(x=>Number(x.value));
+  return {typ,text,options,correct};
+ });
+ qAutoDraft();
+}
+function qValidity(q){
+ if(!String(q.text||'').trim())return {field:'qtext',message:'Bitte eine Fragestellung eingeben.'};
+ if(q.typ==='match'){
+  const pairs=q.pairs||[];
+  if(pairs.length<2||pairs.length>6)return {field:'qleft',message:'Bitte zwei bis sechs Zuordnungspaare anlegen.'};
+  if(pairs.some(p=>!String(p[0]||'').trim()||!String(p[1]||'').trim()))
+   return {field:'qleft',message:'Jedes Zuordnungspaar benötigt links und rechts einen Text.'};
+  if(new Set(pairs.map(p=>p[1].toLowerCase())).size!==pairs.length)
+   return {field:'qright',message:'Die rechten Zuordnungsantworten müssen unterschiedlich sein.'};
+  return null;
+ }
+ if(q.typ==='tf')return [0,1].includes(Number(q.correct?.[0]))?null:{field:'qtf',message:'Bitte Richtig oder Falsch als Lösung auswählen.'};
+ const answers=q.options||[];
+ if(answers.length!==4)return {field:'qanswer',message:'Es sind genau vier Antwortfelder erforderlich.'};
+ const empty=answers.findIndex(a=>!String(a).trim());
+ if(empty!==-1)return {field:'qanswer',at:empty,message:'Antwort '+qLetter(empty)+' ist leer. Bitte alle vier Antworten ausfüllen.'};
+ if(new Set(answers.map(a=>a.toLocaleLowerCase('de-AT'))).size!==4)
+  return {field:'qanswer',message:'Alle vier Antwortmöglichkeiten müssen unterschiedlich sein.'};
+ const right=q.correct||[];
+ if(!right.length)return {field:'qcorrect',message:'Markiere mindestens eine richtige Antwort.'};
+ if(right.some(n=>!Number.isInteger(n)||n<0||n>3)||new Set(right).size!==right.length)
+  return {field:'qcorrect',message:'Die richtige Antwort ist ungültig.'};
+ if(q.typ==='single'&&right.length!==1)return {field:'qcorrect',message:'Markiere genau eine richtige Antwort.'};
+ if(q.typ==='multi'&&right.length<2)return {field:'qcorrect',message:'Markiere mindestens zwei richtige Antworten.'};
+ return null;
+}
+function qValidateBeforeSave(){
+ if(!Q_ITEMS.length)throw new Error('Bitte mindestens eine Frage anlegen.');
+ if(Q_ITEMS.length>20)throw new Error('Maximal 20 Quizfragen möglich.');
+ const problems=Q_ITEMS.map((q,i)=>({index:i,problem:qValidity(q)})).filter(x=>x.problem);
+ if(problems.length){
+  const i=problems[0].index,issue=problems[0].problem;
+  Q_OPEN=i;
+  const card=document.querySelector('[data-qitem="'+i+'"]');
+  if(card){
+   card.open=true;card.classList.add('q-invalid');
+   let input=card.querySelector('[data-'+issue.field+']')||card.querySelector('[name="'+issue.field+'"]');
+   if(issue.field==='qanswer')input=card.querySelectorAll('[data-qanswer]')[issue.at||0]||input;
+   if(input){input.focus();input.scrollIntoView({block:'center',behavior:'smooth'});}
+  }
+  throw new Error('Frage '+(i+1)+': '+issue.message);
  }
 }
-
-function qRepaint(){const el=document.getElementById('q-editor-rows');if(el)el.innerHTML=qEditorRows();}
-function qEditPage(){
- const course=by(STATE.kurse,Q_EDIT),c=Q_META||qCfg(Q_EDIT)||{};
- return '<section class="panel"><div class="row between"><div><p class="ga-eyebrow">KURSQUIZ</p><h2>'+h(course?.Titel||'Quiz')+'</h2></div>'+
- '<button type="button" class="secondary" data-qback="1">Zurück</button></div>'+
- '<p class="muted">Für diesen Kurs einen Wissenstest erstellen. Bei Pflichtquiz wird der Kurs erst mit bestätigter Teilnahme und bestandenem Quiz abgeschlossen.</p>'+
- '<form data-form="quizSave" data-course="'+h(Q_EDIT)+'">'+
- '<div class="ga-quiz-config"><label class="inline-check"><input type="checkbox" name="Aktiv" value="JA" '+(c.Aktiv==='JA'?'checked':'')+'> Quiz aktivieren</label>'+
- '<label class="inline-check"><input type="checkbox" name="Pflicht" value="JA" '+(c.Pflicht==='JA'?'checked':'')+'> Für Kursabschluss verpflichtend</label>'+
- '<div class="grid"><div><label>Bestehensgrenze (%)</label><input type="number" name="Bestehensgrenze" min="50" max="100" required value="'+h(c.Bestehensgrenze??80)+'"></div>'+
- '<div><label>Maximale Versuche</label><input type="number" name="MaxVersuche" min="1" max="10" required value="'+h(c.MaxVersuche??3)+'"></div>'+
- '<div><label>Zeitlimit in Minuten (0 = ohne)</label><input type="number" name="ZeitlimitMinuten" min="0" max="120" required value="'+h(c.ZeitlimitMinuten??0)+'"></div></div></div>'+
- '<div class="row between"><h3>Fragenkatalog</h3><button type="button" class="secondary" data-qadd="1">+ Neue Frage</button></div>'+
- '<div id="q-editor-rows">'+qEditorRows()+'</div>'+
- '<p class="small muted">Jede vollständig richtige Frage zählt 1 Punkt. Maximal 20 Fragen. Neue Quizversionen können bei Pflichtmodulen einen erneuten Abschluss erfordern.</p>'+
- '<div class="btnline"><button class="primary" type="submit">Quiz speichern</button><button type="button" class="secondary" data-qback="1">Abbrechen</button></div></form></section>';
+function qAnswerHtml(q,i){
+ if(q.typ==='tf')return '<div class="q-right-toggle"><label>Welche Aussage ist richtig?</label><select name="qtf">'+
+  '<option value="0" '+(Number(q.correct?.[0]??0)===0?'selected':'')+'>Richtig</option>'+
+  '<option value="1" '+(Number(q.correct?.[0]??0)===1?'selected':'')+'>Falsch</option></select></div>';
+ if(q.typ==='match')return '<div class="q-matching"><div class="q-match-head"><span>Begriff / Links</span><span>Passende Zuordnung / Rechts</span></div>'+
+  (q.pairs||[['',''],['','']]).map((pair,j)=>'<div class="q-match-row">'+
+   '<input type="text" data-qleft="'+j+'" maxlength="150" placeholder="Begriff '+(j+1)+'" value="'+h(pair[0]||'')+'">'+
+   '<input type="text" data-qright="'+j+'" maxlength="150" placeholder="Richtige Zuordnung '+(j+1)+'" value="'+h(pair[1]||'')+'">'+
+   '<button type="button" class="q-iconbtn" data-qpair-delete="'+j+'" aria-label="Zuordnung entfernen" title="Paar entfernen" '+((q.pairs||[]).length<=2?'disabled':'')+'>×</button></div>').join('')+
+  '<button type="button" class="secondary smallbtn" data-qpair-add="1" '+((q.pairs||[]).length>=6?'disabled':'')+'>+ Zuordnung hinzufügen</button>'+
+  '<p class="small muted">Die richtige Zuordnung wird beim Test automatisch gemischt.</p></div>';
+ return '<div class="q-answers">'+
+  '<p class="small muted">Trage vier Antworten ein und markiere rechts '+(q.typ==='multi'?'mindestens zwei richtige Antworten.':'die eine richtige Antwort.')+'</p>'+
+  Array.from({length:4},(_,j)=>'<label class="q-answer-edit"><span class="q-answer-letter">'+qLetter(j)+'</span>'+
+   '<input type="text" data-qanswer="'+j+'" maxlength="220" placeholder="Antwort '+qLetter(j)+' eingeben" value="'+h(q.options?.[j]||'')+'">'+
+   '<span class="q-correct-label"><input data-qcorrect="1" type="'+(q.typ==='multi'?'checkbox':'radio')+'" name="qc'+i+'" value="'+j+'" '+((q.correct||[]).includes(j)?'checked':'')+'><span>Richtig</span></span></label>').join('')+'</div>';
 }
+function qEditorRows(){
+ return Q_ITEMS.map((q,i)=>{
+  const issue=qValidity(q),open=i===Q_OPEN;
+  return '<details class="q-author-card '+(issue?'q-unfinished':'q-complete')+'" data-qitem="'+i+'" '+(open?'open':'')+'>'+
+   '<summary class="q-author-summary"><span class="q-number">'+String(i+1).padStart(2,'0')+'</span>'+
+   '<span class="q-author-title"><strong>'+h(q.text||'Neue Frage')+'</strong><small>'+(
+      q.typ==='multi'?'Mehrfachauswahl':q.typ==='tf'?'Richtig / Falsch':q.typ==='match'?'Zuordnung':'Eine richtige Antwort')+'</small></span>'+
+   '<span class="q-status '+(issue?'q-status-warn':'q-status-ok')+'">'+(issue?'Unvollständig':'Fertig')+'</span></summary>'+
+   '<div class="q-author-body"><div class="q-item-toolbar"><button type="button" class="smallbtn" data-qmove="-1" '+(i===0?'disabled':'')+'>↑ Hinauf</button>'+
+   '<button type="button" class="smallbtn" data-qmove="1" '+(i===Q_ITEMS.length-1?'disabled':'')+'>↓ Hinunter</button>'+
+   '<button type="button" class="smallbtn" data-qcopy="1">Duplizieren</button>'+
+   '<button type="button" class="smallbtn q-remove" data-qdel="1">Entfernen</button></div>'+
+   '<div class="q-author-fields"><label>Fragetyp<select data-qtype="'+i+'">'+
+   [['single','Eine richtige Antwort'],['multi','Mehrere richtige Antworten'],['tf','Richtig / Falsch'],['match','Begriffe zuordnen']].map(a=>
+    '<option value="'+a[0]+'" '+(a[0]===q.typ?'selected':'')+'>'+a[1]+'</option>').join('')+'</select></label>'+
+   '<label>Fragestellung<textarea name="qtext" rows="2" maxlength="450" placeholder="Was sollen die Teilnehmer beantworten?">'+h(q.text||'')+'</textarea></label>'+
+   qAnswerHtml(q,i)+'</div>'+
+   (issue?'<p class="q-validation-hint"><span>!</span> '+h(issue.message)+'</p>':'')+
+   '</div></details>';
+ }).join('');
+}
+function qRepaint(){
+ const el=document.getElementById('q-editor-rows');if(el)el.innerHTML=qEditorRows();
+ qUpdateStats();
+}
+function qUpdateStats(){
+ const amount=Q_ITEMS.length,ready=Q_ITEMS.filter(q=>!qValidity(q)).length;
+ const total=document.getElementById('qTotal'),done=document.getElementById('qReady');
+ if(total)total.textContent=String(amount);
+ if(done)done.textContent=String(ready);
+ const meter=document.querySelector('.q-editor-meter>span');
+ if(meter)meter.style.width=(amount?Math.round(ready/amount*100):0)+'%';
+}
+function qEditPage(){
+ const course=by(STATE.kurse,Q_EDIT),cfg=Q_META||qCfg(Q_EDIT)||{};
+ const total=Q_ITEMS.length,done=Q_ITEMS.filter(q=>!qValidity(q)).length;
+ return '<section class="panel q-studio"><div class="q-studio-hero"><div><p class="ga-eyebrow">QUIZ-STUDIO / AUSBILDER</p>'+
+  '<h2>'+h(course?.Titel||'Kursquiz')+'</h2><p>Fragen zusammenstellen, richtige Antworten auswählen und das Quiz vor der Veröffentlichung testen.</p></div>'+
+  '<button type="button" class="secondary" data-qback="1">← Zur Übersicht</button></div>'+
+  '<form data-form="quizSave" data-course="'+h(Q_EDIT)+'">'+
+  '<section class="q-studio-settings"><div class="q-studio-settings-top"><h3>Quiz-Einstellungen</h3><span class="tag blue">Nur nach bestätigter Teilnahme</span></div>'+
+  '<div class="q-checkboxes"><label class="inline-check"><input type="checkbox" name="Aktiv" value="JA" '+(cfg.Aktiv==='JA'?'checked':'')+'> Quiz für den Kurs aktivieren</label>'+
+  '<label class="inline-check"><input type="checkbox" name="Pflicht" value="JA" '+(cfg.Pflicht==='JA'?'checked':'')+'> Zum Abschluss verpflichtend</label></div>'+
+  '<div class="q-setting-grid"><label>Bestehensgrenze (%)<input name="Bestehensgrenze" type="number" min="50" max="100" required value="'+h(cfg.Bestehensgrenze??80)+'"></label>'+
+  '<label>Versuche<input name="MaxVersuche" type="number" min="1" max="10" required value="'+h(cfg.MaxVersuche??3)+'"></label>'+
+  '<label>Zeitlimit in Minuten<input name="ZeitlimitMinuten" type="number" min="0" max="120" required value="'+h(cfg.ZeitlimitMinuten??0)+'"></label></div></section>'+
+  '<div class="q-editor-head"><div><h3>Fragenkatalog <span class="q-count" id="qTotal">'+total+'</span></h3>'+
+  '<p><span id="qReady">'+done+'</span> von '+total+' Fragen vollständig</p></div>'+
+  '<div class="q-editor-actions"><button type="button" class="secondary" data-qadd="1" '+(total>=20?'disabled':'')+'>+ Frage hinzufügen</button>'+
+  '<button type="button" class="secondary" data-qbackup="1">Entwurf exportieren</button></div></div>'+
+  '<div class="q-editor-meter"><span style="width:'+(total?Math.round(done/total*100):0)+'%"></span></div>'+
+  '<p class="q-draft-note"><span>●</span> Der Entwurf wird während dieser Browser-Sitzung automatisch zwischengespeichert. Exportiere ihn zusätzlich, wenn du später auf einem anderen Gerät weitermachen möchtest.</p>'+
+  '<div id="q-editor-rows" class="q-editor-list">'+qEditorRows()+'</div>'+
+  '<div class="q-studio-footer"><button type="button" class="secondary" data-qpreview="1"> <span>▷</span> Quiz testen – ohne Speicherung</button>'+
+  '<button type="submit" class="primary">Quiz speichern und übernehmen</button></div>'+
+  '<p class="small muted">Die Testvorschau verändert keine Teilnehmerdaten und verbraucht keine Versuche. Nach dem Speichern wird die aktive Quizversion gemäß den Einstellungen aktualisiert.</p></form></section>';
+}
+function qPreviewPage(){
+ const course=by(STATE.kurse,Q_EDIT);
+ const answers=Q_PREVIEW_ANSWERS||[];
+ const result=Q_PREVIEW_RESULT;
+ const content=Q_ITEMS.map((q,i)=>{
+  const selected=answers[i];
+  const correctLabel=q.typ==='match'?(q.pairs||[]).map(p=>p[0]+' → '+p[1]).join('; '):
+   (q.correct||[]).map(j=>q.typ==='tf'?(j===0?'Richtig':'Falsch'):q.options?.[j]).join(', ');
+  const choices=q.typ==='match'?'<div class="q-preview-matches">'+q.pairs.map((pair,j)=>
+   '<label>'+h(pair[0])+'<select name="pm'+i+'_'+j+'" '+(result?'disabled':'required')+'><option value="">Bitte zuordnen</option>'+
+    q.pairs.map((p,k)=>'<option value="'+k+'" '+(selected?.[j]===k?'selected':'')+'>'+h(p[1])+'</option>').reverse().join('')+'</select></label>').join('')+'</div>':
+   (q.typ==='tf'?['Richtig','Falsch']:q.options).map((t,j)=>
+    '<label class="q-preview-choice"><input name="pa'+i+'" type="'+(q.typ==='multi'?'checkbox':'radio')+'" value="'+j+'" '+
+    ((Array.isArray(selected)?selected.includes(j):selected===j)?'checked':'')+' '+(result?'disabled':'')+'> '+h(t)+'</label>').join('');
+  const hit=result?.details?.[i];
+  return '<section class="q-preview-question"><div class="row between"><span>Frage '+(i+1)+' / '+Q_ITEMS.length+'</span>'+
+   (result?'<span class="tag '+(hit?'ok':'bad')+'">'+(hit?'Richtig':'Falsch')+'</span>':'')+'</div>'+
+   '<h3>'+h(q.text)+'</h3>'+choices+
+   (result?'<p class="q-solution"><b>Richtige Lösung:</b> '+h(correctLabel)+'</p>':'')+'</section>';
+ }).join('');
+ return '<section class="panel q-studio"><div class="q-studio-hero"><div><p class="ga-eyebrow">LOKALER PROBELAUF</p>'+
+  '<h2>'+h(course?.Titel||'Wissenstest')+'</h2><p>Du siehst das Quiz aus Sicht eines Teilnehmers. Das Ergebnis wird nur hier im Browser berechnet.</p></div>'+
+  '<button type="button" class="secondary" data-qpreview-back="1">← Editor</button></div>'+
+  (result?'<div class="q-preview-result"><span>Testergebnis</span><strong>'+result.percent+' %</strong>'+
+   '<p>'+result.correct+' von '+Q_ITEMS.length+' Fragen richtig – '+(result.passed?'Bestanden':'Noch nicht bestanden')+' (Grenze: '+result.limit+' %)</p></div>':
+   '<p class="q-draft-note">Dies ist eine Vorschau. Keine Eintragung in Teilnehmerlisten, keine Quizversuche, keine Änderung am gespeicherten Kurs.</p>')+
+  '<form data-form="quizPreview">'+content+
+  '<div class="q-studio-footer">'+(result?'<button type="button" class="secondary" data-qpreview-again="1">Erneut testen</button>':
+   '<button type="submit" class="primary">Test auswerten</button>')+
+  '<button type="button" class="secondary" data-qpreview-back="1">Zur Bearbeitung</button></div></form></section>';
+}
+function qPreviewSubmit(form){
+ const answers=Q_ITEMS.map((q,i)=>{
+  if(q.typ==='match'){
+   const values=q.pairs.map((_,j)=>form.querySelector('[name="pm'+i+'_'+j+'"]')?.value||'');
+   if(values.some(x=>x===''))throw new Error('Bitte Frage '+(i+1)+' vollständig beantworten.');
+   return values.map(Number);
+  }
+  const selected=Array.from(form.querySelectorAll('[name="pa'+i+'"]:checked')).map(x=>Number(x.value));
+  if(!selected.length)throw new Error('Bitte Frage '+(i+1)+' beantworten.');
+  return q.typ==='multi'?selected:selected[0];
+ });
+ const details=Q_ITEMS.map((q,i)=>{
+  const answer=answers[i];
+  if(q.typ==='match')return answer.every((v,j)=>v===j);
+  if(q.typ==='multi')return [...answer].sort((a,b)=>a-b).join(',')===[...(q.correct||[])].sort((a,b)=>a-b).join(',');
+  return answer===(q.correct||[])[0];
+ });
+ const correct=details.filter(Boolean).length;
+ const setting=document.querySelector('[name="Bestehensgrenze"]'); // unavailable in preview; use saved temporary settings
+ const limit=Number(Q_PREVIEW_LIMIT)||80;
+ Q_PREVIEW_ANSWERS=answers;
+ Q_PREVIEW_RESULT={details,correct,percent:Math.round(correct/Q_ITEMS.length*100),limit,passed:Math.round(correct/Q_ITEMS.length*100)>=limit};
+ render();
+}
+
 function qAdmin(){
- if(Q_EDIT)return qEditPage();
+ if(Q_EDIT)return Q_PREVIEW?qPreviewPage():qEditPage();
  const courses=(STATE.kurse||[]).filter(c=>c.Aktiv==='JA');
  const cards=courses.map(c=>{
   const cfg=qCfg(c.ID),enabled=cfg?.Aktiv==='JA';
