@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.6.0',
+  VERSION: '1.7.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -33,7 +33,8 @@ const GA = Object.freeze({
     ErsteHilfeNachweise: ['ID','MitgliedID','Kursdatum','Stunden','Dateiname','DriveDateiID','Status','EingereichtVon','EingereichtAm','GeprueftVon','GeprueftAm','Pruefnotiz','EmailStatus','EmailGesendetAm','EmailEmpfaenger'],
     QuizKurse: ['ID','KursID','Aktiv','Pflicht','Bestehensgrenze','MaxVersuche','ZeitlimitMinuten','FragenJSON','Version','AktualisiertVon','AktualisiertAm'],
     QuizVersuche: ['ID','KursID','MitgliedID','TerminID','QuizVersion','Versuch','Status','BegonnenAm','AbgegebenAm','Punkte','MaxPunkte','Prozent','Bestanden','AntwortenJSON','FragenSnapshotJSON'],
-    QuizFreigaben: ['ID','KursID','MitgliedID','QuizVersion','ZusatzVersuche','FreigegebenVon','FreigegebenAm']
+    QuizFreigaben: ['ID','KursID','MitgliedID','QuizVersion','ZusatzVersuche','FreigegebenVon','FreigegebenAm'],
+    Sitzungen: ['ID','BenutzerID','TokenHash','HashPrefix','AblaufMillis','WiderrufenAm','ErstelltAm']
   },
   ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
@@ -146,32 +147,55 @@ function gaHash_(password,salt){
 function gaSame_(a,b){a=String(a);b=String(b);let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return diff===0;}
 function gaTokenKey_(token){return 's_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token)).slice(0,52);}
 function gaSession_(token){
-  if(!token||typeof token!=='string')throw new Error('Bitte anmelden.');
-  const session=CacheService.getScriptCache().get(gaTokenKey_(token))||'';
-  const separator=session.lastIndexOf('|');
-  const id=separator<0?'':session.slice(0,separator);
-  const fingerprint=separator<0?'':session.slice(separator+1);
-  const u=id&&gaFind_('Benutzer',id);
-  // Nach Passwortänderung verlieren alle bisherigen Sitzungen ihre Gültigkeit.
-  if(!u||!gaBool_(u.Aktiv)||!u.Hash||
-     fingerprint!==u.Hash.slice(0,24))throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
-  return u;
-}
-function gaLogin(email,password){
-  email=gaText_(email,240).toLowerCase();password=String(password||'');
-  const cache=CacheService.getScriptCache();
-  const fail='f_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,email)).slice(0,50);
-  if(Number(cache.get(fail)||0)>=8)throw new Error('Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.');
-  const u=gaRows_('Benutzer').find(v=>v.Email.toLowerCase()===email&&gaBool_(v.Aktiv));
-  if(!u||!u.Hash||!u.Salt||!gaSame_(gaHash_(password,u.Salt),u.Hash)){
-    cache.put(fail,String(Number(cache.get(fail)||0)+1),900);
-    throw new Error('E-Mail oder Passwort ungültig.');
+ if(!token||typeof token!=='string'||token.length>200)throw new Error('Bitte anmelden.');
+ const key=gaTokenKey_(token),cache=CacheService.getScriptCache();
+ let packed=cache.get(key)||'';
+ let parts=packed.split('|');
+ // Sitzungen aus älteren Versionen bleiben für ihre ursprüngliche Cache-Laufzeit gültig.
+ let userId='',fp='',expire=0;
+ if(parts.length===2){userId=parts[0];fp=parts[1];}
+ else if(parts.length===3&&Number(parts[2])>Date.now()){userId=parts[0];fp=parts[1];expire=Number(parts[2]);}
+ if(!userId){
+  const row=gaOptionalRows_('Sitzungen').find(r=>r.TokenHash===key&&!r.WiderrufenAm&&Number(r.AblaufMillis)>Date.now());
+  if(row){userId=row.BenutzerID;fp=row.HashPrefix;expire=Number(row.AblaufMillis);
+    const ttl=Math.min(21600,Math.max(1,Math.floor((expire-Date.now())/1000)));
+    cache.put(key,userId+'|'+fp+'|'+expire,ttl);
   }
-  cache.remove(fail);
-  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
-  cache.put(gaTokenKey_(token),u.ID+'|'+u.Hash.slice(0,24),21600);
-  gaLog_(u.ID,'LOGIN','Benutzer',u.ID,{});
-  return {token,user:gaPublicUser_(u),version:GA.VERSION};
+ }
+ const user=userId&&gaFind_('Benutzer',userId);
+ if(!user||!gaBool_(user.Aktiv)||!user.Hash||fp!==user.Hash.slice(0,24))
+   throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
+ return user;
+}
+function gaLogin(email,password,remember){
+ email=gaText_(email,240).toLowerCase();password=String(password||'');
+ const cache=CacheService.getScriptCache();
+ const fail='f_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,email)).slice(0,50);
+ if(Number(cache.get(fail)||0)>=8)throw new Error('Zu viele Versuche. Bitte in 15 Minuten erneut versuchen.');
+ const u=gaRows_('Benutzer').find(v=>v.Email.toLowerCase()===email&&gaBool_(v.Aktiv));
+ if(!u||!u.Hash||!u.Salt||!gaSame_(gaHash_(password,u.Salt),u.Hash)){
+  cache.put(fail,String(Number(cache.get(fail)||0)+1),900);
+  throw new Error('E-Mail oder Passwort ungültig.');
+ }
+ cache.remove(fail);
+ const persistent=remember===true||remember==='JA';
+ if(persistent&&!gaSheet_().getSheetByName('Sitzungen'))
+  throw new Error('30-Tage-Anmeldung noch nicht eingerichtet. Administrator: Tabellen prüfen/erstellen ausführen.');
+ const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
+ const expires=Date.now()+(persistent?30*86400000:21600000);
+ const key=gaTokenKey_(token);
+ if(persistent)gaAppend_('Sitzungen',{ID:gaId_(),BenutzerID:u.ID,TokenHash:key,HashPrefix:u.Hash.slice(0,24),
+  AblaufMillis:String(expires),WiderrufenAm:'',ErstelltAm:gaNow_()});
+ cache.put(key,u.ID+'|'+u.Hash.slice(0,24)+'|'+expires,21600);
+ gaLog_(u.ID,'LOGIN','Benutzer',u.ID,{AngemeldetBleiben:persistent});
+ return {token,user:gaPublicUser_(u),version:GA.VERSION,rememberUntil:persistent?expires:null};
+}
+function gaLogoutSession_(token){
+ const key=gaTokenKey_(token);
+ CacheService.getScriptCache().remove(key);
+ const record=gaOptionalRows_('Sitzungen').find(r=>r.TokenHash===key&&!r.WiderrufenAm);
+ if(record)gaReplace_('Sitzungen',record.ID,{WiderrufenAm:gaNow_()});
+ return {ok:true};
 }
 function gaPublicUser_(u){return {ID:u.ID,Name:u.Name,Email:u.Email,Rolle:u.Rolle,Bereich:u.Bereich,Aktiv:u.Aktiv};}
 function gaRequire_(u,roles){if(!roles.includes(u.Rolle))throw new Error('Keine Berechtigung für diese Funktion.');}
@@ -179,7 +203,7 @@ function gaLock_(callback){const l=LockService.getScriptLock();l.waitLock(20000)
 function gaApi(method,data,token){
   const u=gaSession_(token),d=data||{};
   if(method==='state')return gaState_(u);
-  if(method==='logout'){CacheService.getScriptCache().remove(gaTokenKey_(token));return {ok:true};}
+  if(method==='logout')return gaLogoutSession_(token);
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
   if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
@@ -1138,7 +1162,13 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
- const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung',gabDone=valid(m.Aktiv)&&(advanced||(valid(q.GABFreigabe)&&gab.length>0&&gabOpen.length===0));
+ const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung';
+ // Die ausdrückliche Bestätigung des Administrators ist eine eigenständige Freigabe.
+ // Fehlende Pflichtmodule bleiben sichtbar, werden aber nicht als unbeabsichtigte Sperre verwendet.
+ const adminConfirmed=valid(q.GABFreigabe),gabDone=valid(m.Aktiv)&&(advanced||adminConfirmed);
+ const gabDocsComplete=gab.length>0&&gabOpen.length===0;
+ const gabNotice=!gab.length?'Noch keine GAB-Pflichtmodule definiert.':gabOpen.length?
+   gabOpen.length+' GAB-Pflichtmodul(e) ohne bestätigten Abschluss.':'Alle definierten GAB-Pflichtmodule absolviert.';
  // GAB ist die erste Stufe; nach belegtem Abschluss folgt automatisch die Erweiterte Ausbildung.
  // Wer GAB macht, darf bereits vorher freiwillig an erweiterten Kursen teilnehmen.
  const actualPath=gabDone?'Erweiterte Ausbildung':'Grundausbildung';
@@ -1148,7 +1178,7 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
-  GABAbgeschlossen:gabDone,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
+  GABAbgeschlossen:gabDone,GABDokuVollstaendig:gabDocsComplete,GABHinweis:gabNotice,GABManuellBestaetigt:adminConfirmed,BSWModulAbgeschlossen:bswDone,Alter16:!!age16,
   BSWDienstMoeglich:gabDone&&bswDone&&!!age16,
   Fortschritt:requirements.length?Math.round(done*100/requirements.length):0,
   PflichtGesamt:requirements.length,PflichtAbsolviert:done,
