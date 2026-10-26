@@ -232,14 +232,14 @@ function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder';
  const base=admin?[
  ['overview','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],['quizzes','Quizverwaltung'],
- ['terms','Termine'],['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['abschnitt','Abschnittsmodule A/B'],['checks','Checklisten'],
+ ['terms','Termine'],['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['freeActivities','Freie Tätigkeiten'],['turnus','Turnusse'],['members','Mitglieder'],['qualifications','Qualifikationen'],['abschnitt','Abschnittsmodule A/B'],['checks','Checklisten'],
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:trainer?[
  ['courses','Kurskatalog'],['projects','Kursprojekte'],
  ...(can.KurseGestalten||can.KurseBearbeiten?[['quizzes','Quizverwaltung']]:[]),
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
- ['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['reports','Mängel & Ideen'],
+ ['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['freeActivities','Freie Tätigkeiten'],['reports','Mängel & Ideen'],
  ...(can.BewertungenAnsehen?[['reviews','Kursbewertungen']]:[]),
  ...(can.FrageboegenBearbeiten?[['questionnaires','Fragebögen']]:[])
  ]:r==='Teilnehmer'?[
@@ -254,11 +254,11 @@ function title(){return ({
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',abschnitt:'Abschnittsmodule A/B',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
- attendance:'Ausbildung durchführen',trainingReports:'FDISK-Tätigkeitsberichte',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
+ attendance:'Ausbildung durchführen',trainingReports:'FDISK-Tätigkeitsberichte',freeActivities:'Freie Tätigkeiten',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?messages():VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?questionnaires():VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -530,7 +530,7 @@ function reviews(){
  '</div></section>';
 }
 function areaOptions(sel){return ['Grundausbildung','Erweiterte Ausbildung'].map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
-function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+(c&&safeLinks(c.Links)?'<div class="btnline"><button class="smallbtn" data-linkcourse="'+h(c.ID)+'">Kursunterlagen anzeigen</button></div>':'')+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
+function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+'<div class="btnline"><button type="button" class="primary" data-training-open="'+h(t.ID)+'">Kurs öffnen & Präsentation</button></div>'+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
 function terms(){
  const courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');
  const create=STATE.rechte?.TerminePlanen?
@@ -1103,6 +1103,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='requirement')await doSave('setCourseRequirement',data);
  else if(type==='singleAttendance')await doSave('setAttendanceMember',data);
  else if(type==='attendance')await gaSaveTrainingAttendance(form,fd);
+ else if(type==='freeActivity')await gaSubmitFreeActivity(form,fd);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script><script src="./training-report-ui.js"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script></body></html>
