@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.2',
+  VERSION: '1.12.3',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -1245,13 +1245,11 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
     if(user)gaNotify_(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
       'Du hast an „'+(course?course.Titel:'Ausbildung')+'“ teilgenommen. Du kannst den Kurs jetzt in der App bewerten.',term.ID);
   });
-  if(course?.Bereich===GA_ADV_AREA){
-   if(firstTime.length)gaNotifyAdvancedOrganizers_('Aufgabe','Ausbildung abgeschlossen',course.Titel,term.ID);
-   firstTime.forEach(m=>{
-    const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
-    if(account)gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course.Titel,term.ID);
-   });
-  }
+  if(course?.Bereich===GA_ADV_AREA&&firstTime.length)gaNotifyAdvancedOrganizers_('Aufgabe','Ausbildung abgeschlossen',course.Titel,term.ID);
+  firstTime.forEach(m=>{
+   const account=users.find(x=>String(x.Email||'').trim().toLowerCase()===String(m.Email||'').trim().toLowerCase());
+   if(account)gaNotify_(account.ID,'Aufgabe','Kurs abgeschlossen','Deine Teilnahme an „'+(course?.Titel||'Ausbildung')+'“ wurde bestätigt.',term.ID);
+  });
   // Both GAB and advanced course participants receive the correct quiz type.
   const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
   if(quiz&&course){
@@ -2424,6 +2422,9 @@ function gaSubmitQuiz_(u,d){
  owner.filter(x=>gaBool_(x.Aktiv)&&(x.Rolle==='Administrator'||(x.Rolle==='Ausbilder'&&gaCan_(x,'KurseGestalten'))))
   .filter(x=>x.ID!==u.ID).forEach(x=>gaNotify_(x.ID,'Aufgabe','Kursquiz abgegeben',
    m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID));
+ const quizCourse=gaFind_('Kurse',attempt.KursID),quizTerm=gaFind_('Termine',attempt.TerminID);
+ if(quizCourse?.Bereich===GA_ADV_AREA&&quizTerm&&gaFind_('Turnusse',quizTerm.TurnusID)?.Bereich===GA_ADV_AREA&&gaAdvAllowedMembers_(quizTerm.TurnusID).some(member=>member.ID===m.ID))
+  gaNotifyAdvancedOrganizers_('Aufgabe','Kursquiz abgegeben',m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);
  gaLog_(u.ID,'QUIZ_ABGEBEN','Kurs',attempt.KursID,{MitgliedID:m.ID,QuizVersion:attempt.QuizVersion,Prozent:percent,Bestanden:passed});
  const attempts=gaRows_('QuizVersuche').filter(x=>x.MitgliedID===m.ID&&x.KursID===attempt.KursID&&x.QuizVersion===config.Version).length;
  return {ok:true,Bestanden:passed,Punkte:correct,MaxPunkte:qs.length,Prozent:percent,
