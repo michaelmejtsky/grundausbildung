@@ -1,3 +1,17 @@
+## Erweiterte Ausbildung – Organisator V1.11.0
+
+Neue Hauptrolle **Organisator Erweiterte Ausbildung**: eigene Übersicht, bereichsgebundene Kurse/Kursprojekte/Freigaben, erweiterte Turnusse und Termine, Quiz, Fragebögen, Bewertungen, Qualifikationen, Tätigkeitsberichte, Mängel & Ideen und Nachrichten. Die Rechte sind im Apps-Script-Backend geprüft und erzwungen.
+
+GAB-Mitglieder erscheinen für den Organisator zunächst nur mit ID und Namen. Die zusätzliche Zuordnung zu einem erweiterten Turnus steht in `ErweiterteZuordnungen`; ursprüngliche GAB-Turnusse und GAB-Abschlüsse bleiben unverändert. GAB-Gäste können auch vor ihrem GAB-Abschluss an erweiterten Modulen teilnehmen. Das eingeladene Mitglied erhält die Nachricht per registriertem Zugang; die E-Mail des GAB-Gasts wird dem Organisator nicht offenbart.
+
+Nachrichten einzeln, für einen erweiterten Turnus oder für alle zugeordneten Teilnehmer. Persönliche Antworten sind ebenfalls möglich. Push wird bei persönlichen Nachrichten, neuen Terminen, Quizverfügbarkeit und Kursabschluss erzeugt, sofern Geräte und Push-Einstellungen es erlauben.
+
+**Deployment:** Die neueste `Code.gs` muss im vorhandenen, an die Ausbildungsdatenbank gebundenen Apps Script als neue Version der **bestehenden** `/exec`-Bereitstellung veröffentlicht werden. GitHub Pages liefert nur die Oberfläche. Das neue Tabellenblatt `ErweiterteZuordnungen` und die Spalte `Bereich` in `FreieTaetigkeiten` wurden bereits in der bestehenden Ausbildungs-Google-Tabelle erstellt.
+
+**Alte PDF-Version:** Cloudflare Worker benutzt `env.GA_SCRIPT_URL || DEPLOYED_SCRIPT_URL`. Eine gesetzte Worker-Variable `GA_SCRIPT_URL` kann auf eine alte Apps-Script-Bereitstellung zeigen. Im Cloudflare-Dashboard Ziel-`/exec` mit dem tatsächlich neu bereitgestellten Apps Script abgleichen. Weder Apps-Script- noch GitHub-Veröffentlichung allein ändern eine Cloudflare-Umgebungsvariable.
+
+Teststand: unabhängige Testpersonen für GAB und erweiterte Ausbildung, blockierte GAB-Zugriffe, nicht destruktive GAB-Gast-Zuordnung, Anwesenheiten, Nachrichten und Push-Ereignisse geprüft. Produktive PDF- und Push-Zustellung nach Apps-Script-/Worker-Veröffentlichung nicht verifiziert.
+
 ## Erweiterte Ausbildung – Organisatorrolle V1.11.0 (27.10.2026)
 
 - Neue eigenständige Hauptrolle **Organisator Erweiterte Ausbildung**, im Administratorbereich **Zugänge & Rollen** auswählbar. Der Organisator erhält eine separate Oberfläche mit Übersicht, Teilnehmer-/Gastverwaltung, Einladungen, Kurskatalog/-projekten, Quiz, Turnussen, Terminen, Tätigkeitserfassung/PDF, Bewertungen/Fragebögen, Nachrichten, Mängel & Ideen.
