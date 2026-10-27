@@ -180,6 +180,12 @@ function gaText_(x,max){return String(x===undefined||x===null?'':x).trim().slice
 function gaCell_(x){const v=String(x===undefined||x===null?'':x);return /^[\s]*[=+@-]/.test(v)?"'"+v:v;}
 function gaEmail_(x){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x||'').trim());}
 function gaBool_(x){return String(x).toUpperCase()==='JA';}
+function gaOwnMember_(u,members){
+ const email=String(u.Email||'').trim().toLowerCase();
+ if(!email)return null;
+ const matches=(members||gaRows_('Mitglieder')).filter(m=>gaBool_(m.Aktiv)&&String(m.Email||'').trim().toLowerCase()===email);
+ return matches.length===1?matches[0]:null;
+}
 function gaRows_(name){
   const sh=gaSheet_().getSheetByName(name); if(!sh)throw new Error('Fehlendes Blatt '+name+'. Bitte zuerst einrichten.');
   const last=sh.getLastRow(); if(last<2)return [];
@@ -355,7 +361,7 @@ function gaAdvancedOrganizerState_(u){
   bewertungen:gaOptionalRows_('Bewertungen').filter(x=>courseIDs.has(x.KursID)),
   qualifikationen:native.filter(x=>gaBool_(x.Aktiv)).map(m=>gaQualificationStatus_(m,
    gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('KursAnforderungen'),courses,terms,attend,
-   turnusse,cfg,attempts,[])),
+   turnusse,cfg,attempts,[],assignments)),
   ausbildungsberichte:gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID)),
   freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
   meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
@@ -505,11 +511,10 @@ function gaApi(method,data,token){
 /** Selbstdiagnose ohne persönliche Daten Dritter. Beweist, welche Backend-Version der Teilnehmer erreicht. */
 function gaParticipantStatus_(u){
  gaRequire_(u,['Teilnehmer']);
- const email=String(u.Email||'').trim().toLowerCase();
- const member=gaRows_('Mitglieder').find(m=>gaBool_(m.Aktiv)&&String(m.Email||'').trim().toLowerCase()===email);
+ const member=gaOwnMember_(u);
  if(!member)return {ok:true,backendVersion:GA.VERSION,mitgliedGefunden:false,
   termine:0,kurse:0,qualifikationen:0,nachrichten:0,benachrichtigungen:0,
-  hinweis:'Kein aktives Mitglied ist mit der E-Mail dieses Teilnehmerkontos verknüpft.'};
+  hinweis:'Kein eindeutig zugeordnetes aktives Mitglied gefunden. Bitte E-Mail und mögliche doppelte Mitgliedseinträge prüfen.'};
  const turns=gaRows_('Turnusse'),allTerms=gaRows_('Termine'),courses=gaRows_('Kurse');
  const turnIDs=new Set([member.TurnusID,...gaAdvAssignments_().filter(x=>x.MitgliedID===member.ID).map(x=>x.TurnusID)]);
  const terms=allTerms.filter(t=>turnIDs.has(t.TurnusID));
@@ -532,7 +537,7 @@ function gaState_(u){
  const allTurnusse=gaRows_('Turnusse'),allKurse=gaRows_('Kurse'),
   allTermine=gaRows_('Termine'),allMembers=gaRows_('Mitglieder'),
   allItems=gaRows_('Checklistenpunkte'),allChecks=gaRows_('MitgliedChecks');
- const own=allMembers.find(m=>m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase()&&gaBool_(m.Aktiv))||null;
+ const own=gaOwnMember_(u,allMembers);
  const aidRows=admin||!!own?gaOptionalRows_('ErsteHilfeNachweise'):[];
  const aidRowsVisible=(admin?aidRows:own?aidRows.filter(x=>x.MitgliedID===own.ID):[])
    .map(({DriveDateiID,EmailEmpfaenger,...r})=>admin?{...r,EmailEmpfaenger}:r);
@@ -544,7 +549,8 @@ function gaState_(u){
  const ratings=(participant||rights.BewertungenAnsehen)?gaOptionalRows_('Bewertungen'):[];
  const questionnaires=(admin||trainer||participant)?gaOptionalRows_('BewertungsFrageboegen'):[];
  const devices=gaOptionalRows_('PushGeraete'),pushRulesRows=gaOptionalRows_('PushRegeln');
- const extraTurns=own?new Set(gaAdvAssignments_().filter(x=>x.MitgliedID===own.ID).map(x=>x.TurnusID)):new Set();
+ const assignments=gaAdvAssignments_();
+ const extraTurns=own?new Set(assignments.filter(x=>x.MitgliedID===own.ID).map(x=>x.TurnusID)):new Set();
  const ownTerm=own?allTermine.filter(t=>t.TurnusID===own.TurnusID||extraTurns.has(t.TurnusID)):[];
  const ownAttendance=own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
  const ownRatings=own?ratings.filter(r=>r.MitgliedID===own.ID):[];
@@ -555,7 +561,7 @@ function gaState_(u){
  const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
  const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
@@ -590,7 +596,7 @@ function gaState_(u){
   meMember:own,
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
-  erweiterteZuordnungen:own?gaAdvAssignments_().filter(x=>x.MitgliedID===own.ID).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})):[],
+  erweiterteZuordnungen:own?assignments.filter(x=>x.MitgliedID===own.ID).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})):[],
   ausbildungsberichte:trainingReports,
   freieTaetigkeiten:freeActivities,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
@@ -1797,7 +1803,7 @@ function gaSetReportStatus_(u,d){
 /** Teilnehmerbewertungen nur für bestätigte Anwesenheiten, 1 pro Termin. */
 function gaSaveRating_(u,d){
  gaRequire_(u,['Teilnehmer']);
- const member=gaRows_('Mitglieder').find(m=>gaBool_(m.Aktiv)&&m.Email&&m.Email.toLowerCase()===u.Email.toLowerCase());
+ const member=gaOwnMember_(u);
  if(!member)throw new Error('Kein aktives Mitgliedsprofil zugeordnet.');
  const term=gaFind_('Termine',gaText_(d.TerminID,100));
  if(!term||term.Status!=='Durchgeführt'||(term.TurnusID!==member.TurnusID&&!gaAdvAssignments_().some(a=>a.MitgliedID===member.ID&&a.TurnusID===term.TurnusID)))
@@ -1855,7 +1861,7 @@ function gaAidMember_(u,memberId){
    return m;
  }
  gaRequire_(u,['Teilnehmer']);
- const m=gaRows_('Mitglieder').find(x=>gaBool_(x.Aktiv)&&x.Email&&x.Email.toLowerCase()===u.Email.toLowerCase());
+ const m=gaOwnMember_(u);
  if(!m||id&&id!==m.ID)throw new Error('Zugriff nur auf das eigene aktive Mitgliedsprofil erlaubt.');
  return m;
 }
@@ -2052,14 +2058,15 @@ function gaResendAidEmail_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt){
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
+ const memberTurns=new Set([m.TurnusID,...(assignments||[]).filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)]);
  const complete=id=>{
    if(id==='GAB-ABSCHNITT-BLOCK-A'||id==='GAB-ABSCHNITT-BLOCK-B'){
      const proof=(abschnitt||[]).find(x=>x.MitgliedID===m.ID&&x.KursID===id);
      return !!proof&&valid(proof.Absolviert)&&(id!=='GAB-ABSCHNITT-BLOCK-B'||valid(proof.PruefungBestanden));
    }
-   const attended=terms.some(t=>t.KursID===id&&t.TurnusID===m.TurnusID&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+   const attended=terms.some(t=>t.KursID===id&&memberTurns.has(t.TurnusID)&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
    if(!attended)return false;
    const config=(quizCfg||[]).find(c=>c.KursID===id&&valid(c.Aktiv)&&valid(c.Pflicht));
    if(!config)return true;
@@ -2322,7 +2329,7 @@ function gaSaveQuiz_(u,d){
 }
 function gaQuizMember_(u){
  gaRequire_(u,['Teilnehmer','Ausbilder','Fachverwaltung','Administrator']);
- const m=gaRows_('Mitglieder').find(x=>gaBool_(x.Aktiv)&&String(x.Email||'').toLowerCase()===String(u.Email||'').toLowerCase());
+ const m=gaOwnMember_(u);
  if(!m)throw new Error('Dein Mitgliedsprofil wurde nicht gefunden.');
  return m;
 }

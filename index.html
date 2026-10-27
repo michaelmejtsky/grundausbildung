@@ -293,7 +293,7 @@ function navs(){
  ['mine','Meine Übersicht'],['myterms','Ausbildungstermine'],['myquiz','Wissenstests'],
  ['ratings','Kurs bewerten'],['messages','Nachrichten']
  ]:[['tasks','Meine Aufgaben']];
- const personal=STATE.meMember?base:base.filter(x=>!['mine','myterms','myquiz'].includes(x[0]));
+ const personal=STATE.meMember?base:base.filter(x=>!['myterms','myquiz'].includes(x[0]));
  return personal.concat([['notifications','Benachrichtigungen']]);
 }
 function title(){return ({
