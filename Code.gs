@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.0',
+  VERSION: '1.12.1',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -448,6 +448,7 @@ function gaApi(method,data,token){
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
   if(method==='state')return gaState_(u);
+  if(method==='participantStatus')return gaParticipantStatus_(u);
   if(method==='logout')return gaLogoutSession_(token);
   if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
@@ -500,6 +501,30 @@ function gaApi(method,data,token){
   if(method==='readAidPdf')return gaReadAidPdf_(u,d);
   throw new Error('Unbekannte Aktion.');
 }
+
+/** Selbstdiagnose ohne persönliche Daten Dritter. Beweist, welche Backend-Version der Teilnehmer erreicht. */
+function gaParticipantStatus_(u){
+ gaRequire_(u,['Teilnehmer']);
+ const email=String(u.Email||'').trim().toLowerCase();
+ const member=gaRows_('Mitglieder').find(m=>gaBool_(m.Aktiv)&&String(m.Email||'').trim().toLowerCase()===email);
+ if(!member)return {ok:true,backendVersion:GA.VERSION,mitgliedGefunden:false,
+  termine:0,kurse:0,qualifikationen:0,nachrichten:0,benachrichtigungen:0,
+  hinweis:'Kein aktives Mitglied ist mit der E-Mail dieses Teilnehmerkontos verknüpft.'};
+ const turns=gaRows_('Turnusse'),allTerms=gaRows_('Termine'),courses=gaRows_('Kurse');
+ const turnIDs=new Set([member.TurnusID,...gaAdvAssignments_().filter(x=>x.MitgliedID===member.ID).map(x=>x.TurnusID)]);
+ const terms=allTerms.filter(t=>turnIDs.has(t.TurnusID));
+ const allowedCourses=courses.filter(c=>gaBool_(c.Aktiv)&&(
+  turns.some(t=>turnIDs.has(t.ID)&&t.Bereich===c.Bereich)||terms.some(t=>t.KursID===c.ID)));
+ const visibleMessages=gaRows_('Nachrichten').filter(n=>!n.TurnusID||turnIDs.has(n.TurnusID)||
+  n.TurnusID==='M:'+member.ID||(n.TurnusID==='ADV:ALLE'&&gaAdvMemberAllowed_(member)));
+ return {ok:true,backendVersion:GA.VERSION,mitgliedGefunden:true,
+  termine:terms.length,kurse:allowedCourses.length,
+  qualifikationen:gaRows_('QualifikationMitglieder').filter(x=>x.MitgliedID===member.ID).length,
+  nachrichten:visibleMessages.length,
+  benachrichtigungen:gaRows_('Benachrichtigungen').filter(x=>x.BenutzerID===u.ID).length,
+  hinweis:'Aktuelle Datensätze in der verbundenen Ausbildungsdatenbank.'};
+}
+
 function gaState_(u){
  if(gaIsAdvOrg_(u))return gaAdvancedOrganizerState_(u);
  const admin=u.Rolle==='Administrator',trainer=u.Rolle==='Ausbilder',
