@@ -518,7 +518,7 @@ function gaState_(u){
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
-  turnusse:admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID):[],
+  turnusse:admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID||extraTurns.has(t.ID)):[],
   kurse:admin||trainer?allKurse:own?allKurse.filter(c=>ownTerm.some(t=>t.KursID===c.ID)):[],
   termine:admin||trainer?allTermine:ownTerm,
   mitglieder:admin||trainer?allMembers:special?allMembers.filter(m=>gaBool_(m.Aktiv)).map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[],
@@ -526,7 +526,7 @@ function gaState_(u){
   checks:admin?allChecks:special?allChecks.filter(ch=>allItems.some(it=>it.ID===ch.PunktID&&it.Zustaendig===u.Bereich)):
     participant&&own?allChecks.filter(ch=>ch.MitgliedID===own.ID):[],
   teilnahmen:admin||trainer?gaRows_('Teilnahmen'):ownAttendance,
-  nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||n.TurnusID==='M:'+own.ID):[],
+  nachrichten:admin?gaRows_('Nachrichten'):participant&&own?gaRows_('Nachrichten').filter(n=>!n.TurnusID||n.TurnusID===own.TurnusID||extraTurns.has(n.TurnusID)||n.TurnusID==='M:'+own.ID||(n.TurnusID==='ADV:ALLE'&&gaAdvMemberAllowed_(own))):[],
   benachrichtigungen:notifications,
   pushEigeneRegeln:gaPushRule_(u.ID,pushRulesRows),
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
