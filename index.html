@@ -442,7 +442,7 @@ function reports(){
  const admin=role()==='Administrator',manager=admin||!!STATE.rechte?.MeldungenBearbeiten;
  const cats=['Mangel App','Mangel Ausbildung','Idee Ausbildung','Idee App'],
   statuses=['Offen','In Bearbeitung','Erledigt','Abgelehnt'];
- const submit=admin||role()==='Ausbilder'?
+ const submit=admin||role()==='Ausbilder'||role()==='Organisator Erweiterte Ausbildung'?
  '<section class="panel"><h2>Idee oder Mangel melden</h2><form data-form="report"><div class="grid">'+
  '<div><label>Kategorie</label><select name="Kategorie">'+cats.map(x=>'<option>'+h(x)+'</option>').join('')+'</select></div>'+
  '<div><label>Betroffener Kurs (optional)</label><select name="KursID"><option value="">Allgemein</option>'+STATE.kurse.map(c=>'<option value="'+h(c.ID)+'">'+h(c.Titel)+'</option>').join('')+'</select></div>'+
@@ -503,7 +503,7 @@ function ratings(){
 function questionnaires(){
  if(!STATE.rechte?.FrageboegenBearbeiten)return '<section class="panel">Keine Berechtigung.</section>';
  const forms=STATE.frageboegen||[];
- const courseOpts=[{ID:'ALLGEMEIN',Titel:'Allgemeine Vorlage – gilt für alle Kurse'}].concat(STATE.kurse);
+ const courseOpts=role()==='Organisator Erweiterte Ausbildung'?STATE.kurse:[{ID:'ALLGEMEIN',Titel:'Allgemeine Vorlage – gilt für alle Kurse'}].concat(STATE.kurse);
  const blocks=courseOpts.map(c=>{
  const configured=forms.find(x=>x.KursID===c.ID);
  const fallback=gaQuestions(c.ID);
