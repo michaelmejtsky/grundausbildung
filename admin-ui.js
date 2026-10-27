@@ -43,7 +43,8 @@ const gaMetric=(n,label,help)=>'<div class="ga-kpi"><strong>'+h(n)+'</strong><sp
 function overview(){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
  const qs=STATE.qualifikationen||[],pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
- const checks=(STATE.checks||[]).filter(c=>c.Status==='Offen');
+ const activeMemberIds=new Set(members.map(m=>m.ID));
+ const checks=(STATE.checks||[]).filter(c=>activeMemberIds.has(c.MitgliedID)&&c.Status==='Offen');
  const openMembers=new Set(checks.map(c=>c.MitgliedID));
  const qbad=qs.filter(q=>!q.GABAbgeschlossen).length,good=qs.filter(q=>q.GABAbgeschlossen).length;
  const due=(STATE.termine||[]).filter(t=>gaTrainingUpcoming(t)).sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn)).slice(0,4);
@@ -73,7 +74,8 @@ function gaCheckSelect(row){
 }
 function checks(){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
- const raw=(STATE.checks||[]),filtered=members.filter(m=>{
+ const activeMemberIds=new Set(members.map(m=>m.ID));
+ const raw=(STATE.checks||[]).filter(c=>activeMemberIds.has(c.MitgliedID)),filtered=members.filter(m=>{
   if(GA_CHECK_TURNUS&&m.TurnusID!==GA_CHECK_TURNUS)return false;
   if(GA_CHECK_QUERY&&!gaMatches(name(m)+' '+m.Standesbuchnummer+' '+m.Email,GA_CHECK_QUERY))return false;
   if(GA_CHECK_STATUS==='Alle')return raw.some(c=>c.MitgliedID===m.ID);
@@ -96,7 +98,7 @@ function checks(){
  '<button type="button" class="secondary" data-ga-clear="check">Schließen</button></div>'+
  (own.length?own.map(gaCheckSelect).join(''):'<p class="muted">Keine Checklistenpunkte hinterlegt.</p>')+'</section>':'<section class="panel ga-admin-placeholder"><h2>Mitglied auswählen</h2><p>Wähle links eine Person aus, um nur deren Checkliste zu bearbeiten.</p></section>';
  return '<div class="ga-page-heading"><div><h2>Checklistenverwaltung</h2><p>Filtern, Mitglied auswählen, Status bearbeiten – auch bei vielen Teilnehmern.</p></div></div>'+
- '<div class="ga-kpis">'+gaMetric(open,'Offene Punkte','Noch zu bearbeiten')+gaMetric(done,'Erledigt','Bestätigte Aufgaben')+gaMetric(total,'Einträge insgesamt','Über alle Mitglieder')+'</div>'+
+ '<div class="ga-kpis">'+gaMetric(open,'Offene Punkte','Noch zu bearbeiten')+gaMetric(done,'Erledigt','Bestätigte Aufgaben')+gaMetric(total,'Einträge insgesamt','Über aktive Mitglieder')+'</div>'+
  '<section class="panel"><h2>Mitglieder & Status</h2>'+controls+'<div class="ga-admin-split"><div class="ga-person-list">'+(list||gaNotice('Keine Mitglieder für diesen Filter gefunden.'))+
  (filtered.length>GA_CHECK_LIMIT?'<button class="secondary full" type="button" data-ga-more="check">Weitere '+(filtered.length-GA_CHECK_LIMIT)+' Mitglieder anzeigen</button>':'')+
  '<p class="small muted">'+filtered.length+' Mitglieder entsprechen der Auswahl</p></div>'+panel+'</div></section>'+
