@@ -481,3 +481,10 @@
 .ga-organizer-roster b{font-size:14px;overflow-wrap:anywhere}
 .ga-organizer-roster .tag{flex:none}
 @media(max-width:720px){.ga-organizer-cards{grid-template-columns:1fr}.ga-organizer-roster>div{align-items:flex-start;flex-direction:column}}
+
+/* Persönliche Antworten in der erweiterten Ausbildung */
+.ga-org-reply{margin:14px 0 5px;padding:13px;border:1px solid #dce7f0;border-radius:11px;background:#f6fbff;display:grid;gap:8px;max-width:650px}
+.ga-org-reply label{display:block;font-size:12px;font-weight:700;color:#365a74}
+.ga-org-reply input,.ga-org-reply textarea{display:block;margin:5px 0 0;width:100%;box-sizing:border-box}
+.ga-org-reply button{justify-self:start}
+@media(max-width:640px){.ga-org-reply button{width:100%}}
