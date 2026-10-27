@@ -313,7 +313,7 @@ document.getElementById('gaBackdrop')?.addEventListener('click',()=>document.bod
 let GA_USER_QUERY='',GA_USER_ROLE='',GA_USER_LIMIT=40,GA_SELECTED_USER='';
 let GA_RIGHTS_FOCUS='';
 function gaUserRoleSelect(current,attr){
- return '<select '+attr+'>'+['Teilnehmer','Ausbilder','Fachverwaltung','Administrator'].map(r=>
+ return '<select '+attr+'>'+['Teilnehmer','Ausbilder','Fachverwaltung','Organisator Erweiterte Ausbildung','Administrator'].map(r=>
   '<option value="'+r+'" '+(r===current?'selected':'')+'>'+r+'</option>').join('')+'</select>';
 }
 function gaUserEdit(u){
@@ -362,7 +362,7 @@ function users(){
  '<section class="panel"><h2>Benutzer suchen</h2><div class="ga-admin-toolbar"><div><label>Suche nach Name oder E-Mail</label>'+
  '<input type="search" data-ga-search="user" value="'+h(GA_USER_QUERY)+'" placeholder="Mitglied oder Benutzer suchen"></div>'+
  '<div><label>Hauptrolle filtern</label><select data-ga-select="userRole"><option value="">Alle Rollen</option>'+
- ['Teilnehmer','Ausbilder','Fachverwaltung','Administrator'].map(role=>'<option value="'+role+'" '+(GA_USER_ROLE===role?'selected':'')+'>'+role+'</option>').join('')+
+ ['Teilnehmer','Ausbilder','Fachverwaltung','Organisator Erweiterte Ausbildung','Administrator'].map(role=>'<option value="'+role+'" '+(GA_USER_ROLE===role?'selected':'')+'>'+role+'</option>').join('')+
  '</select></div></div><div class="ga-admin-split"><div class="ga-person-list">'+
  (list||gaNotice('Kein Benutzer gefunden.'))+
  (filtered.length>GA_USER_LIMIT?'<button type="button" class="secondary full" data-ga-more="user">Weitere Zugänge anzeigen</button>':'')+
