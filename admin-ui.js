@@ -22,10 +22,6 @@ function gaMenuHtml(tabs){
   ['Erweiterte Ausbildung',['advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
- ]:advanced?[
-  ['Erweiterte Ausbildung',['advOverview','advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
-  ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
-  ['Kommunikation & Qualität',['messages','reports','questionnaires','reviews','notifications']]
  ]:trainer?[
   ['Ausbildung',['courses','projects','quizzes','terms']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
