@@ -420,3 +420,18 @@
  .ga-training-continue button,.ga-training-finish-buttons button{width:100%}
  .ga-training-finish-buttons{flex-direction:column}
 }
+
+
+/* PDF template connection diagnostic – explicitly identifies the deployed Apps Script version. */
+.ga-pdf-check-panel{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;border:1px solid #cbdce8;
+ border-left:4px solid #2e719b;border-radius:13px;padding:15px 17px;margin:13px 0 19px;background:#f5faff}
+.ga-pdf-check-text{flex:1;min-width:240px}
+.ga-pdf-check-text strong{font-size:16px;color:#1c4a69}
+.ga-pdf-check-text p{margin:5px 0 0;font-size:12px;color:#46657b;line-height:1.5}
+.ga-pdf-check-text .ga-pdf-check-warning{color:#975a21;font-weight:750}
+.ga-pdf-check-result{width:100%;margin:0;font-size:13px;color:#49677b;line-height:1.5}
+.ga-pdf-check-result:empty{display:none}
+.ga-pdf-check-result.ok{background:#e7f8ee;border:1px solid #bce3cd;border-radius:8px;padding:10px;color:#165b3b}
+.ga-pdf-check-result.warn{background:#fff3df;border:1px solid #eed6a7;border-radius:8px;padding:10px;color:#81571b}
+.ga-pdf-check-panel>button{white-space:normal}
+@media(max-width:660px){.ga-pdf-check-panel>button{width:100%}}
