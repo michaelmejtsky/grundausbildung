@@ -9,7 +9,8 @@ function qCourseStatus(courseId,memberId,turnusId){
  const config=qCfg(courseId);
  const member=memberId?(STATE.mitglieder||[]).find(m=>m.ID===memberId):null;
  const turnus=turnusId||member?.TurnusID||STATE.meMember?.TurnusID||'';
- const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||t.TurnusID===turnus));
+ const allowed=new Set([turnus,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
+ const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||allowed.has(t.TurnusID)));
  const attended=(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&terms.some(t=>t.ID===a.TerminID));
  const active=config?.Aktiv==='JA',required=active&&config.Pflicht==='JA';
  const success=active&&(STATE.quizVersuche||[]).some(a=>a.KursID===courseId&&a.MitgliedID===memberId&&
