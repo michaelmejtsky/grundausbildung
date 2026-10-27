@@ -656,9 +656,11 @@ function gaQueueCourseReminders_(now){
   const dateString=Utilities.formatDate(date,'Europe/Vienna','dd.MM.yyyy');
   const timeString=Utilities.formatDate(date,'Europe/Vienna','HH:mm');
   const ref='TERM8H:'+term.ID+':'+String(term.Beginn).trim().replace(' ','T').slice(0,16);
-  const title='Heute: '+course.Titel;
-  const message='Erinnerung: „'+course.Titel+'“ findet heute, '+dateString+' um '+timeString+
-   ' Uhr statt'+(term.Ort?' (Ort: '+term.Ort+')':'')+'.';
+  const isToday=Utilities.formatDate(current,'Europe/Vienna','yyyy-MM-dd')===
+   Utilities.formatDate(date,'Europe/Vienna','yyyy-MM-dd');
+  const title=(isToday?'Heute: ':'Morgen: ')+course.Titel;
+  const message='Erinnerung: „'+course.Titel+'“ findet '+(isToday?'heute':'morgen')+
+   ', '+dateString+' um '+timeString+' Uhr statt'+(term.Ort?' (Ort: '+term.Ort+')':'')+'.';
   for(const member of members){
    if(member.TurnusID!==term.TurnusID&&!assignments.some(a=>a.MitgliedID===member.ID&&a.TurnusID===term.TurnusID))continue;
    const account=accounts.get(String(member.Email).toLowerCase());
