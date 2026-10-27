@@ -726,18 +726,54 @@ function gaSaveMember_(u,d){
   if(d.ID){
     const existing=rows.find(m=>m.ID===d.ID);
     if(!existing)throw new Error('Mitglied wurde nicht gefunden.');
-    if(String(existing.Email||'').toLowerCase()!==email&&
-       gaRows_('Benutzer').some(x=>x.Rolle==='Teilnehmer'&&x.Email.toLowerCase()===String(existing.Email||'').toLowerCase())){
-      throw new Error('Dieses Mitglied hat bereits einen Teilnehmerzugang. Die E-Mail kann erst geändert werden, wenn der alte Zugang durch den Administrator getrennt wurde.');
+    const beforeEmail=String(existing.Email||'').trim().toLowerCase();
+    const changedEmail=beforeEmail!==email;
+    const allAccounts=gaRows_('Benutzer');
+    const linked=beforeEmail?allAccounts.filter(x=>String(x.Email||'').trim().toLowerCase()===beforeEmail):[];
+    if(changedEmail){
+      if(linked.length>1)throw new Error('Mehrere Benutzer verwenden die alte E-Mail. Bitte zunächst die Zugänge prüfen.');
+      if(linked.length&&!email)throw new Error('Eine E-Mail mit bestehendem App-Zugang darf nicht geleert werden.');
+      if(email&&allAccounts.some(x=>String(x.Email||'').trim().toLowerCase()===email&&x.ID!==linked[0]?.ID))
+        throw new Error('Die neue E-Mail wird bereits von einem anderen Benutzer verwendet.');
     }
-    gaReplace_('Mitglieder',d.ID,val);
+    // Das Mitglied bleibt über seine unveränderte ID mit sämtlichen Kursen, Nachweisen
+    // und Checklisten verbunden. Bei vorhandenem Zugang wird die Login-Mail mitgeändert.
+    // Offene Einladungen und Passwort-Reset-Links auf die alte Adresse werden ungültig.
+    const user=changedEmail?linked[0]:null;
+    const pending=user?gaOptionalRows_('Einladungen').filter(i=>i.BenutzerID===user.ID&&
+      ['Offen','Passwortreset'].includes(i.Status)):[];
+    const replaced=[];
+    try{
+      gaReplace_('Mitglieder',d.ID,val);
+      replaced.push({sheet:'Mitglieder',id:d.ID,previous:existing});
+      if(user){
+        gaReplace_('Benutzer',user.ID,{Email:email});
+        replaced.push({sheet:'Benutzer',id:user.ID,previous:user});
+      }
+      pending.forEach(i=>{
+        gaReplace_('Einladungen',i.ID,{Status:'Ersetzt'});
+        replaced.push({sheet:'Einladungen',id:i.ID,previous:i});
+      });
+    }catch(error){
+      replaced.reverse().forEach(r=>{
+        try{gaReplace_(r.sheet,r.id,r.previous);}catch(rollback){Logger.log('E-Mail-Rollback fehlgeschlagen: '+rollback.message);}
+      });
+      throw new Error('Änderung konnte nicht vollständig gespeichert werden: '+error.message);
+    }
     const checks=gaRows_('MitgliedChecks');
     gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich))
       .filter(i=>!checks.some(ch=>ch.MitgliedID===d.ID&&ch.PunktID===i.ID))
       .forEach(i=>gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:d.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()}));
     gaLog_(u.ID,'BEARBEITEN','Mitglied',d.ID,{Vorher:existing.Vorname+' '+existing.Nachname,
-      Nachher:val.Vorname+' '+val.Nachname,TurnusVorher:existing.TurnusID,TurnusNachher:val.TurnusID});
-    return {ok:true,message:'Mitglied aktualisiert. Bestehende Ausbildungsnachweise bleiben erhalten.'};
+      Nachher:val.Vorname+' '+val.Nachname,TurnusVorher:existing.TurnusID,TurnusNachher:val.TurnusID,
+      EMailGeaendert:changedEmail,ZugangAktualisiert:!!user,EinladungenErsetzt:pending.length});
+    return {ok:true,emailGeaendert:changedEmail,zugangAktualisiert:!!user,
+      neueEinladungNoetig:pending.length>0,
+      message:changedEmail?
+       (user?'E-Mail im Mitglied und App-Zugang aktualisiert. Bestehendes Passwort und Ausbildungsnachweise bleiben erhalten.':
+         'Mitglieds-E-Mail aktualisiert. Ausbildungsnachweise bleiben erhalten.')+
+        (pending.length?' Bisherige Einladungslinks sind ungültig; bitte an die neue Adresse erneut einladen.':''):
+       'Mitglied aktualisiert. Bestehende Ausbildungsnachweise bleiben erhalten.'};
   }
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Mitglieder',val);
   gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich)).forEach(i=>
