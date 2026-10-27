@@ -312,10 +312,63 @@ function gaErweiterteTabellenEinrichten(){
  return {ok:true};
 }
 
+
+function gaAdvancedOrganizerState_(u){
+ const allCourses=gaRows_('Kurse'),allTurns=gaRows_('Turnusse'),allMembers=gaRows_('Mitglieder');
+ const courses=allCourses.filter(x=>x.Bereich===GA_ADV_AREA),turnusse=allTurns.filter(x=>x.Bereich===GA_ADV_AREA);
+ const courseIDs=new Set(courses.map(x=>x.ID)),turnIDs=new Set(turnusse.map(x=>x.ID));
+ const terms=gaRows_('Termine').filter(t=>courseIDs.has(t.KursID)&&turnIDs.has(t.TurnusID)),termIDs=new Set(terms.map(x=>x.ID));
+ const assignments=gaAdvAssignments_().filter(x=>turnIDs.has(x.TurnusID));
+ const native=allMembers.filter(m=>turnIDs.has(m.TurnusID));
+ const guestIDs=new Set(assignments.map(x=>x.MitgliedID));
+ const guests=allMembers.filter(m=>guestIDs.has(m.ID)&&!native.some(n=>n.ID===m.ID))
+  .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignments.find(a=>a.MitgliedID===m.ID).TurnusID,Aktiv:m.Aktiv,Ausbildungsweg:'GAB-Gast'}));
+ const gabNamen=allMembers.filter(m=>gaFind_('Turnusse',m.TurnusID)?.Bereich==='Grundausbildung'&&gaBool_(m.Aktiv))
+  .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname}));
+ const attend=gaRows_('Teilnahmen').filter(a=>termIDs.has(a.TerminID));
+ const cfg=gaOptionalRows_('QuizKurse').filter(x=>courseIDs.has(x.KursID));
+ const attempts=gaOptionalRows_('QuizVersuche').filter(x=>courseIDs.has(x.KursID));
+ const rights={KurseGestalten:true,KurseFreigeben:false,KurseBearbeiten:true,TerminePlanen:true,
+  FrageboegenBearbeiten:true,BewertungenAnsehen:true,MeldungenBearbeiten:true};
+ return {
+  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,
+  kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,
+  erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
+  teilnahmen:att,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
+   .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
+  kursProjekte:gaOptionalRows_('KursProjekte').filter(x=>x.Bereich===GA_ADV_AREA),
+  quizKurse:cfg.map(gaQuizPublicConfig_),
+  quizVersuche:attempts.map(x=>({ID:x.ID,KursID:x.KursID,MitgliedID:x.MitgliedID,TerminID:x.TerminID,
+   QuizVersion:x.QuizVersion,Versuch:x.Versuch,Status:x.Status,Prozent:x.Prozent,Bestanden:x.Bestanden})),
+  quizFreigaben:gaOptionalRows_('QuizFreigaben').filter(x=>courseIDs.has(x.KursID))
+   .map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche})),
+  frageboegen:gaOptionalRows_('BewertungsFrageboegen').filter(x=>courseIDs.has(x.KursID)&&x.Aktiv==='JA'),
+  bewertungen:gaOptionalRows_('Bewertungen').filter(x=>courseIDs.has(x.KursID)),
+  qualifikationen:native.filter(x=>gaBool_(x.Aktiv)).map(m=>gaQualificationStatus_(m,
+   gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('KursAnforderungen'),courses,terms,att,
+   turnusse,cfg,attempts,[])),
+  ausbildungsberichte:gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID)),
+  freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
+  meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
+  nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
+  meMember:null,checklistenpunkte:[],checks:[],eigeneBewertungen:[],offeneBewertungen:[],
+  ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
+  direktnachrichten:[],nachrichtenEmpfaenger:[],
+  pushEigeneRegeln:gaPushRule_(u.ID),pushGeraeteAnzahl:0,pushRegeln:[],
+  benachrichtigungen:gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse()
+ };
+}
+
 function gaApi(method,data,token){
   const u=gaSession_(token),d=data||{};
+  if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','saveCourse','saveTermin','saveMember','inviteUser',
+   'saveAdvancedEnrollment','saveProject','submitProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
+   'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
+   'sendMessage','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
+    throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
   if(method==='state')return gaState_(u);
   if(method==='logout')return gaLogoutSession_(token);
+  if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
   if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
@@ -367,6 +420,7 @@ function gaApi(method,data,token){
   throw new Error('Unbekannte Aktion.');
 }
 function gaState_(u){
+ if(gaIsAdvOrg_(u))return gaAdvancedOrganizerState_(u);
  const admin=u.Rolle==='Administrator',trainer=u.Rolle==='Ausbilder',
   special=u.Rolle==='Fachverwaltung',participant=u.Rolle==='Teilnehmer';
  const allTurnusse=gaRows_('Turnusse'),allKurse=gaRows_('Kurse'),
