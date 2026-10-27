@@ -42,8 +42,8 @@ function gaOrganizerInvite(){
  return '<section class="panel"><h2>Teilnehmer einladen</h2>'+
  '<p>Einladungen können nur an Mitglieder gesendet werden, die deiner erweiterten Ausbildung bereits zugeordnet sind. Eine gültige E-Mail-Adresse muss beim Mitglied hinterlegt sein.</p>'+
  '<form data-form="advInvite"><label>Teilnehmer<select required name="MitgliedID"><option value="">Bitte wählen</option>'+
- members.filter(m=>m.Email).map(m=>'<option value="'+h(m.ID)+'">'+h(m.Nachname+', '+m.Vorname)+'</option>').join('')+
- '</select></label><p class="small muted">GAB-Gäste ohne freigegebene Kontaktdaten werden hier nicht angeboten. Eine Einladung an sie kann ein Administrator versenden.</p>'+
+ members.map(m=>'<option value="'+h(m.ID)+'">'+h(m.Nachname+', '+m.Vorname)+'</option>').join('')+
+ '</select></label><p class="small muted">Bei GAB-Gästen werden keine Kontaktdaten angezeigt. Der Server versendet die Einladung an die bereits hinterlegte Mitglieds-E-Mail, sofern vorhanden.</p>'+
  '<button class="primary" type="submit">Zugangseinladung senden</button></form></section>';
 }
 function gaOrganizerQualifications(){
@@ -54,3 +54,43 @@ function gaOrganizerQualifications(){
  '<p class="small muted">Erweiterte Ausbildung · '+h(q.PflichtAbsolviert||0)+' / '+h(q.PflichtGesamt||0)+' Module dokumentiert</p></div>').join('')+
  (!qs.length?'<p class="muted">Noch keine Qualifikationsdaten vorhanden.</p>':'')+'</div></section>';
 }
+function gaOrganizerMessages(){
+ const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),turns=STATE.turnusse||[];
+ return '<section class="panel"><h2>Nachrichten – Erweiterte Ausbildung</h2>'+
+ '<p class="muted">Nur bereits für die erweiterte Ausbildung zugeordnete Mitglieder können benachrichtigt werden. Push folgt den Benachrichtigungseinstellungen der Empfänger.</p>'+
+ '<form data-form="advMessage"><div class="grid">'+
+ '<div class="wide"><label>Betreff<input name="Titel" required maxlength="160"></label></div>'+
+ '<div><label>Empfänger<select name="EmpfaengerArt" data-adv-msg-select>'+
+ '<option value="ALLE">Alle erweiterten Teilnehmer</option>'+
+ '<option value="TURNUS">Ein erweiterter Turnus</option>'+
+ '<option value="MITGLIED">Einzelnes Mitglied</option></select></label></div>'+
+ '<div data-adv-msg="TURNUS" hidden><label>Turnus<select name="TurnusID">'+
+ turns.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('')+'</select></label></div>'+
+ '<div data-adv-msg="MITGLIED" hidden><label>Mitglied<select name="MitgliedID">'+
+ members.map(m=>'<option value="'+h(m.ID)+'">'+h(m.Nachname+', '+m.Vorname)+'</option>').join('')+'</select></label></div>'+
+ '<div class="wide"><label>Nachricht<textarea name="Text" rows="5" required maxlength="3000"></textarea></label></div>'+
+ '</div><button class="primary" type="submit">Nachricht senden</button></form></section>'+
+ '<section class="panel"><h3>Meine gesendeten Nachrichten</h3><div class="items">'+
+ (STATE.nachrichten||[]).slice().reverse().map(n=>'<article class="item"><strong>'+h(n.Titel)+'</strong>'+
+ '<div class="small muted">'+h(dt(n.ErstelltAm))+'</div><p class="msg">'+h(n.Text)+'</p></article>').join('')+
+ (!(STATE.nachrichten||[]).length?'<p class="muted">Noch keine Nachrichten vorhanden.</p>':'')+'</div></section>';
+}
+function gaOrganizerQuestionnaires(){
+ const courses=(STATE.kurse||[]).filter(c=>c.Aktiv==='JA'),forms=STATE.frageboegen||[];
+ return '<section class="panel"><h2>Bewertungsfragebögen</h2>'+
+ '<p class="muted">Nur deine Kurse der erweiterten Ausbildung – keine GAB- oder globale Fragebögen.</p>'+
+ (courses.length?courses.map(c=>{
+  const cfg=forms.find(x=>x.KursID===c.ID);let qs=[];
+  try{qs=JSON.parse(cfg?.FragenJSON||'[]')}catch(e){}
+  return '<form class="item" data-form="questionnaire">'+
+  '<input type="hidden" name="KursID" value="'+h(c.ID)+'"><h3>'+h(c.Titel)+'</h3>'+
+  '<p class="small muted">Eine Bewertungsfrage pro Zeile, maximal 15 Fragen.</p>'+
+  '<textarea name="Fragen" rows="7" required>'+h(qs.join('\n'))+'</textarea>'+
+  '<button class="primary" type="submit">Fragebogen speichern</button></form>';
+ }).join(''):'<p class="muted">Zuerst einen erweiterten Kurs veröffentlichen.</p>')+'</section>';
+}
+document.getElementById('app')?.addEventListener('change',e=>{
+ if(!e.target.matches('[data-adv-msg-select]'))return;
+ const mode=e.target.value;
+ e.target.closest('form')?.querySelectorAll('[data-adv-msg]').forEach(x=>{x.hidden=x.dataset.advMsg!==mode;});
+});
