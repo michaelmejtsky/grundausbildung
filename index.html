@@ -730,7 +730,8 @@ function mine(){
  return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
 }
 function myterms(){
- const all=(STATE.termine||[]).filter(t=>STATE.meMember&&t.TurnusID===STATE.meMember.TurnusID);
+ const allowed=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
+ const all=(STATE.termine||[]).filter(t=>STATE.meMember&&allowed.has(t.TurnusID));
  const now=Date.now();
  const coming=all.filter(t=>t.Status==='Geplant'&&new Date(t.Beginn).getTime()>=now-3600000)
   .sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn)));
