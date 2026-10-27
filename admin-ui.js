@@ -10,13 +10,18 @@ const gaTurnusSelect=(value,attr,empty='Alle Turnusse')=>
  (STATE.turnusse||[]).map(t=>'<option value="'+h(t.ID)+'" '+(value===t.ID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('')+'</select>';
 const gaNotice=(text)=>'<p class="ga-dim">'+h(text)+'</p>';
 function gaMenuHtml(tabs){
- const admin=role()==='Administrator',trainer=role()==='Ausbilder';
+ const admin=role()==='Administrator',trainer=role()==='Ausbilder',organizer=role()==='Organisator Erweiterte Ausbildung';
  const groups=admin?[
   ['Start',['overview','terms','notifications']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Ausbildung',['courses','projects','quizzes','turnus','qualifications','abschnitt','questionnaires','reviews']],
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
   ['Organisation',['rights','reports','messages','pushadmin']]
+ ]:organizer?[
+  ['Start',['advOverview','notifications']],
+  ['Erweiterte Ausbildung',['advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
+  ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
+  ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
  ]:trainer?[
   ['Ausbildung',['courses','projects','quizzes','terms']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
