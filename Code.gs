@@ -570,6 +570,7 @@ function gaSaveCourse_(u,d){
  const val={Titel:gaNeed_(d.Titel,'Kurstitel',160),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),
  Inhalt:gaNeed_(d.Inhalt,'Ausbildungsinhalt',8000),Lernziele:gaText_(d.Lernziele,3000),
  Links:gaLinks_(d.Links),Aktiv:'JA'};
+ if(gaIsAdvOrg_(u)&&val.Bereich!==GA_ADV_AREA)throw new Error('Kursteil gehört nicht zur erweiterten Ausbildung.');
  gaReplace_('Kurse',id,val);
  gaLog_(u.ID,'KURS_NACH_VEROEFFENTLICHUNG_BEARBEITEN','Kurs',id,{Vorher:old,Nachher:val});
  return {ok:true,message:'Veröffentlichter Kurs aktualisiert. Änderung protokolliert.'};
@@ -584,7 +585,7 @@ function gaNotify_(userId,type,title,message,reference){
   gaAppend_('Benachrichtigungen',{ID:id,BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
   return id;
 }
-function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaRows_('Mitglieder').filter(m=>m.TurnusID===turnusId&&gaBool_(m.Aktiv)).map(m=>m.Email.toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
+function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaAdvAllowedMembers_(turnusId).map(m=>String(m.Email||'').toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
 function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);
   if(!course||!gaBool_(course.Aktiv))throw new Error('Der Kurs ist noch nicht veröffentlicht.');if(!course||!turnus||!(course.Bereich===turnus.Bereich||(turnus.Bereich==='Grundausbildung'&&course.Bereich==='Erweiterte Ausbildung')))throw new Error('Dieser Kurs kann dem gewählten Turnus nicht zugeordnet werden. GAB-Turnusse dürfen auch erweiterte Ausbildungen besuchen.');
   const begin=gaDateTime_(d.Beginn),end=gaDateTime_(d.Ende);if(end<=begin)throw new Error('Das Ende muss nach dem Beginn liegen.');
@@ -1090,21 +1091,22 @@ function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.N
   const salt=gaId_()+gaId_();const val={ID:gaId_(),Name:name,Email:email,Rolle:role,Bereich:bereich,Aktiv:'JA',Salt:salt,Hash:gaHash_(pwd,salt),ErstelltAm:gaNow_()};
   gaAppend_('Benutzer',val);gaLog_(u.ID,'ANLEGEN','Benutzer',val.ID,{Email:email,Rolle:role});return {ok:true};}
 function gaSendMessage_(u,d){
-  gaRequire_(u,['Administrator']);
+  gaRequire_(u,['Administrator',GA_ADV_ROLE]);
   const title=gaNeed_(d.Titel,'Betreff',160),message=gaNeed_(d.Text,'Nachricht',3000);
   const mode=gaChoice_(d.EmpfaengerArt||(d.TurnusID?'TURNUS':'ALLE'),['ALLE','TURNUS','MITGLIED'],'Empfängerart');
-  const members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv));
+  const members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv)&&(!gaIsAdvOrg_(u)||gaAdvMemberAllowed_(m)));
   let target='',recipients=[];
   if(mode==='TURNUS'){
     const id=gaNeed_(d.TurnusID,'Turnus',100);
     if(!gaFind_('Turnusse',id))throw new Error('Turnus nicht gefunden.');
-    target=id;recipients=members.filter(m=>m.TurnusID===id);
+    if(gaIsAdvOrg_(u))gaAdvancedTurnus_(u,id);
+    target=id;recipients=gaIsAdvOrg_(u)?gaAdvAllowedMembers_(id):members.filter(m=>m.TurnusID===id);
   }else if(mode==='MITGLIED'){
     const id=gaNeed_(d.MitgliedID,'Mitglied',100);
     const member=members.find(m=>m.ID===id);
     if(!member)throw new Error('Mitglied nicht gefunden oder nicht aktiv.');
     target='M:'+id;recipients=[member];
-  }else recipients=members;
+  }else{recipients=members;if(gaIsAdvOrg_(u))target='ADV:ALLE';}
   const emails=new Set(recipients.map(m=>String(m.Email||'').toLowerCase()).filter(Boolean));
   const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.has(x.Email.toLowerCase()));
   const id=gaId_();
@@ -1527,6 +1529,7 @@ function gaProjectComplete_(p){
 }
 function gaSaveProject_(u,d){
  gaRequireRight_(u,'KurseGestalten');
+ if(gaIsAdvOrg_(u)&&d.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Kursprojekte.');
  const input=gaProjectData_(d),existing=d.ID?gaFind_('KursProjekte',gaText_(d.ID,100)):null;
  if(d.ID&&!existing)throw new Error('Kursprojekt nicht gefunden.');
  if(existing){
@@ -1547,6 +1550,7 @@ function gaSaveProject_(u,d){
 }
 function gaSubmitProject_(u,d){
  gaRequireRight_(u,'KurseGestalten');
+ if(gaIsAdvOrg_(u)&&gaFind_('KursProjekte',d.ID)?.Bereich!==GA_ADV_AREA)throw new Error('Fremdes Projekt.');
  const project=gaFind_('KursProjekte',gaText_(d.ID,100));
  if(!project||!['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].includes(project.Status))
    throw new Error('Dieses Projekt kann gerade nicht eingereicht werden.');
@@ -2024,6 +2028,7 @@ function gaActiveQuestionnaire_(courseId){
 }
 function gaSaveQuestionnaire_(u,d){
  gaRequireRight_(u,'FrageboegenBearbeiten');
+ if(gaIsAdvOrg_(u))gaAdvancedCourse_(u,d.KursID);
  const courseId=gaText_(d.KursID,100)||'ALLGEMEIN';
  if(courseId!=='ALLGEMEIN'&&!gaFind_('Kurse',courseId))throw new Error('Kurs nicht gefunden.');
  const raw=Array.isArray(d.Fragen)?d.Fragen:String(d.Fragen||'').split(/\r?\n/);
@@ -2117,6 +2122,14 @@ function gaSaveQuiz_(u,d){
  if(old)gaReplace_('QuizKurse',old.ID,val);
  else gaAppend_('QuizKurse',{ID:gaId_(),...val});
  gaLog_(u.ID,'QUIZ_SPEICHERN','Kurs',id,{Aktiv:val.Aktiv,Pflicht:val.Pflicht,Version:val.Version,Fragen:questions.length});
+ if(enabled){
+  const termIDs=gaRows_('Termine').filter(t=>t.KursID===id).map(t=>t.ID);
+  const att=gaRows_('Teilnahmen').filter(a=>termIDs.includes(a.TerminID)&&gaBool_(a.Anwesend));
+  const members=gaRows_('Mitglieder').filter(m=>att.some(a=>a.MitgliedID===m.ID));
+  gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&members.some(m=>m.Email&&m.Email.toLowerCase()===String(x.Email||'').toLowerCase()))
+   .forEach(x=>gaNotify_(x.ID,'Aufgabe','Wissenstest verfügbar',course.Titel,id));
+  gaPushQueue_(5);
+ }
  return {ok:true,message:enabled?'Quiz gespeichert. Neue Quizversion '+val.Version+' ist aktiv.':'Quiz deaktiviert; bisherige Versuche bleiben erhalten.'};
 }
 function gaQuizMember_(u){
