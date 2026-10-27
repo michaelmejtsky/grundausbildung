@@ -833,14 +833,23 @@ function notifications(){
 function pushAdmin(){
  if(role()!=='Administrator')return '';
  const rows=STATE.pushRegeln||[];
- return '<section class="panel"><h2>Push-Empfänger festlegen</h2><p class="muted">Die vier Push-Arten sind einzeln pro Benutzer freigebbar. In-App-Nachrichten bleiben erhalten; die Geräte benötigen zusätzlich die Zustimmung des jeweiligen Mitglieds.</p>'+
- '<div class="items">'+(rows.length?rows.map(u=>'<form class="item" data-form="pushRule">'+
- '<input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'"><div class="row between"><div><b>'+h(u.Name)+'</b><small class="muted">'+h(u.Rolle)+' · '+h(u.Geraete)+' registrierte(s) Gerät(e)</small></div><span class="tag '+(Number(u.Geraete)>0?'ok':'warn')+'">'+(Number(u.Geraete)>0?'Push registriert':'Kein Push-Gerät')+'</span>'+
- '<button class="smallbtn" type="submit">Speichern</button></div><div class="row" style="gap:20px">'+
- ['Nachrichten','Termine','Aufgaben','Bewertungen'].map(cat=>'<label class="inline-check"><input type="checkbox" name="'+cat+'" value="JA" '+(u[cat]?'checked':'')+'> '+cat+'</label>').join('')+
- '</div></form>').join(''):'Noch keine aktiven Benutzer.')+'</div></section>'+
- '<section class="panel"><p class="small muted">Eine echte Test-Benachrichtigung kannst du jetzt unter „Benachrichtigungen“ direkt an dein eigenes Gerät senden.</p></section>';
+ const categories=['Nachrichten','Termine','Aufgaben','Bewertungen'];
+ return '<section class="panel ga-push-admin"><h2>Push-Empfänger festlegen</h2>'+
+ '<p class="muted">Lege für jeden Benutzer fest, welche Benachrichtigungen er erhalten darf. Push funktioniert nur auf Geräten, auf denen es vom Benutzer aktiviert wurde.</p>'+
+ '<div class="ga-push-admin-list">'+(rows.length?rows.map(u=>{
+  const devices=Number(u.Geraete)||0;
+  return '<form class="ga-push-user" data-form="pushRule">'+
+  '<input type="hidden" name="BenutzerID" value="'+h(u.BenutzerID)+'">'+
+  '<div class="ga-push-user-head"><div class="ga-push-user-person"><strong>'+h(u.Name)+'</strong><span>'+h(u.Rolle)+'</span></div>'+
+  '<div class="ga-push-user-status"><span class="tag '+(devices>0?'ok':'warn')+'">'+(devices>0?'Push registriert':'Kein Push-Gerät')+'</span>'+
+  '<small>'+devices+' '+(devices===1?'Gerät':'Geräte')+'</small></div></div>'+
+  '<fieldset class="ga-push-options"><legend>Benachrichtigungsarten</legend>'+
+  categories.map(cat=>'<label class="ga-push-option"><input type="checkbox" name="'+cat+'" value="JA" '+(u[cat]?'checked':'')+'><span>'+cat+'</span></label>').join('')+
+  '</fieldset><div class="ga-push-user-footer"><button class="smallbtn" type="submit">Einstellungen speichern</button></div></form>';
+ }).join(''):'<p class="muted">Noch keine aktiven Benutzer vorhanden.</p>')+'</div></section>'+
+ '<section class="panel"><p class="small muted">Eine Test-Benachrichtigung kannst du unter „Benachrichtigungen“ an dein eigenes Gerät senden.</p></section>';
 }
+
 function gaB64UrlBytes(value){
  const s=String(value).replace(/-/g,'+').replace(/_/g,'/');
  const raw=atob(s+'='.repeat((4-s.length%4)%4));
