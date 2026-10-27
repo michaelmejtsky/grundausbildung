@@ -2,7 +2,7 @@
 'use strict';
 let GA_FREE_EDIT='';
 function gaFreeActivityPage(){
- if(!['Administrator','Ausbilder'].includes(role()))return '<section class="panel">Keine Berechtigung.</section>';
+ if(!['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()))return '<section class="panel">Keine Berechtigung.</section>';
  const items=STATE.freieTaetigkeiten;
  if(!Array.isArray(items))return '<section class="panel"><h2>Freie Tätigkeiten</h2><p class="ga-alert">Das Apps-Script-Backend ist noch nicht auf Version 1.10 aktualisiert. Bitte die neue Code.gs als Version bereitstellen.</p></section>';
  const chosen=items.find(x=>x.ID===GA_FREE_EDIT);
@@ -21,7 +21,7 @@ function gaFreeActivityPage(){
  (list||'<p class="muted">Noch keine Tätigkeiten erfasst.</p>')+'</section>';
  const item=chosen||{};
  const members=(STATE.mitglieder||[]).filter(x=>x.Aktiv==='JA');
- const trainers=(STATE.benutzer||[]).filter(x=>['Administrator','Ausbilder'].includes(x.Rolle));
+ const trainers=(STATE.benutzer||[]).filter(x=>['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(x.Rolle));
  if(!trainers.some(x=>x.ID===STATE.user.ID))trainers.unshift({...STATE.user,Aktiv:'JA'});
  const pIds=String(item.TeilnehmerIDs||'').split(','),tIds=item.AusbilderIDs?String(item.AusbilderIDs).split(','):[STATE.user.ID];
  const v=gaReportVehicles(item),used=v.length>0;
