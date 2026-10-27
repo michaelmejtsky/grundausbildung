@@ -535,7 +535,11 @@ function gaState_(u){
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
   turnusse:admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID||extraTurns.has(t.ID)):[],
-  kurse:admin||trainer?allKurse:own?allKurse.filter(c=>ownTerm.some(t=>t.KursID===c.ID)):[],
+  // Teilnehmer sehen auch veröffentlichte Pflichtmodule ohne eigenen Termin (z. B. Block A/B im Abschnitt).
+  // Fremde Ausbildungsbereiche bleiben ausgeschlossen, außer bei expliziter Teilnahme/Zuordnung.
+  kurse:admin||trainer?allKurse:own?allKurse.filter(c=>gaBool_(c.Aktiv)&&(
+    allTurnusse.some(t=>(t.ID===own.TurnusID||extraTurns.has(t.ID))&&t.Bereich===c.Bereich)||
+    ownTerm.some(t=>t.KursID===c.ID))):[],
   termine:admin||trainer?allTermine:ownTerm,
   mitglieder:admin||trainer?allMembers:special?allMembers.filter(m=>gaBool_(m.Aktiv)).map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[],
   checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
