@@ -633,7 +633,7 @@ function gaCourseDate_(value){
 
 /** Once per scheduled start and account, approximately eight hours before the course. */
 function gaQueueCourseReminders_(now){
- const ms=(now||new Date()).getTime(),before=8*60*60*1000,lateTolerance=20*60*1000;
+ const current=now||new Date(),ms=current.getTime(),before=8*60*60*1000,lateTolerance=20*60*1000;
  const terms=gaRows_('Termine').filter(t=>{
   if(t.Status!=='Geplant')return false;
   const start=gaCourseDate_(t.Beginn);
