@@ -259,6 +259,59 @@ function gaLogoutSession_(token){
 function gaPublicUser_(u){return {ID:u.ID,Name:u.Name,Email:u.Email,Rolle:u.Rolle,Bereich:u.Bereich,Aktiv:u.Aktiv};}
 function gaRequire_(u,roles){if(!roles.includes(u.Rolle))throw new Error('Keine Berechtigung für diese Funktion.');}
 function gaLock_(callback){const l=LockService.getScriptLock();l.waitLock(20000);try{return callback();}finally{l.releaseLock();}}
+
+const GA_ADV_ROLE='Organisator Erweiterte Ausbildung', GA_ADV_AREA='Erweiterte Ausbildung';
+function gaIsAdvOrg_(u){return !!u&&u.Rolle===GA_ADV_ROLE;}
+function gaAdvancedCourse_(u,id){
+ const c=gaFind_('Kurse',gaText_(id,100));
+ if(!c||gaIsAdvOrg_(u)&&c.Bereich!==GA_ADV_AREA)throw new Error('Zugriff nur auf Kurse der erweiterten Ausbildung.');
+ return c;
+}
+function gaAdvancedTurnus_(u,id){
+ const t=gaFind_('Turnusse',gaText_(id,100));
+ if(!t||gaIsAdvOrg_(u)&&t.Bereich!==GA_ADV_AREA)throw new Error('Zugriff nur auf Turnusse der erweiterten Ausbildung.');
+ return t;
+}
+function gaAdvAssignments_(){return gaOptionalRows_('ErweiterteZuordnungen');}
+function gaAdvAllowedMembers_(turnusId){
+ const ids=new Set(gaAdvAssignments_().filter(x=>x.TurnusID===turnusId).map(x=>x.MitgliedID));
+ return gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv)&&(m.TurnusID===turnusId||ids.has(m.ID)));
+}
+function gaAdvMemberAllowed_(m){
+ if(!m)return false;
+ return gaFind_('Turnusse',m.TurnusID)?.Bereich===GA_ADV_AREA||
+  gaAdvAssignments_().some(x=>x.MitgliedID===m.ID&&gaFind_('Turnusse',x.TurnusID)?.Bereich===GA_ADV_AREA);
+}
+function gaSaveAdvancedEnrollment_(u,d){
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ const m=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100));
+ const t=gaAdvancedTurnus_(u,gaNeed_(d.TurnusID,'Erweiterter Turnus',100));
+ if(!m||!gaBool_(m.Aktiv)||t.Bereich!==GA_ADV_AREA||!gaBool_(t.Aktiv))throw new Error('Aktives Mitglied und aktiver erweiterter Turnus sind erforderlich.');
+ if(m.TurnusID===t.ID||gaAdvAssignments_().some(x=>x.MitgliedID===m.ID&&x.TurnusID===t.ID))
+  return {ok:true,message:'Zuordnung bereits vorhanden.'};
+ gaAppend_('ErweiterteZuordnungen',{ID:gaId_(),MitgliedID:m.ID,TurnusID:t.ID,ZugeordnetVon:u.ID,ZugeordnetAm:gaNow_()});
+ gaLog_(u.ID,'ERWEITERTE_ZUORDNUNG','Mitglied',m.ID,{TurnusID:t.ID,UrspruenglicherTurnus:m.TurnusID});
+ return {ok:true,message:'Für erweiterte Ausbildung zugeordnet; GAB-Turnus bleibt unverändert.'};
+}
+function gaErweiterteTabellenEinrichten(){
+ const ss=gaSheet_(),columns=GA.SHEETS.ErweiterteZuordnungen;
+ let tab=ss.getSheetByName('ErweiterteZuordnungen');
+ if(!tab)tab=ss.insertSheet('ErweiterteZuordnungen');
+ if(tab.getMaxColumns()<columns.length)tab.insertColumnsAfter(tab.getMaxColumns(),columns.length-tab.getMaxColumns());
+ if(tab.getLastRow()===0)tab.getRange(1,1,1,columns.length).setValues([columns]);
+ else if(tab.getRange(1,1,1,columns.length).getDisplayValues()[0].some((v,i)=>v!==columns[i]))
+  throw new Error('ErweiterteZuordnungen: Unerwartete Spalten. Nichts überschrieben.');
+ tab.setFrozenRows(1);
+ const act=ss.getSheetByName('FreieTaetigkeiten');
+ if(act){
+  const index=GA.SHEETS.FreieTaetigkeiten.length;
+  if(act.getMaxColumns()<index)act.insertColumnsAfter(act.getMaxColumns(),index-act.getMaxColumns());
+  if(act.getRange(1,index).getValue()!=='Bereich')act.getRange(1,index).setValue('Bereich');
+ }
+ Logger.log('Erweiterte Ausbildung vorbereitet.');ss.toast('Erweiterte Ausbildung vorbereitet.','Grundausbildung',6);
+ return {ok:true};
+}
+
 function gaApi(method,data,token){
   const u=gaSession_(token),d=data||{};
   if(method==='state')return gaState_(u);
