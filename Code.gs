@@ -353,7 +353,7 @@ function gaAdvancedOrganizerState_(u){
   nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
   meMember:null,checklistenpunkte:[],checks:[],eigeneBewertungen:[],offeneBewertungen:[],
   ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
-  direktnachrichten:[],nachrichtenEmpfaenger:[],
+  direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse(),nachrichtenEmpfaenger:[],
   pushEigeneRegeln:gaPushRule_(u.ID),pushGeraeteAnzahl:gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,pushRegeln:[],
   benachrichtigungen:gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse()
  };
@@ -429,7 +429,7 @@ function gaApi(method,data,token){
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','saveCourse','saveTermin','saveMember','inviteUser',
    'saveAdvancedEnrollment','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
-   'sendMessage','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
+   'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
   if(method==='state')return gaState_(u);
   if(method==='logout')return gaLogoutSession_(token);
@@ -556,7 +556,7 @@ function gaState_(u){
   kursAnforderungen:admin?reqs:[],
   direktnachrichten,
   nachrichtenEmpfaenger:admin||trainer?users.filter(x=>gaBool_(x.Aktiv)).map(gaPublicUser_):
-    gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&['Administrator','Ausbilder','Fachverwaltung'].includes(x.Rolle)).map(gaPublicUser_)
+    gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&(['Administrator','Ausbilder','Fachverwaltung'].includes(x.Rolle)||(x.Rolle===GA_ADV_ROLE&&gaAdvMemberAllowed_(own)))).map(gaPublicUser_)
  };
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
@@ -2006,8 +2006,16 @@ function gaSetAttendanceMember_(u,d){
 function gaSendDirect_(u,d){
  const recipient=gaFind_('Benutzer',gaText_(d.AnBenutzerID,100));
  if(!recipient||!gaBool_(recipient.Aktiv)||recipient.ID===u.ID)throw new Error('Empfänger nicht verfügbar.');
- if(u.Rolle==='Teilnehmer'&&!['Administrator','Ausbilder','Fachverwaltung'].includes(recipient.Rolle))
+ if(u.Rolle==='Teilnehmer'&&!['Administrator','Ausbilder','Fachverwaltung',GA_ADV_ROLE].includes(recipient.Rolle))
   throw new Error('Teilnehmer können Ausbilder und Verwaltung anschreiben.');
+ if(u.Rolle==='Teilnehmer'&&gaIsAdvOrg_(recipient)){
+  const m=gaRows_('Mitglieder').find(x=>x.Email&&x.Email.toLowerCase()===String(u.Email||'').toLowerCase());
+  if(!gaAdvMemberAllowed_(m))throw new Error('Keine Zuordnung zur erweiterten Ausbildung.');
+ }
+ if(gaIsAdvOrg_(u)){
+  const m=gaRows_('Mitglieder').find(x=>x.Email&&x.Email.toLowerCase()===String(recipient.Email||'').toLowerCase());
+  if(recipient.Rolle!=='Teilnehmer'||!gaAdvMemberAllowed_(m))throw new Error('Nur zugeordnete Teilnehmer anschreibbar.');
+ }
  const item={ID:gaId_(),VonBenutzerID:u.ID,AnBenutzerID:recipient.ID,Titel:gaNeed_(d.Titel,'Betreff',160),
   Text:gaNeed_(d.Text,'Nachricht',3000),ErstelltAm:gaNow_(),GelesenAm:''};
  gaAppend_('Direktnachrichten',item);
