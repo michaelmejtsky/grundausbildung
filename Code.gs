@@ -262,6 +262,13 @@ function gaLock_(callback){const l=LockService.getScriptLock();l.waitLock(20000)
 
 const GA_ADV_ROLE='Organisator Erweiterte Ausbildung', GA_ADV_AREA='Erweiterte Ausbildung';
 function gaIsAdvOrg_(u){return !!u&&u.Rolle===GA_ADV_ROLE;}
+
+/** Bei wichtigen Ereignissen beide Ausbildungsstellen getrennt benachrichtigen. */
+function gaNotifyAdvancedOrganizers_(type,title,message,ref){
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&x.Rolle===GA_ADV_ROLE)
+  .forEach(x=>gaNotify_(x.ID,type,title,message,ref));
+}
+
 function gaAdvancedCourse_(u,id){
  const c=gaFind_('Kurse',gaText_(id,100));
  if(!c||gaIsAdvOrg_(u)&&c.Bereich!==GA_ADV_AREA)throw new Error('Zugriff nur auf Kurse der erweiterten Ausbildung.');
@@ -598,7 +605,9 @@ function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFi
   const val={KursID:d.KursID,TurnusID:d.TurnusID,Beginn:begin,Ende:end,Ort:gaText_(d.Ort,160),Status:'Geplant'};
   if(d.ID){gaReplace_('Termine',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Termin',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Termine',val);gaLog_(u.ID,'ANLEGEN','Termin',val.ID,val);
-  gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);gaPushQueue_(5);return {ok:true};}
+  gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);
+  if(course.Bereich===GA_ADV_AREA)gaNotifyAdvancedOrganizers_('Termin','Erweiterter Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);
+  gaPushQueue_(5);return {ok:true};}
 function gaSaveMember_(u,d){
   gaRequire_(u,['Administrator',GA_ADV_ROLE]);
   const turnus=gaFind_('Turnusse',d.TurnusID);
@@ -1088,7 +1097,8 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
     if(user)gaNotify_(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
       'Du hast an „'+(course?course.Titel:'Ausbildung')+'“ teilgenommen. Du kannst den Kurs jetzt in der App bewerten.',term.ID);
   });
-  if(gaIsAdvOrg_(u)){
+  if(course?.Bereich===GA_ADV_AREA){
+   if(firstTime.length)gaNotifyAdvancedOrganizers_('Aufgabe','Ausbildung abgeschlossen',course.Titel,term.ID);
    firstTime.forEach(m=>{
     const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
     if(account){
@@ -2150,6 +2160,7 @@ function gaSaveQuiz_(u,d){
  else gaAppend_('QuizKurse',{ID:gaId_(),...val});
  gaLog_(u.ID,'QUIZ_SPEICHERN','Kurs',id,{Aktiv:val.Aktiv,Pflicht:val.Pflicht,Version:val.Version,Fragen:questions.length});
  if(enabled){
+  if(course.Bereich===GA_ADV_AREA)gaNotifyAdvancedOrganizers_('Aufgabe','Wissenstest veröffentlicht',course.Titel,id);
   const termIDs=gaRows_('Termine').filter(t=>t.KursID===id).map(t=>t.ID);
   const att=gaRows_('Teilnahmen').filter(a=>termIDs.includes(a.TerminID)&&gaBool_(a.Anwesend));
   const members=gaRows_('Mitglieder').filter(m=>att.some(a=>a.MitgliedID===m.ID));
