@@ -1083,6 +1083,12 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
     if(user)gaNotify_(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
       'Du hast an „'+(course?course.Titel:'Ausbildung')+'“ teilgenommen. Du kannst den Kurs jetzt in der App bewerten.',term.ID);
   });
+  if(gaIsAdvOrg_(u)){
+   firstTime.forEach(m=>{
+    const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
+    if(account)gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course?.Titel||'Ausbildung',term.ID);
+   });
+  }
   gaPushQueue_(5);
   return {ok:true,message:'Anwesenheit bestätigt. '+firstTime.length+' neue Bewertungsbenachrichtigungen vorbereitet.'};
 }
