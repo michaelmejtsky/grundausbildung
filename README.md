@@ -1,3 +1,13 @@
+## Fehlerprüfung 27.10.2026 – Code-Stand und erforderliche Aktivierung
+
+- **GitHub main:** Backend-`Code.gs` abgesichert gegen Verschieben erweiterter Termine in GAB-Kurse/Turnusse; FDISK-Modul-PDF für Organisatoren enthält nur Termine ihrer erweiterten Turnusse. Schutz vor Überschreiben einer anders belegten Spaltenüberschrift.
+- **Teilnehmer-App:** Ein laufender GAB-Teilnehmer sieht nach zusätzlicher Zuordnung kommende Termine der erweiterten Ausbildung auch auf der Startseite. PWA-Shell auf `ga-shell-v2.21`.
+- **Tests:** 19 gezielte, isolierte Regressionstests mit Beispieldaten erfolgreich (Rollenfilter, Terminänderungen, Berichtsauswahl, GAB-Gastzuordnung, Anwesenheit, Quizfreigabe, Nachrichten). JavaScript-Syntax für Backend, Worker, Frontend und Service Worker geprüft. **Keine** produktiven Push-, PDF- oder Apps-Script-Livetests. Bestehende Google-Sheet-Daten bei der Prüfung nur gelesen.
+- **Echte Tabellen:** `ErweiterteZuordnungen` (5 korrekte Spalten) und `FreieTaetigkeiten` (Spalte `Bereich`) im vorhandenen Datenblatt vorhanden. Keine Neuanlage oder Migration erforderlich.
+- **Unbedingt noch notwendig:** `Code.gs` aus `main` in das **bestehende, datenbankgebundene** Apps-Script-Projekt übernehmen und die **bestehende Web-App-Bereitstellung** über „Bereitstellungen verwalten“ mit einer neuen Version aktualisieren. Keine neue Datenbank/keine neue getrennte Bereitstellung anlegen.
+- **Cloudflare prüfen:** Tatsächlich im produktiven Worker verwendete `GA_SCRIPT_URL` (wenn gesetzt) muss mit genau dieser Apps-Script-`/exec`-URL übereinstimmen; sonst gilt der Fallback `DEPLOYED_SCRIPT_URL` in `cloudflare-worker.js`. GitHub-Updates veröffentlichen den Worker nicht automatisch.
+- **Abnahmetest:** In „Tätigkeitsberichte“ → „Aktive PDF-Vorlage testen“ muss **Backend 1.11.0 / FDISK-DESIGN-2** erscheinen. Einen **neuen** Einzeltermin-/Modulbericht erzeugen und den Präfix `FDISK_Design2_` sowie das tatsächliche Layout prüfen. Danach Organisator + GAB-Gast mit echten Testkonten (Termine, Kurs, Quiz, Push) prüfen. Erst dann produktiv freigeben.
+
 ## Erweiterte Ausbildung – Organisator V1.11.0
 
 Neue Hauptrolle **Organisator Erweiterte Ausbildung**: eigene Übersicht, bereichsgebundene Kurse/Kursprojekte/Freigaben, erweiterte Turnusse und Termine, Quiz, Fragebögen, Bewertungen, Qualifikationen, Tätigkeitsberichte, Mängel & Ideen und Nachrichten. Die Rechte sind im Apps-Script-Backend geprüft und erzwungen.
