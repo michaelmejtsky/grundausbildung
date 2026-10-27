@@ -242,6 +242,7 @@ function gaMemberForm(edit){
  '<div><label>Vorname</label><input name="Vorname" maxlength="100" required value="'+h(edit?.Vorname||'')+'"></div>'+
  '<div><label>Nachname</label><input name="Nachname" maxlength="100" required value="'+h(edit?.Nachname||'')+'"></div>'+
  '<div><label>E-Mail (Teilnehmerzugang)</label><input name="Email" type="email" value="'+h(edit?.Email||'')+'"></div>'+
+ (edit?'<div class="wide"><p class="small muted">Eine neue E-Mail-Adresse wird beim Speichern auch für den zugeordneten App-Zugang übernommen. Passwort und Ausbildungsnachweise bleiben bestehen. Offene Einladungen an die alte Adresse werden ungültig.</p></div>':'')+
  '<div><label>Telefon</label><input name="Telefon" type="tel" value="'+h(edit?.Telefon||'')+'"></div>'+
  '<div><label>Geburtsdatum</label><input type="date" name="Geburtsdatum" value="'+h(edit?.Geburtsdatum||'')+'"></div>'+
  '<div><label>Standesbuchnummer</label><input name="Standesbuchnummer" maxlength="35" value="'+h(edit?.Standesbuchnummer||'')+'"></div>'+
