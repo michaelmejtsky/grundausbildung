@@ -363,7 +363,7 @@ function gaAdvancedOrganizerState_(u){
 function gaOrganizerGuard_(u,method,d){
  if(!gaIsAdvOrg_(u))return;
  if(['saveCourse','saveQuiz','getQuizEdit','unlockQuiz','saveQuestionnaire','exportTrainingPdf'].includes(method)){
-  const id=gaText_(d.KursID,100)||(d.TerminID?gaFind_('Termine',d.TerminID)?.KursID:'');
+  const id=gaText_(d.KursID||((method==='saveCourse')?d.ID:''),100)||(d.TerminID?gaFind_('Termine',d.TerminID)?.KursID:'');
   if(id)gaAdvancedCourse_(u,id);
   if(d.TerminID){
    const term=gaFind_('Termine',d.TerminID);
