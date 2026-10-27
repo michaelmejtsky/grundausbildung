@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.11.0',
+  VERSION: '1.12.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -603,6 +603,73 @@ function gaNotify_(userId,type,title,message,reference){
   gaAppend_('Benachrichtigungen',{ID:id,BenutzerID:userId,Typ:type,Titel:title,Text:message,BezugID:reference||'',ErstelltAm:gaNow_(),GelesenAm:'',PushStatus:pushStatus});
   return id;
 }
+
+/** Send a course quiz announcement only once per member, version and quiz type. */
+function gaNotifyQuizAvailable_(user,course,quiz,known){
+ if(!user||!course||!quiz||!gaBool_(quiz.Aktiv))return false;
+ const required=gaBool_(quiz.Pflicht);
+ const ref='QUIZREADY:'+course.ID+':'+String(quiz.Version||'1')+':'+(required?'P':'F');
+ const notices=known||gaRows_('Benachrichtigungen');
+ if(notices.some(n=>n.BenutzerID===user.ID&&n.BezugID===ref))return false;
+ gaNotify_(user.ID,'Aufgabe',
+  required?'Pflichtquiz ist eröffnet!':'Freiwilliges Quiz verfügbar!',
+  'Deine Kursteilnahme an „'+course.Titel+'“ wurde bestätigt. '+(required?
+   'Das Pflichtquiz ist jetzt unter „Meine Wissenstests“ verfügbar.':
+   'Das freiwillige Quiz ist jetzt unter „Meine Wissenstests“ verfügbar.'),
+  ref);
+ notices.push({BenutzerID:user.ID,BezugID:ref});
+ return true;
+}
+
+/** Parse training dates from either Apps Script or formatted Sheet rows as Vienna-local time. */
+function gaCourseDate_(value){
+ const stamp=String(value||'').trim().replace('T',' ').slice(0,16);
+ if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(stamp))return null;
+ try{
+  const zone='Europe/Vienna',date=Utilities.parseDate(stamp,zone,'yyyy-MM-dd HH:mm');
+  return Utilities.formatDate(date,zone,'yyyy-MM-dd HH:mm')===stamp?date:null;
+ }catch(e){return null;}
+}
+
+/** Once per scheduled start and account, approximately eight hours before the course. */
+function gaQueueCourseReminders_(now){
+ const ms=(now||new Date()).getTime(),before=8*60*60*1000,lateTolerance=20*60*1000;
+ const terms=gaRows_('Termine').filter(t=>{
+  if(t.Status!=='Geplant')return false;
+  const start=gaCourseDate_(t.Beginn);
+  if(!start)return false;
+  const until=start.getTime()-ms;
+  return until<=before&&until>before-lateTolerance;
+ });
+ if(!terms.length)return 0;
+ const courses=new Map(gaRows_('Kurse').map(c=>[c.ID,c]));
+ const accounts=new Map(gaRows_('Benutzer').filter(u=>u.Rolle==='Teilnehmer'&&gaBool_(u.Aktiv)&&u.Email)
+  .map(u=>[String(u.Email).toLowerCase(),u]));
+ const members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv)&&m.Email);
+ const assignments=gaAdvAssignments_();
+ const known=new Set(gaRows_('Benachrichtigungen').filter(n=>String(n.BezugID||'').startsWith('TERM8H:'))
+  .map(n=>n.BenutzerID+'|'+n.BezugID));
+ let queued=0;
+ for(const term of terms){
+  const course=courses.get(term.KursID);if(!course)continue;
+  const date=gaCourseDate_(term.Beginn);
+  const dateString=Utilities.formatDate(date,'Europe/Vienna','dd.MM.yyyy');
+  const timeString=Utilities.formatDate(date,'Europe/Vienna','HH:mm');
+  const ref='TERM8H:'+term.ID+':'+String(term.Beginn).trim().replace(' ','T').slice(0,16);
+  const title='Heute: '+course.Titel;
+  const message='Erinnerung: „'+course.Titel+'“ findet heute, '+dateString+' um '+timeString+
+   ' Uhr statt'+(term.Ort?' (Ort: '+term.Ort+')':'')+'.';
+  for(const member of members){
+   if(member.TurnusID!==term.TurnusID&&!assignments.some(a=>a.MitgliedID===member.ID&&a.TurnusID===term.TurnusID))continue;
+   const account=accounts.get(String(member.Email).toLowerCase());
+   if(!account||known.has(account.ID+'|'+ref))continue;
+   gaNotify_(account.ID,'Termin',title,message,ref);
+   known.add(account.ID+'|'+ref);queued++;
+  }
+ }
+ return queued;
+}
+
 function gaNotifyTurnus_(turnusId,type,title,text,ref){const emails=gaAdvAllowedMembers_(turnusId).map(m=>String(m.Email||'').toLowerCase());gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.includes(x.Email.toLowerCase())).forEach(x=>gaNotify_(x.ID,type,title,text,ref));}
 function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFind_('Kurse',d.KursID),turnus=gaFind_('Turnusse',d.TurnusID);
   if(!course||!gaBool_(course.Aktiv))throw new Error('Der Kurs ist noch nicht veröffentlicht.');if(!course||!turnus||!(course.Bereich===turnus.Bereich||(turnus.Bereich==='Grundausbildung'&&course.Bereich==='Erweiterte Ausbildung')))throw new Error('Dieser Kurs kann dem gewählten Turnus nicht zugeordnet werden. GAB-Turnusse dürfen auch erweiterte Ausbildungen besuchen.');
@@ -1109,11 +1176,16 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
    if(firstTime.length)gaNotifyAdvancedOrganizers_('Aufgabe','Ausbildung abgeschlossen',course.Titel,term.ID);
    firstTime.forEach(m=>{
     const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
-    if(account){
-     gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course?.Titel||'Ausbildung',term.ID);
-     const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
-     if(quiz)gaNotify_(account.ID,'Aufgabe','Wissenstest jetzt verfügbar',course?.Titel||'Ausbildung',term.KursID);
-    }
+    if(account)gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course.Titel,term.ID);
+   });
+  }
+  // Both GAB and advanced course participants receive the correct quiz type.
+  const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
+  if(quiz&&course){
+   const known=gaRows_('Benachrichtigungen');
+   firstTime.forEach(m=>{
+    const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
+    if(account)gaNotifyQuizAvailable_(account,course,quiz,known);
    });
   }
   gaPushQueue_(5);
@@ -1511,12 +1583,12 @@ function gaPushQueue_(limit,onlyNotificationId){
   }
   return pending.length+' Nachricht(en) bearbeitet.';
 }
-function gaPushJob_(){gaLock_(()=>gaPushQueue_(8));}
+function gaPushJob_(){gaLock_(()=>{gaQueueCourseReminders_();gaPushQueue_(8);});}
 function gaPushEinrichten(){
   gaEinrichten();
   const current=ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='gaPushJob_');
   if(!current.length)ScriptApp.newTrigger('gaPushJob_').timeBased().everyMinutes(5).create();
-  SpreadsheetApp.getUi().alert('Push-Speicher eingerichtet. Versandprüfung alle 5 Minuten. Für echte Push-Nachrichten noch VAPID-Schlüssel im Cloudflare-Worker hinterlegen.');
+  SpreadsheetApp.getUi().alert('Push-Speicher eingerichtet. Alle 5 Minuten: Kurserinnerungen und wartende Push-Mitteilungen prüfen.');
 }
 
 
@@ -2169,11 +2241,14 @@ function gaSaveQuiz_(u,d){
  gaLog_(u.ID,'QUIZ_SPEICHERN','Kurs',id,{Aktiv:val.Aktiv,Pflicht:val.Pflicht,Version:val.Version,Fragen:questions.length});
  if(enabled){
   if(course.Bereich===GA_ADV_AREA)gaNotifyAdvancedOrganizers_('Aufgabe','Wissenstest veröffentlicht',course.Titel,id);
-  const termIDs=gaRows_('Termine').filter(t=>t.KursID===id).map(t=>t.ID);
-  const att=gaRows_('Teilnahmen').filter(a=>termIDs.includes(a.TerminID)&&gaBool_(a.Anwesend));
-  const members=gaRows_('Mitglieder').filter(m=>att.some(a=>a.MitgliedID===m.ID));
-  gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&members.some(m=>m.Email&&m.Email.toLowerCase()===String(x.Email||'').toLowerCase()))
-   .forEach(x=>gaNotify_(x.ID,'Aufgabe','Wissenstest verfügbar',course.Titel,id));
+  // If a quiz is created after a completed course, notify those who attended.
+  const finishedIds=new Set(gaRows_('Termine').filter(t=>t.KursID===id&&t.Status==='Durchgeführt').map(t=>t.ID));
+  const attendeeIds=new Set(gaRows_('Teilnahmen').filter(a=>finishedIds.has(a.TerminID)&&gaBool_(a.Anwesend)).map(a=>a.MitgliedID));
+  const emails=new Set(gaRows_('Mitglieder').filter(m=>attendeeIds.has(m.ID)&&gaBool_(m.Aktiv))
+   .map(m=>String(m.Email||'').toLowerCase()).filter(Boolean));
+  const known=gaRows_('Benachrichtigungen');
+  gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.has(String(x.Email||'').toLowerCase()))
+   .forEach(x=>gaNotifyQuizAvailable_(x,course,val,known));
   gaPushQueue_(5);
  }
  return {ok:true,message:enabled?'Quiz gespeichert. Neue Quizversion '+val.Version+' ist aktiv.':'Quiz deaktiviert; bisherige Versuche bleiben erhalten.'};
