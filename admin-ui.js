@@ -50,7 +50,7 @@ function overview(){
  const checks=(STATE.checks||[]).filter(c=>c.Status==='Offen');
  const openMembers=new Set(checks.map(c=>c.MitgliedID));
  const qbad=qs.filter(q=>!q.GABAbgeschlossen).length,good=qs.filter(q=>q.GABAbgeschlossen).length;
- const due=(STATE.termine||[]).filter(t=>t.Status==='Geplant'&&String(t.Beginn)>=new Date().toISOString().slice(0,16)).sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn))).slice(0,4);
+ const due=(STATE.termine||[]).filter(t=>gaTrainingUpcoming(t)).sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn)).slice(0,4);
  const attention=qs.filter(q=>!q.GABAbgeschlossen||q.ErsteHilfeStatus!=='Bestätigt').slice(0,6);
  const shortcuts=[
  ['members','Teilnehmer verwalten','users-round'],['checks','Checklisten bearbeiten','list-checks'],['qualifications','GAB & Qualifikationen','award'],['projects','Module zur Kontrolle','clipboard-check'],['terms','Ausbildungstermine','calendar-days']
