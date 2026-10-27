@@ -1,3 +1,11 @@
+## PDF-Diagnose V1.10.2 – neue oder alte Apps-Script-Bereitstellung feststellen
+
+Der Kurs-PDF-Button ruft `gaApi('exportTrainingPdf')` über die bestehende Cloudflare-Worker-/Apps-Script-Verbindung auf. Die neue serverseitige PDF-Vorlage ist seit V1.10.1 vorhanden, aber der Client kann nicht erkennen, ob der Worker noch mit einem älteren `/exec`-Deployment verbunden ist. Deshalb gibt es jetzt unter **Tätigkeitsberichte → Aktive PDF-Vorlage testen** eine Backend-Prüfung über `gaApi('pdfTemplateInfo')`. Der Server antwortet ab V1.10.2 mit `{backendVersion:'1.10.2',template:'FDISK-DESIGN-2'}`. Alte Bereitstellungen zeigen einen entsprechenden Warnhinweis.
+
+Neu generierte Kurs- und Tätigkeits-PDFs bekommen den eindeutigen Dateinamen-Präfix `FDISK_Design2_` sowie einen Footer `FDISK-BERICHTSDESIGN 2.0` und eine API-Rückgabe `pdfDesign:'FDISK-DESIGN-2'`. Fehlt diese Rückgabe beim tatsächlichen PDF-Download, war die PDF-Vorlage im verbundenen Backend noch alt; die App weist deutlich darauf hin, statt einen alten Export als neues Design auszugeben.
+
+**Wichtig für die Fehleranalyse:** Die Datei `cloudflare-worker.js` enthält als Fallback `DEPLOYED_SCRIPT_URL`. Der tatsächlich laufende Worker kann stattdessen die Umgebungsvariable `GA_SCRIPT_URL` verwenden. Beide Varianten erfordern die **passende bestehende Apps-Script-Bereitstellung** mit einer neuen Version; das Erstellen einer ganz neuen, separaten Bereitstellung ändert nicht automatisch den Worker-Zielendpunkt. Keine Datenbanktabellen oder bestehenden Datensätze müssen angepasst werden.
+
 ## PDF-Berichtsvorlagen V1.10.1 – strukturiertes Feuerwehr-Layout
 
 Die bestehenden serverseitigen Funktionen `gaExportTrainingPdf_` und `gaExportFreeActivityPdf_` erzeugen ab dieser Version im **bestehenden Google Apps Script** einen einheitlichen FDISK-Auszug mit: dunkelblauem Feuerwehr-Kopfbereich, großem Titel, Stammdatenfeldern, vier hervorgehobenen Kennzahlen (Tätigkeitsdauer, Teilnehmerstunden, Ausbilderstunden, Fahrzeugkilometer), nummerierten Abschnitten und farbig wechselnden Tabellenzeilen. Mehrere Termine desselben Moduls erhalten zusätzlich eine Personen-/Fahrzeug-Summenübersicht und die zugehörigen Termin-Details.
