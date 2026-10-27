@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.10.2',
+  VERSION: '1.11.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -15,7 +15,8 @@ const GA = Object.freeze({
     Termine: ['ID','KursID','TurnusID','Beginn','Ende','Ort','Status','ErstelltAm'],
     Teilnahmen: ['ID','TerminID','MitgliedID','Anwesend','AusbilderIDs','BestaetigtVon','BestaetigtAm'],
     Ausbildungsberichte: ['ID','TerminID','BeginnIst','EndeIst','DauerMinuten','FahrzeugeJSON','AusbilderIDs','Notiz','ErfasstVon','AktualisiertAm'],
-    FreieTaetigkeiten: ['ID','Titel','Kategorie','Ort','BeginnIst','EndeIst','DauerMinuten','TeilnehmerIDs','AusbilderIDs','FahrzeugeJSON','Notiz','ErfasstVon','AktualisiertAm'],
+    FreieTaetigkeiten: ['ID','Titel','Kategorie','Ort','BeginnIst','EndeIst','DauerMinuten','TeilnehmerIDs','AusbilderIDs','FahrzeugeJSON','Notiz','ErfasstVon','AktualisiertAm','Bereich'],
+    ErweiterteZuordnungen: ['ID','MitgliedID','TurnusID','ZugeordnetVon','ZugeordnetAm'],
     Checklistenpunkte: ['ID','Titel','Bereich','Zustaendig','Aktiv','ErstelltAm'],
     MitgliedChecks: ['ID','MitgliedID','PunktID','Status','Kommentar','GeaendertVon','GeaendertAm'],
     Nachrichten: ['ID','Titel','Text','TurnusID','VonBenutzerID','ErstelltAm'],
@@ -39,7 +40,7 @@ const GA = Object.freeze({
     QuizFreigaben: ['ID','KursID','MitgliedID','QuizVersion','ZusatzVersuche','FreigegebenVon','FreigegebenAm'],
     Sitzungen: ['ID','BenutzerID','TokenHash','HashPrefix','AblaufMillis','WiderrufenAm','ErstelltAm']
   },
-  ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung'],
+  ROLES: ['Administrator','Ausbilder','Teilnehmer','Fachverwaltung','Organisator Erweiterte Ausbildung'],
   AREAS: ['Grundausbildung','Erweiterte Ausbildung'],
   CHECK_STATUSES: ['Offen','Erledigt','Nicht erforderlich']
 });
@@ -52,7 +53,8 @@ function onOpen() {
     .addItem('4 · Worker-Schlüssel einrichten','gaWorkerSchluesselEinrichten')
     .addItem('5 · Push-Speicher und Trigger einrichten','gaPushEinrichten')
     .addItem('6 · Login- und Quiz-Tabellen einrichten','gaErweiterungenEinrichten')
-    .addItem('7 · Tätigkeitsberichte einrichten','gaBerichtsTabellenEinrichten').addToUi();
+    .addItem('7 · Tätigkeitsberichte einrichten','gaBerichtsTabellenEinrichten')
+    .addItem('8 · Erweiterte Ausbildung vorbereiten','gaErweiterteTabellenEinrichten').addToUi();
 }
 
 function gaSheet_() {
