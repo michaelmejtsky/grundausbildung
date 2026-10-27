@@ -1,3 +1,11 @@
+## Teilnehmerdaten und Mitglieds-E-Mail – V1.12.1
+
+- Das Speichern einer geänderten E-Mail bei **bestehenden Mitgliedern mit App-Zugang** synchronisiert jetzt die Benutzer-Login-Adresse unter derselben Benutzer-ID. Passwort, Rechte, Kursnachweise und Mitglieds-ID bleiben unverändert. Änderungen werden auf doppelt vergebene Benutzeradressen geprüft.
+- Noch offene Einladungs- und Passwortreset-Links an die alte Adresse werden ungültig und müssen bei Bedarf über den vorhandenen Einladungsprozess erneut versendet werden. Eine E-Mail mit verknüpftem Benutzerkonto kann nicht versehentlich geleert werden.
+- **Mein Ausbildungsstand → Meine Ausbildungsdaten prüfen → Verbindung & Ausbildungsdaten prüfen** bietet für Teilnehmer eine authentifizierte Diagnose mit Backend-Version und den Anzahlen der eigenen Termine, Kurse, Qualifikationen, Nachrichten und Benachrichtigungen. Es werden keine privaten Daten anderer Nutzer ausgegeben.
+- Die Tabelle enthält weiterhin alle bisherigen Mitglieder, Kursdaten und Nachweise. Die Änderung schreibt keine Live-Daten um, solange ein Administrator nicht ein Mitglied explizit bearbeitet.
+- Für diese Funktionen muss die aktuelle `Code.gs` im **bestehenden Apps Script** als neue Version veröffentlicht werden. Das GitHub-Pages-Update allein aktiviert keine Änderung der Benutzer-/Datenbanklogik. Falls die App die neuen API-Funktionen nicht erreicht, `GA_SCRIPT_URL` des produktiven Cloudflare Workers und die verwendete `/exec`-Bereitstellung abgleichen.
+
 ## Push-Automatik V1.12.0 – Pflichtquiz, Freiwilliges Quiz, 8-Stunden-Erinnerung und Aktivierungshinweis
 
 - **Kurserinnerung:** `gaPushJob_` prüft mit dem vorhandenen Apps-Script-Zeittrigger (alle 5 Minuten) bevorstehende Ausbildungstermine und stellt ca. **8 Stunden vor Beginn** eine terminbezogene Push-Mitteilung mit Kursname, Datum, Uhrzeit und Ort in die Warteschlange. Ein Zeitfenster von 20 Minuten erlaubt geringfügige Trigger-Verzögerungen. Bei Veranstaltungen am nächsten Morgen lautet die Nachricht **„Morgen“**, nicht „Heute“.
