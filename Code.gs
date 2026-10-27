@@ -545,6 +545,7 @@ function gaState_(u){
   meMember:own,
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
+  erweiterteZuordnungen:own?gaAdvAssignments_().filter(x=>x.MitgliedID===own.ID).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})):[],
   ausbildungsberichte:trainingReports,
   freieTaetigkeiten:freeActivities,
   quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
