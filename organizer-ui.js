@@ -47,12 +47,30 @@ function gaOrganizerInvite(){
  '<button class="primary" type="submit">Zugangseinladung senden</button></form></section>';
 }
 function gaOrganizerQualifications(){
- const qs=STATE.qualifikationen||[];
- return '<div class="ga-page-heading"><div><h2>Qualifikationen – erweiterte Ausbildung</h2>'+
- '<p>Nur die Ergebnisse der eigenen erweiterten Mitglieder. GAB-Daten werden nicht angezeigt.</p></div></div>'+
- '<section class="panel"><div class="items">'+qs.map(q=>'<div class="item"><b>'+h(q.Name)+'</b>'+
- '<p class="small muted">Erweiterte Ausbildung · '+h(q.PflichtAbsolviert||0)+' / '+h(q.PflichtGesamt||0)+' Module dokumentiert</p></div>').join('')+
- (!qs.length?'<p class="muted">Noch keine Qualifikationsdaten vorhanden.</p>':'')+'</div></section>';
+ const people=STATE.mitglieder||[],courses=STATE.kurse||[],terms=STATE.termine||[];
+ const present=STATE.teilnahmen||[],attempts=STATE.quizVersuche||[],quiz=STATE.quizKurse||[];
+ const table=people.map(m=>{
+  const progress=courses.map(c=>{
+   const attended=terms.some(t=>t.KursID===c.ID&&t.Status==='Durchgeführt'&&
+    present.some(p=>p.TerminID===t.ID&&p.MitgliedID===m.ID&&p.Anwesend==='JA'));
+   const q=quiz.find(x=>x.KursID===c.ID&&x.Aktiv==='JA'),required=q?.Pflicht==='JA';
+   const passed=q&&attempts.some(a=>a.KursID===c.ID&&a.MitgliedID===m.ID&&
+    a.Bestanden==='JA'&&String(a.QuizVersion)===String(q.Version));
+   return {name:c.Titel,attended,passed,required,done:attended&&(!required||passed)};
+  });
+  const done=progress.filter(x=>x.done).length;
+  return '<details class="ga-member-fold ga-org-qualification"><summary><span>'+h(m.Nachname+', '+m.Vorname)+
+   '</span><span class="tag '+(done===progress.length&&progress.length?'ok':'blue')+'">'+done+' / '+progress.length+' Module</span></summary>'+
+   '<div class="ga-fold-body">'+(m.Ausbildungsweg==='GAB-Gast'?
+    '<p class="small muted">Als GAB-Gast aufgenommen. GAB-Ausbildungsstand und private Nachweise sind hier nicht einsehbar.</p>':'')+
+   (progress.length?progress.map(c=>
+    '<div class="ga-org-list-row"><strong>'+h(c.name)+'</strong><span class="tag '+(c.done?'ok':c.attended?'warn':'blue')+'">'+
+    (c.done?'Positiv abgeschlossen':c.attended&&c.required?'Pflichtquiz ausständig':'Noch offen')+'</span></div>').join(''):
+    '<p class="muted">Noch keine erweiterten Module vorhanden.</p>')+'</div></details>';
+ });
+ return '<section class="panel"><h2>Qualifikationen – Erweiterte Ausbildung</h2>'+
+ '<p class="muted">Nur Anwesenheit, Wissenstests und Kursabschlüsse der erweiterten Ausbildung. Die GAB-Dokumentation bleibt verborgen.</p>'+
+ (table.length?table.join(''):'<p class="muted">Noch keine Teilnehmer zugeordnet.</p>')+'</section>';
 }
 function gaOrganizerMessages(){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),turns=STATE.turnusse||[];
