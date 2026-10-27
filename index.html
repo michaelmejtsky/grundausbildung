@@ -1127,7 +1127,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
   if(invite){
     try{const invited=await api('inviteUser',{Name:String(data.Vorname).trim()+' '+String(data.Nachname).trim(),Email:email,Rolle:'Teilnehmer',Bereich:''});tip(invited.message||'Mitglied angelegt und Einladung versendet.');}
     catch(err){tip('Mitglied gespeichert, aber Einladung fehlgeschlagen: '+err.message,true);}
-  }else tip('Mitglied aufgenommen.');
+  }else tip(saved?.message||'Mitglied gespeichert.');
   await reload();
  }
  else if(type==='aidSettings'){
