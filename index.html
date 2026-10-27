@@ -677,7 +677,9 @@ function mine(){
  const completed=(STATE.teilnahmen||[]).filter(t=>t.MitgliedID===member.ID&&t.Anwesend==='JA');
  const checks=(STATE.checks||[]).filter(c=>c.MitgliedID===member.ID),openChecks=checks.filter(c=>c.Status==='Offen');
  const gabOpen=arr(q.OffeneGABKurse),bswOpen=arr(q.OffeneBSWKurse);
- const upcoming=(STATE.termine||[]).filter(t=>t.TurnusID===member.TurnusID&&t.Status==='Geplant'&&
+ const assignedTurns=new Set([member.TurnusID,...(STATE.erweiterteZuordnungen||[])
+  .filter(x=>x.MitgliedID===member.ID).map(x=>x.TurnusID)]);
+ const upcoming=(STATE.termine||[]).filter(t=>assignedTurns.has(t.TurnusID)&&t.Status==='Geplant'&&
   new Date(t.Beginn).getTime()>=Date.now()-3600000).sort((a,b)=>a.Beginn.localeCompare(b.Beginn));
  const next=upcoming[0],nextCourse=next&&by(STATE.kurse,next.KursID);
  const first=h(member.Vorname||STATE.user.Name||'');
