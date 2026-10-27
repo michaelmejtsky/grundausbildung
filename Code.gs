@@ -1087,7 +1087,11 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
   if(gaIsAdvOrg_(u)){
    firstTime.forEach(m=>{
     const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
-    if(account)gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course?.Titel||'Ausbildung',term.ID);
+    if(account){
+     gaNotify_(account.ID,'Aufgabe','Erweitertes Ausbildungsmodul abgeschlossen',course?.Titel||'Ausbildung',term.ID);
+     const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
+     if(quiz)gaNotify_(account.ID,'Aufgabe','Wissenstest jetzt verfügbar',course?.Titel||'Ausbildung',term.KursID);
+    }
    });
   }
   gaPushQueue_(5);
