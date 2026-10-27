@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.10.1',
+  VERSION: '1.10.2',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -288,6 +288,10 @@ function gaApi(method,data,token){
   if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
+  if(method==='pdfTemplateInfo'){
+    gaRequire_(u,['Administrator','Ausbilder']);
+    return {ok:true,backendVersion:GA.VERSION,template:'FDISK-DESIGN-2',message:'Aktuelle PDF-Vorlage mit dunkelblauem Kopf und Kennzahlen.'};
+  }
   if(method==='exportTrainingPdf')return gaExportTrainingPdf_(u,d);
   if(method==='saveFreeActivity')return gaLock_(()=>gaSaveFreeActivity_(u,d));
   if(method==='exportFreeActivityPdf')return gaExportFreeActivityPdf_(u,d);
@@ -672,7 +676,7 @@ function gaPdfWarning_(body,message){
 function gaPdfFooter_(body,stamp){
  gaPdfSpace_(body,12);
  body.appendHorizontalRule();
- gaPdfLine_(body,'FDISK-ARBEITSHILFE  |  Feuerwehr St. Pölten-Stadt',8,GA_PDF.blue,true).setSpacingBefore(7);
+ gaPdfLine_(body,'FDISK-BERICHTSDESIGN 2.0  |  Feuerwehr St. Pölten-Stadt',8,GA_PDF.blue,true).setSpacingBefore(7);
  gaPdfLine_(body,'Interner Datenauszug · Nicht automatisch in FDISK übertragen · Vor Übernahme prüfen',8,GA_PDF.muted,false);
  gaPdfLine_(body,'Erstellt am '+gaTrainingDate_(stamp)+'  |  Grundlage: gespeicherte Ist-Zeiten und bestätigte Mitwirkende',8,GA_PDF.muted,false);
 }
@@ -684,7 +688,7 @@ function gaExportTrainingPdf_(u,d){
  const report=gaTrainingPdfData_(d||{});
  const safe=v=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,200);
  const h=gaTrainingHours_,date=gaTrainingDate_,km=gaPdfKm_;
- const filename=('FDISK_Ausbildung_'+report.course.Titel+
+ const filename=('FDISK_Design2_Ausbildung_'+report.course.Titel+
   (report.isSingle?'_'+String(report.details[0]?.term?.Beginn||gaRows_('Termine').find(t=>t.ID===d.TerminID)?.Beginn||'').slice(0,10):'_Gesamt')+'.pdf')
   .replace(/[^\wÄÖÜäöüß.-]+/g,'_').slice(0,135);
  const incomplete=report.pending>0||report.details.length===0;
@@ -774,7 +778,7 @@ function gaExportTrainingPdf_(u,d){
   if(bytes.length>8*1024*1024)throw new Error('PDF zu groß. Bitte einzelne Ausbildungstermine herunterladen.');
   gaLog_(u.ID,'PDF_TAETIGKEITSBERICHT','Kurs',report.course.ID,{Termine:report.details.length,PDF:filename});
   return {ok:true,dateiname:filename,base64:Utilities.base64Encode(bytes),
-   termine:report.details.length,gesamtKm:report.kilometers,ausbildungsMinuten:report.minutes};
+   pdfDesign:'FDISK-DESIGN-2',backendVersion:GA.VERSION,termine:report.details.length,gesamtKm:report.kilometers,ausbildungsMinuten:report.minutes};
  }finally{
   if(docId)try{DriveApp.getFileById(docId).setTrashed(true);}catch(e){Logger.log('Temporäre PDF-Datei: '+e.message);}
  }
@@ -824,7 +828,7 @@ function gaExportFreeActivityPdf_(u,d){
  const vehicles=gaTrainingVehicles_(entry),mins=Number(entry.DauerMinuten)||0;
  const hours=gaTrainingHours_,date=gaTrainingDate_,km=gaPdfKm_;
  const totalKm=vehicles.reduce((n,v)=>n+Number(v.Kilometer||0),0);
- const filename=('FDISK_Taetigkeit_'+String(entry.Titel||'')+'_'+String(entry.BeginnIst).slice(0,10)+'.pdf')
+ const filename=('FDISK_Design2_Taetigkeit_'+String(entry.Titel||'')+'_'+String(entry.BeginnIst).slice(0,10)+'.pdf')
   .replace(/[^\wÄÖÜäöüß.-]+/g,'_').slice(0,140);
  let docId=null;
  try{
@@ -863,7 +867,7 @@ function gaExportFreeActivityPdf_(u,d){
   const bytes=DriveApp.getFileById(docId).getAs(MimeType.PDF).setName(filename).getBytes();
   if(bytes.length>8*1024*1024)throw new Error('Das PDF ist zu groß. Bitte Bericht einzeln herunterladen.');
   gaLog_(u.ID,'PDF_FREIE_TAETIGKEIT','FreieTaetigkeiten',entry.ID,{Datei:filename});
-  return {ok:true,dateiname:filename,base64:Utilities.base64Encode(bytes)};
+  return {ok:true,dateiname:filename,base64:Utilities.base64Encode(bytes),pdfDesign:'FDISK-DESIGN-2',backendVersion:GA.VERSION};
  }finally{
   if(docId)try{DriveApp.getFileById(docId).setTrashed(true);}catch(e){Logger.log('Temporäre PDF-Datei: '+e.message);}
  }
