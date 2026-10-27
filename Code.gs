@@ -334,7 +334,7 @@ function gaAdvancedOrganizerState_(u){
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,
   kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
-  teilnahmen:att,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
+  teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
    .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
   kursProjekte:gaOptionalRows_('KursProjekte').filter(x=>x.Bereich===GA_ADV_AREA),
   quizKurse:cfg.map(gaQuizPublicConfig_),
