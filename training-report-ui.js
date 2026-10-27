@@ -53,7 +53,7 @@ function gaAttendancePage(){
    }).join('')+'</div></section>';
  }
  const c=by(STATE.kurse,term.KursID),report=gaReportByTerm(term.ID);
- const members=(STATE.mitglieder||[]).filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA');
+ const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'&&(m.TurnusID===term.TurnusID||(STATE.erweiterteZuordnungen||[]).some(a=>a.MitgliedID===m.ID&&a.TurnusID===term.TurnusID)));
  const previous=(STATE.teilnahmen||[]).filter(a=>a.TerminID===term.ID);
  // Auch eingeladene, noch nicht aktivierte Ausbilder dürfen als tatsächlich mitwirkend erfasst werden.
  const trainers=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(u.Rolle));
@@ -201,12 +201,12 @@ async function gaSaveTrainingAttendance(form,fd){
  if(!Array.isArray(STATE.ausbildungsberichte))throw new Error('Der Tätigkeitsbericht ist am Apps-Script-Backend noch nicht aktiviert. Bitte zuerst die Code.gs aktualisieren.');
  const term=by(STATE.termine,TERM);
  if(!term)throw new Error('Bitte einen Ausbildungstermin auswählen.');
- const members=(STATE.mitglieder||[]).filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA');
+ const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'&&(m.TurnusID===term.TurnusID||(STATE.erweiterteZuordnungen||[]).some(a=>a.MitgliedID===m.ID&&a.TurnusID===term.TurnusID)));
  const present=new Set(fd.getAll('member')),teachers=fd.getAll('trainer');
  const begin=String(fd.get('BeginnIst')||''),end=String(fd.get('EndeIst')||'');
  if(!gaTrainingMin(begin,end))throw new Error('Bitte einen gültigen tatsächlichen Beginn und ein späteres Ende angeben.');
  if(!teachers.length)throw new Error('Bitte mindestens einen Ausbilder anhaken.');
- if(STATE.user.Rolle==='Ausbilder'&&!teachers.includes(STATE.user.ID))throw new Error('Du musst dich selbst als durchführenden Ausbilder anhaken.');
+ if(['Ausbilder','Organisator Erweiterte Ausbildung'].includes(STATE.user.Rolle)&&!teachers.includes(STATE.user.ID))throw new Error('Du musst dich selbst als durchführenden Ausbilder anhaken.');
  const data={TerminID:term.ID,BeginnIst:begin,EndeIst:end,Notiz:fd.get('Notiz')||'',
   Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[],AusbilderIDs:teachers,
   Anwesend:members.map(m=>({MitgliedID:m.ID,Anwesend:present.has(m.ID)}))};
