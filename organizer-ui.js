@@ -74,7 +74,17 @@ function gaOrganizerQualifications(){
 }
 function gaOrganizerMessages(){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),turns=STATE.turnusse||[];
- return '<section class="panel"><h2>Nachrichten – Erweiterte Ausbildung</h2>'+
+ const inbox=(STATE.direktnachrichten||[]).filter(n=>n.AnBenutzerID===STATE.user.ID);
+ const inboxHtml='<section class="panel"><h3>Persönliche Nachrichten</h3>'+
+ (inbox.length?inbox.map(n=>'<div class="ga-org-list-row"><div><strong>'+h(n.Titel)+'</strong>'+
+ '<p>Von '+h(n.VonName||'Teilnehmer')+' · '+h(dt(n.ErstelltAm))+'</p><p>'+h(n.Text)+'</p>'+
+ (n.AntwortMoeglich?'<form data-form="advDirect" class="ga-org-reply">'+
+ '<input name="AnBenutzerID" type="hidden" value="'+h(n.VonBenutzerID)+'">'+
+ '<label>Betreff<input name="Titel" value="AW: '+h(n.Titel)+'" required maxlength="160"></label>'+
+ '<label>Antwort<textarea name="Text" rows="2" maxlength="3000" required></textarea></label>'+
+ '<button type="submit" class="secondary">Antwort senden</button></form>':'')+'</div></div>').join(''):
+ '<p class="muted">Noch keine persönlichen Nachrichten erhalten.</p>')+'</section>';
+ return inboxHtml+'<section class="panel"><h2>Nachrichten – Erweiterte Ausbildung</h2>'+
  '<p class="muted">Nur bereits für die erweiterte Ausbildung zugeordnete Mitglieder können benachrichtigt werden. Push folgt den Benachrichtigungseinstellungen der Empfänger.</p>'+
  '<form data-form="advMessage"><div class="grid">'+
  '<div class="wide"><label>Betreff<input name="Titel" required maxlength="160"></label></div>'+
