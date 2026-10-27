@@ -35,7 +35,7 @@ function gaTrainingStatsForTerm(term){
   participantMinutes:minutes*attendance.length,trainerMinutes:minutes*trainers.length,km,vehicle};
 }
 function gaAttendancePage(){
- if(!['Administrator','Ausbilder'].includes(role()))return '<section class="panel">Keine Berechtigung.</section>';
+ if(!['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()))return '<section class="panel">Keine Berechtigung.</section>';
  const ready=Array.isArray(STATE.ausbildungsberichte);
  if(!ready)return '<section class="panel"><h2>Ausbildungsdokumentation</h2><p class="ga-alert">Die aktuelle Code.gs muss zuerst in Google Apps Script bereitgestellt werden, damit die Ist-Zeiten und Berichte sicher gespeichert werden.</p></section>';
  const term=TERM&&by(STATE.termine,TERM);
@@ -56,7 +56,7 @@ function gaAttendancePage(){
  const members=(STATE.mitglieder||[]).filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA');
  const previous=(STATE.teilnahmen||[]).filter(a=>a.TerminID===term.ID);
  // Auch eingeladene, noch nicht aktivierte Ausbilder dürfen als tatsächlich mitwirkend erfasst werden.
- const trainers=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));
+ const trainers=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(u.Rolle));
  const chosen=report?String(report.AusbilderIDs||'').split(','):
   previous[0]?.AusbilderIDs?String(previous[0].AusbilderIDs).split(','):[STATE.user.ID];
  if(!trainers.some(u=>u.ID===STATE.user.ID))trainers.unshift({ID:STATE.user.ID,Name:STATE.user.Name,Rolle:STATE.user.Rolle,Aktiv:'JA'});
@@ -122,7 +122,7 @@ function gaTrainingModuleRows(){
  }).sort((a,b)=>a.title.localeCompare(b.title,'de'));
 }
 function gaTrainingReportsPage(){
- if(!['Administrator','Ausbilder'].includes(role()))return '';
+ if(!['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()))return '';
  const backendReady=Array.isArray(STATE.ausbildungsberichte);
  if(!backendReady)return '<section class="panel"><h2>Tätigkeitsberichte</h2>'+
  '<div class="ga-alert">Das Apps-Script-Backend muss auf den aktuellen Stand gebracht werden. Im Google Sheet unter „Grundausbildung → 7 · Tätigkeitsberichte einrichten“ zuerst die neue Tabelle erstellen.</div></section>';
