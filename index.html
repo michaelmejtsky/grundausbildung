@@ -641,9 +641,9 @@ function expandedMessage(title,detail,body,id='',open=false,footer=''){
    '<p class="msg">'+h(body)+'</p>'+footer+'</details>';
 }
 function messages(){
- const admin=role()==='Administrator';
- const recipientMembers=STATE.mitglieder.filter(m=>m.Aktiv==='JA'&&m.Email).slice().sort((a,b)=>name(a).localeCompare(name(b),'de'));
- const compose=admin?'<section class="panel"><h2>Nachricht verfassen</h2><form data-form="message"><div class="grid">'+
+ const admin=role()==='Administrator',org=role()==='Organisator Erweiterte Ausbildung';
+ const recipientMembers=STATE.mitglieder.filter(m=>m.Aktiv==='JA'&&(org||m.Email)).slice().sort((a,b)=>name(a).localeCompare(name(b),'de'));
+ const compose=(admin||org)?'<section class="panel"><h2>Nachricht verfassen</h2><form data-form="message"><div class="grid">'+
  '<div class="wide"><label>Betreff</label><input name="Titel" required maxlength="160"></div>'+
  '<div><label>Empfänger auswählen</label><select name="EmpfaengerArt" data-recipient-mode><option value="ALLE">Alle Teilnehmer</option><option value="TURNUS">Gesamter Turnus</option><option value="MITGLIED">Einzelnes Mitglied</option></select></div>'+
  '<div data-recipient-target="TURNUS" style="display:none"><label>Turnus</label><select name="TurnusID">'+option(STATE.turnusse,t=>t.Bezeichnung)+'</select></div>'+
