@@ -1115,6 +1115,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advEnroll')await doSave('saveAdvancedEnrollment',data);
  else if(type==='advInvite')await doSave('inviteUser',{MitgliedID:data.MitgliedID,Rolle:'Teilnehmer'});
  else if(type==='advMessage')await doSave('sendMessage',data);
+ else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
 </script><script src="./aid-ui.js"></script><script src="./quiz-ui.js"></script><script src="./admin-ui.js"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js"></script></body></html>
