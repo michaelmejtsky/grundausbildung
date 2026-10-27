@@ -60,7 +60,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.11.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.12.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -68,6 +68,29 @@ let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},invit
 const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 let PUSH_FEEDBACK='',PUSH_FEEDBACK_ERROR=false;
+let GA_PUSH_ONBOARD_VISITS=0,GA_PUSH_ONBOARD_DISMISSED=false;
+function gaCountAppVisit(){
+ if(!STATE?.user?.ID)return;
+ const key='ga_push_visit_v1_'+STATE.user.ID;
+ try{
+  GA_PUSH_ONBOARD_VISITS=Math.min(99,Math.max(0,Number(localStorage.getItem(key))||0)+1);
+  localStorage.setItem(key,String(GA_PUSH_ONBOARD_VISITS));
+ }catch(_){GA_PUSH_ONBOARD_VISITS=0;}
+ GA_PUSH_ONBOARD_DISMISSED=false;
+}
+function gaPushOnboardingBanner(){
+ if(STATE?.user?.Rolle!=='Teilnehmer'||GA_PUSH_ONBOARD_VISITS<2||
+  GA_PUSH_ONBOARD_DISMISSED||Number(STATE.pushGeraeteAnzahl||0)>0)return '';
+ const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+ const denied=supported&&Notification.permission==='denied';
+ return '<section class="panel ga-push-onboard"><div class="row between"><div>'+
+  '<h2>🔔 Push-Benachrichtigungen aktivieren</h2>'+
+  '<p>Damit du Kurserinnerungen sowie Hinweise zu Pflichtquiz und freiwilligem Quiz erhältst, aktiviere Push auf deinem Handy.</p>'+
+  (denied?'<p class="small muted">Push ist in den Geräte- oder Browsereinstellungen blockiert. Dort bitte zuerst wieder freigeben.</p>':
+   !supported?'<p class="small muted">Auf iPhones muss die App zum Home-Bildschirm hinzugefügt und von dort geöffnet werden.</p>':'')+
+  '</div><div class="btnline"><button class="primary" type="button" data-push-enable="1" '+(!supported||denied?'disabled':'')+'>Push jetzt aktivieren</button>'+
+  '<button class="secondary" type="button" data-push-remind-later="1">Später</button></div></div></section>';
+}
 let PROJECT_REVIEW_ID='';
 let NOTICE_FOCUS=(new URLSearchParams(location.search).get('notification')||'').slice(0,90);
 if(!/^[a-f0-9-]{8,90}$/i.test(NOTICE_FOCUS))NOTICE_FOCUS='';
@@ -148,7 +171,7 @@ async function gaRestoreLogin(){
   STATE=await api('state');
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
   VIEW=NOTICE_FOCUS?'notifications':'overview';
-  render();
+  gaCountAppVisit();render();
   if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
  }catch(e){
   TOKEN='';STATE=null;
@@ -282,7 +305,7 @@ function title(){return ({
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();}
+ const root=$('content');root.innerHTML=VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaPushOnboardingBanner());}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -901,7 +924,7 @@ $('loginForm').addEventListener('submit',async e=>{
    if(!gaStoreLogin(result.token,result.rememberUntil))tip('30-Tage-Anmeldung noch nicht aktiv: Backend-Version und Browser-Speicher prüfen.',true);
   }else gaClearLogin();
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
-  VIEW=NOTICE_FOCUS?'notifications':'overview';render();
+  VIEW=NOTICE_FOCUS?'notifications':'overview';gaCountAppVisit();render();
   if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
  }catch(err){
   TOKEN='';STATE=null;
@@ -917,7 +940,8 @@ async function logout(){
  try{if(oldToken)await rpc('gaApi','logout',{},oldToken);}catch(e){tip('Lokal abgemeldet. Bei fehlender Verbindung kann die Sitzung serverseitig noch gültig sein.',true);}
 }
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-push-remind-later],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+ if(x.dataset.pushRemindLater!==undefined){GA_PUSH_ONBOARD_DISMISSED=true;render();return;}
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';document.body.classList.remove('ga-nav-open');render();return}
  if(x.dataset.edit){PROJECT_REVIEW_ID='';FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
  if(x.dataset.cancel){FORM='';EDIT=null;render();return}
