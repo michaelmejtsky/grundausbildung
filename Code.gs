@@ -1565,7 +1565,7 @@ function gaSubmitProject_(u,d){
  // Gestaltungsberechtigte Ausbilder können gemeinsam ausgearbeitete Projekte einreichen.
  gaProjectComplete_(project);
  gaReplace_('KursProjekte',project.ID,{Status:'Zur Prüfung',GeaendertVon:u.ID,GeaendertAm:gaNow_(),Rueckmeldung:''});
- gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID)
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID&&(!gaIsAdvOrg_(x)||project.Bereich===GA_ADV_AREA))
    .forEach(x=>gaNotify_(x.ID,'Aufgabe','Kurs wartet auf Freigabe',project.Titel,project.ID));
  gaLog_(u.ID,'PROJEKT_EINREICHEN','Kursprojekt',project.ID,{Titel:project.Titel});
  return {ok:true,message:'Projekt zur Prüfung eingereicht.'};
