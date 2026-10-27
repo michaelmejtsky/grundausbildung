@@ -313,7 +313,9 @@ function gaErweiterteTabellenEinrichten(){
  if(act){
   const index=GA.SHEETS.FreieTaetigkeiten.length;
   if(act.getMaxColumns()<index)act.insertColumnsAfter(act.getMaxColumns(),index-act.getMaxColumns());
-  if(act.getRange(1,index).getValue()!=='Bereich')act.getRange(1,index).setValue('Bereich');
+  const header=String(act.getRange(1,index).getDisplayValue()||'').trim();
+  if(header&&header!=='Bereich')throw new Error('FreieTaetigkeiten: Bestehende Spalte nicht überschrieben. Bitte Spaltenstruktur prüfen.');
+  if(!header)act.getRange(1,index).setValue('Bereich');
  }
  Logger.log('Erweiterte Ausbildung vorbereitet.');ss.toast('Erweiterte Ausbildung vorbereitet.','Grundausbildung',6);
  return {ok:true};
@@ -384,8 +386,11 @@ function gaOrganizerGuard_(u,method,d){
  }
  if(['saveTermin','saveAttendance'].includes(method)){
   const term=d.TerminID?gaFind_('Termine',d.TerminID):d.ID?gaFind_('Termine',d.ID):null;
-  const course=gaAdvancedCourse_(u,term?.KursID||d.KursID);
-  const turn=gaAdvancedTurnus_(u,term?.TurnusID||d.TurnusID);
+  if(method==='saveAttendance'&&!term)throw new Error('Ausbildungstermin nicht gefunden.');
+  // Bei Änderungen auch die neuen Ziel-IDs prüfen, um fremde GAB-Daten zu schützen.
+  if(term){gaAdvancedCourse_(u,term.KursID);gaAdvancedTurnus_(u,term.TurnusID);}
+  const course=gaAdvancedCourse_(u,method==='saveTermin'?d.KursID:term.KursID);
+  const turn=gaAdvancedTurnus_(u,method==='saveTermin'?d.TurnusID:term.TurnusID);
   if(course.Bereich!==GA_ADV_AREA||turn.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Kurstermine.');
  }
  if(method==='saveTurnus'){
@@ -702,13 +707,16 @@ function gaTrainingHours_(minutes){return (Math.round(Number(minutes)/6)/10).toL
 function gaTrainingDate_(stamp){const s=String(stamp||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(8,10)+'.'+s.slice(5,7)+'.'+s.slice(0,4)+(s.length>=16?' '+s.slice(11,16):''):s;}
 
 /** Reads only recorded values, keeping planned and actual times distinct. */
-function gaTrainingPdfData_(d){
+function gaTrainingPdfData_(d,u){
  const termId=gaText_(d.TerminID,100),courseId=gaText_(d.KursID,100);
  if(!termId&&!courseId)throw new Error('Bitte einen Ausbildungstermin oder ein Modul auswählen.');
  if(termId&&courseId)throw new Error('Bitte nur einen Berichtstyp auswählen.');
  const allTerms=gaRows_('Termine'),allCourses=gaRows_('Kurse');
- const selected=termId?allTerms.filter(t=>t.ID===termId):allTerms.filter(t=>t.KursID===courseId);
- if(!selected.length)throw new Error('Keine Termine für diese Auswahl gefunden.');
+ const matching=termId?allTerms.filter(t=>t.ID===termId):allTerms.filter(t=>t.KursID===courseId);
+ // Erweiterte Kurse können auch in GAB-Turnussen stattfinden. Ein Organisator
+ // darf deren personenbezogene GAB-Daten nicht im Modulgesamtbericht sehen.
+ const selected=gaIsAdvOrg_(u)?matching.filter(t=>gaFind_('Turnusse',t.TurnusID)?.Bereich===GA_ADV_AREA):matching;
+ if(!selected.length)throw new Error('Keine berechtigten Termine für diese Auswahl gefunden.');
  const reportRows=gaOptionalRows_('Ausbildungsberichte'),att=gaRows_('Teilnahmen');
  const members=gaRows_('Mitglieder'),accounts=gaRows_('Benutzer');
  const course=allCourses.find(c=>c.ID===(courseId||selected[0].KursID));
@@ -875,7 +883,7 @@ function gaPdfKm_(n){return Number(n||0).toLocaleString('de-AT',{minimumFraction
 
 function gaExportTrainingPdf_(u,d){
  gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
- const report=gaTrainingPdfData_(d||{});
+ const report=gaTrainingPdfData_(d||{},u);
  const safe=v=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,200);
  const h=gaTrainingHours_,date=gaTrainingDate_,km=gaPdfKm_;
  const filename=('FDISK_Design2_Ausbildung_'+report.course.Titel+
