@@ -1062,7 +1062,8 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
   const qualified=gaRows_('Benutzer').filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>x.ID);
   if(!trainerIds.length||trainerIds.some(id=>!qualified.includes(id)))throw new Error('Mindestens einen gültigen Ausbilder auswählen.');
   if((u.Rolle==='Ausbilder'||gaIsAdvOrg_(u))&&!trainerIds.includes(u.ID))throw new Error('Der bestätigende Ausbilder muss selbst angeführt sein.');
-  const previous=gaRows_('Teilnahmen');
+  // Vor dem Aktualisieren als Momentaufnahme sichern, sonst erkennt firstTime keine neuen Abschlüsse.
+  const previous=gaRows_('Teilnahmen').map(a=>({...a}));
   const saved=gaOptionalRows_('Ausbildungsberichte').find(r=>r.TerminID===term.ID);
   const report={...details,AusbilderIDs:trainerIds.join(','),ErfasstVon:u.ID,AktualisiertAm:gaNow_()};
   if(saved)gaReplace_('Ausbildungsberichte',saved.ID,report);
