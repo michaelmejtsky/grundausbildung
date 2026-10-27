@@ -60,7 +60,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.12.0</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.12.1</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
@@ -709,9 +709,42 @@ function messages(){
 }
 function attendance(){let term=TERM&&by(STATE.termine,TERM);if(term){let c=by(STATE.kurse,term.KursID),ms=STATE.mitglieder.filter(m=>m.TurnusID===term.TurnusID&&m.Aktiv==='JA'),trainers=STATE.benutzer.filter(u=>['Administrator','Ausbilder'].includes(u.Rolle));let previous=STATE.teilnahmen.filter(x=>x.TerminID===term.ID);return '<section class="panel"><div class="row between"><h2>'+h(c?.Titel||'Kurs')+'</h2><button class="secondary" data-close-term="1">Zurück</button></div><p class="muted">'+dt(term.Beginn)+' · '+h(term.Ort)+'</p>'+(c?courseCard(c):'')+'<hr class="divider"><h2>Anwesenheit bestätigen</h2><form data-form="attendance"><h3>Teilnehmer</h3>'+ms.map(m=>{let old=previous.find(t=>t.MitgliedID===m.ID);return '<div class="q-attendance-person"><label class="inline-check"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+(old?.Anwesend==='JA'?'checked':'')+'> '+h(name(m))+'</label>'+(old?.Anwesend==='JA'?qCourseBadge(term.KursID,m.ID,term.TurnusID):'')+'</div>'}).join('')+'<h3>Durchführende Ausbilder</h3>'+trainers.map(t=>{let old=previous[0]?.AusbilderIDs?.split(',')||[];return '<label class="inline-check"><input type="checkbox" name="trainer" value="'+h(t.ID)+'" '+(old.includes(t.ID)||(!previous.length&&t.ID===STATE.user.ID)?'checked':'')+'> '+h(t.Name)+'</label>'}).join('')+'<div class="notice">Mit Bestätigung werden Anwesenheit, Ausbilder, Datum und der bestätigende Benutzer protokolliert. Eine erneute Bestätigung korrigiert den Datensatz mit neuem Protokolleintrag.</div><div class="btnline"><button class="primary">Ausbildung verbindlich bestätigen</button></div></form></section>'}return '<section class="panel"><h2>Ausbildung auswählen</h2><p class="muted">Öffne den Termin, sieh die Unterlagen und bestätige anschließend die Anwesenheit.</p><div class="items">'+STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)).map(t=>{let c=by(STATE.kurse,t.KursID);return '<div class="item"><div class="row between"><div><b>'+h(c?.Titel||'Kurs')+'</b><div class="detail">'+dt(t.Beginn)+' · '+h(t.Ort)+'</div></div><button class="primary" data-term="'+h(t.ID)+'">Öffnen</button></div></div>'}).join('')+'</div></section>'}
 
+function gaParticipantDiagnosticBox(){
+ if(STATE?.user?.Rolle!=='Teilnehmer')return '';
+ const count=a=>Array.isArray(a)?a.length:0;
+ return '<details class="panel ga-self-check"><summary><strong>Meine Ausbildungsdaten prüfen</strong>'+
+ '<span class="small muted">Serverversion und persönliche Datensätze</span></summary>'+
+ '<div class="small muted">Verbundener Server: <strong>'+h(STATE.version||'unbekannt')+'</strong></div>'+
+ '<div class="ga-self-check-grid">'+
+ '<span>Mitgliedsprofil: <b>'+(STATE.meMember?'gefunden':'FEHLT')+'</b></span>'+
+ '<span>Termine: <b>'+count(STATE.termine)+'</b></span>'+
+ '<span>Kurse: <b>'+count(STATE.kurse)+'</b></span>'+
+ '<span>Ausbildungsstand: <b>'+count(STATE.qualifikationen)+'</b></span>'+
+ '<span>Nachrichten: <b>'+count(STATE.nachrichten)+'</b></span>'+
+ '<span>Benachrichtigungen: <b>'+count(STATE.benachrichtigungen)+'</b></span></div>'+
+ '<button type="button" class="secondary" data-self-check="1">Verbindung & Ausbildungsdaten prüfen</button>'+
+ '<p class="small muted" id="gaParticipantCheckFeedback" aria-live="polite"></p>'+
+ '<p class="small muted">Wenn der Server Datensätze meldet, die hier fehlen, ist die App noch mit einer anderen Backend-Version verbunden.</p></details>';
+}
+async function gaCheckParticipantData(button){
+ const result=document.getElementById('gaParticipantCheckFeedback');
+ if(!result)return;
+ const txt=button.textContent;button.disabled=true;button.textContent='Wird geprüft …';
+ try{
+  const res=await api('participantStatus');
+  result.textContent='Backend '+String(res.backendVersion||'?')+' · Mitglied: '+(res.mitgliedGefunden?'ja':'nein')+
+   ' · Termine: '+Number(res.termine||0)+' · Kurse: '+Number(res.kurse||0)+
+   ' · Ausbildungsstand: '+Number(res.qualifikationen||0)+
+   ' · Nachrichten: '+Number(res.nachrichten||0)+' · Benachrichtigungen: '+Number(res.benachrichtigungen||0)+
+   '. '+String(res.hinweis||'');
+ }catch(e){
+  result.textContent='Die verbundene Bereitstellung unterstützt die Prüfung nicht oder ist nicht erreichbar: '+
+   String(e.message||e)+' – bitte den Administrator die Apps-Script-/Cloudflare-Version prüfen lassen.';
+ }finally{button.disabled=false;button.textContent=txt;}
+}
 function mine(){
  const member=STATE.meMember;
- if(!member)return '<section class="panel"><h2>Dein Teilnehmerprofil fehlt</h2><p>Bitte lass vom Administrator deine E-Mail im Mitgliedseintrag kontrollieren.</p></section>';
+ if(!member)return '<section class="panel"><h2>Dein Teilnehmerprofil fehlt</h2><p>Die App konnte dein Mitgliedsprofil nicht zuordnen. Bitte die Datenverbindung prüfen.</p></section>'+gaParticipantDiagnosticBox();
  const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===member.ID)||{};
  const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
  const percent=Math.max(0,Math.min(100,Number(q.Fortschritt)||0));
@@ -770,7 +803,7 @@ function mine(){
   '<div class="ga-fold-body"><p class="small muted">Deine Nachweise kannst du hier hochladen oder ihren Prüfstatus ansehen.</p>'+
   aidPanel(false)+
   '<p class="small muted">FDISK: '+h(q.FDISKPlatzhalter==='JA'?'Platzhalter erfasst – kein Ausbildungsnachweis':q.FDISKEintragDatum||'Noch kein Datum hinterlegt')+'</p></div></details>';
- return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>';
+ return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>'+gaParticipantDiagnosticBox();
 }
 function myterms(){
  const allowed=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
@@ -949,7 +982,8 @@ async function logout(){
  try{if(oldToken)await rpc('gaApi','logout',{},oldToken);}catch(e){tip('Lokal abgemeldet. Bei fehlender Verbindung kann die Sitzung serverseitig noch gültig sein.',true);}
 }
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-push-remind-later],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-self-check],[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-push-remind-later],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+ if(x.dataset.selfCheck!==undefined){await gaCheckParticipantData(x);return;}
  if(x.dataset.pushRemindLater!==undefined){GA_PUSH_ONBOARD_DISMISSED=true;render();return;}
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';document.body.classList.remove('ga-nav-open');render();return}
  if(x.dataset.edit){PROJECT_REVIEW_ID='';FORM=x.dataset.edit;EDIT=x.dataset.id;render();return}
