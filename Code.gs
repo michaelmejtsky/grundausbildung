@@ -353,7 +353,11 @@ function gaAdvancedOrganizerState_(u){
   nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
   meMember:null,checklistenpunkte:[],checks:[],eigeneBewertungen:[],offeneBewertungen:[],
   ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
-  direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse(),nachrichtenEmpfaenger:[],
+  direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse().map(x=>{
+   const sender=gaFind_('Benutzer',x.VonBenutzerID);
+   const member=gaRows_('Mitglieder').find(m=>m.Email&&m.Email.toLowerCase()===String(sender?.Email||'').toLowerCase());
+   return {...x,VonName:sender?.Name||'Teilnehmer',AntwortMoeglich:sender?.Rolle==='Teilnehmer'&&gaAdvMemberAllowed_(member)};
+  }),nachrichtenEmpfaenger:[],
   pushEigeneRegeln:gaPushRule_(u.ID),pushGeraeteAnzahl:gaOptionalRows_('PushGeraete').filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,pushRegeln:[],
   benachrichtigungen:gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse()
  };
@@ -2020,6 +2024,7 @@ function gaSendDirect_(u,d){
   Text:gaNeed_(d.Text,'Nachricht',3000),ErstelltAm:gaNow_(),GelesenAm:''};
  gaAppend_('Direktnachrichten',item);
  gaNotify_(recipient.ID,'Nachricht',item.Titel,item.Text,item.ID);
+ gaPushQueue_(5);
  gaLog_(u.ID,'NACHRICHT','Benutzer',recipient.ID,{ID:item.ID});
  return {ok:true,message:'Persönliche Nachricht gesendet.'};
 }
