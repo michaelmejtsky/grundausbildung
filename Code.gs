@@ -359,8 +359,73 @@ function gaAdvancedOrganizerState_(u){
  };
 }
 
+
+function gaOrganizerGuard_(u,method,d){
+ if(!gaIsAdvOrg_(u))return;
+ if(['saveCourse','saveQuiz','getQuizEdit','unlockQuiz','saveQuestionnaire','exportTrainingPdf'].includes(method)){
+  const id=gaText_(d.KursID,100)||(d.TerminID?gaFind_('Termine',d.TerminID)?.KursID:'');
+  if(id)gaAdvancedCourse_(u,id);
+  if(d.TerminID){
+   const term=gaFind_('Termine',d.TerminID);
+   if(!term)throw new Error('Termin nicht gefunden.');
+   gaAdvancedTurnus_(u,term.TurnusID);
+  }
+ }
+ if(['saveTermin','saveAttendance'].includes(method)){
+  const term=d.TerminID?gaFind_('Termine',d.TerminID):d.ID?gaFind_('Termine',d.ID):null;
+  const course=gaAdvancedCourse_(u,term?.KursID||d.KursID);
+  const turn=gaAdvancedTurnus_(u,term?.TurnusID||d.TurnusID);
+  if(course.Bereich!==GA_ADV_AREA||turn.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Kurstermine.');
+ }
+ if(method==='saveTurnus'){
+  if(d.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Turnusse.');
+  if(d.ID)gaAdvancedTurnus_(u,d.ID);
+ }
+ if(method==='saveMember'){
+  gaAdvancedTurnus_(u,d.TurnusID);
+  if(d.ID){
+   const m=gaFind_('Mitglieder',d.ID);
+   if(!m||gaFind_('Turnusse',m.TurnusID)?.Bereich!==GA_ADV_AREA)
+    throw new Error('Bestehende GAB-Mitglieder nicht bearbeiten. Nutze die zusätzliche Zuordnung.');
+  }
+  if(d.Ausbildungsweg!==GA_ADV_AREA)throw new Error('Nur Erweiterte Ausbildung.');
+ }
+ if(['saveProject','submitProject'].includes(method)){
+  if(method==='saveProject'&&d.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Kursprojekte.');
+  if(d.ID){
+   const p=gaFind_('KursProjekte',d.ID);
+   if(!p||p.Bereich!==GA_ADV_AREA)throw new Error('Fremdes Kursprojekt.');
+  }
+ }
+ if(method==='saveFreeActivity'){
+  if(d.ID&&gaFind_('FreieTaetigkeiten',d.ID)?.Bereich!==GA_ADV_AREA)
+    throw new Error('Fremde Tätigkeit.');
+  if(d.TeilnehmerIDs?.some(id=>!gaAdvMemberAllowed_(gaFind_('Mitglieder',id))))
+    throw new Error('Teilnehmer gehört nicht zur erweiterten Ausbildung.');
+ }
+ if(method==='exportFreeActivityPdf'&&gaFind_('FreieTaetigkeiten',d.ID)?.Bereich!==GA_ADV_AREA)
+  throw new Error('Kein Zugriff auf diesen Bericht.');
+ if(method==='setReportStatus'){
+  const report=gaFind_('Meldungen',d.ID),course=report?.KursID?gaFind_('Kurse',report.KursID):null;
+  if(!report||!(course?.Bereich===GA_ADV_AREA||report.ErstelltVon===u.ID))
+   throw new Error('Fremde Meldung.');
+ }
+ if(method==='submitReport'&&d.KursID)gaAdvancedCourse_(u,d.KursID);
+ if(method==='inviteUser'){
+  if(d.Rolle!=='Teilnehmer')throw new Error('Nur Teilnehmerzugänge einladen.');
+  const member=gaFind_('Mitglieder',d.MitgliedID);
+  if(!gaAdvMemberAllowed_(member))throw new Error('Mitglied nicht der erweiterten Ausbildung zugeordnet.');
+ }
+ if(method==='sendMessage'){
+  if(d.EmpfaengerArt==='TURNUS')gaAdvancedTurnus_(u,d.TurnusID);
+  if(d.EmpfaengerArt==='MITGLIED'&&!gaAdvMemberAllowed_(gaFind_('Mitglieder',d.MitgliedID)))
+   throw new Error('Mitglied nicht für erweiterte Ausbildung zugeordnet.');
+ }
+}
+
 function gaApi(method,data,token){
   const u=gaSession_(token),d=data||{};
+  gaOrganizerGuard_(u,method,d);
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','saveCourse','saveTermin','saveMember','inviteUser',
    'saveAdvancedEnrollment','saveProject','submitProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
@@ -397,7 +462,7 @@ function gaApi(method,data,token){
   if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
   if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
   if(method==='pdfTemplateInfo'){
-    gaRequire_(u,['Administrator','Ausbilder']);
+    gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
     return {ok:true,backendVersion:GA.VERSION,template:'FDISK-DESIGN-2',message:'Aktuelle PDF-Vorlage mit dunkelblauem Kopf und Kennzahlen.'};
   }
   if(method==='exportTrainingPdf')return gaExportTrainingPdf_(u,d);
@@ -494,7 +559,7 @@ function gaState_(u){
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
 function gaChoice_(v,allowed,name){if(!allowed.includes(v))throw new Error('Ungültiger Wert für '+name+'.');return v;}
-function gaSaveTurnus_(u,d){gaRequire_(u,['Administrator']);let val={Bezeichnung:gaNeed_(d.Bezeichnung,'Bezeichnung',130),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Aktiv:'JA'};
+function gaSaveTurnus_(u,d){gaRequire_(u,['Administrator',GA_ADV_ROLE]);let val={Bezeichnung:gaNeed_(d.Bezeichnung,'Bezeichnung',130),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Aktiv:'JA'};
   if(d.ID){gaReplace_('Turnusse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Turnus',d.ID,val);return {ok:true};}
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Turnusse',val);gaLog_(u.ID,'ANLEGEN','Turnus',val.ID,val);return {ok:true};}
 function gaLinks_(x){const text=gaText_(x,5000);const lines=text.split(/\n/).map(s=>s.trim()).filter(Boolean);if(lines.length>12)throw new Error('Maximal 12 Links.');for(const l of lines){if(!/^https:\/\//i.test(l))throw new Error('Unterlagen müssen HTTPS-Links sein (ein Link pro Zeile).');}return lines.join('\n');}
@@ -528,7 +593,7 @@ function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFi
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Termine',val);gaLog_(u.ID,'ANLEGEN','Termin',val.ID,val);
   gaNotifyTurnus_(val.TurnusID,'Termin','Neuer Ausbildungstermin',course.Titel+' · '+val.Beginn,val.ID);gaPushQueue_(5);return {ok:true};}
 function gaSaveMember_(u,d){
-  gaRequire_(u,['Administrator']);
+  gaRequire_(u,['Administrator',GA_ADV_ROLE]);
   const turnus=gaFind_('Turnusse',d.TurnusID);
   if(!turnus||!gaBool_(turnus.Aktiv))throw new Error('Bitte einen gültigen aktiven Turnus wählen.');
   const email=gaText_(d.Email,240).toLowerCase();
@@ -793,7 +858,7 @@ function gaPdfKm_(n){return Number(n||0).toLocaleString('de-AT',{minimumFraction
 
 
 function gaExportTrainingPdf_(u,d){
- gaRequire_(u,['Administrator','Ausbilder']);
+ gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
  const report=gaTrainingPdfData_(d||{});
  const safe=v=>String(v??'').replace(/[\r\n]+/g,' ').slice(0,200);
  const h=gaTrainingHours_,date=gaTrainingDate_,km=gaPdfKm_;
@@ -895,7 +960,7 @@ function gaExportTrainingPdf_(u,d){
 
 /** Eigenständige Feuerwehrtätigkeiten ohne Kurs- und Terminpflicht – unabhängig von GAB. */
 function gaSaveFreeActivity_(u,d){
- gaRequire_(u,['Administrator','Ausbilder']);
+ gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
  if(!gaSheet_().getSheetByName('FreieTaetigkeiten'))
   throw new Error('Die Tabelle FreieTaetigkeiten fehlt. Bitte die neue Code.gs im bestehenden Apps Script aktualisieren und die Tabelle einmalig einrichten.');
  const Titel=gaNeed_(d.Titel,'Tätigkeitsbezeichnung',160);
@@ -903,14 +968,14 @@ function gaSaveFreeActivity_(u,d){
  const Ort=gaText_(d.Ort,160),details=gaTrainingDetails_(d);
  const allUsers=gaRows_('Benutzer'),allMembers=gaRows_('Mitglieder');
  const trainers=Array.isArray(d.AusbilderIDs)?[...new Set(d.AusbilderIDs.map(String))]:[];
- if(!trainers.length||trainers.some(id=>!allUsers.some(x=>x.ID===id&&['Ausbilder','Administrator'].includes(x.Rolle))))
+ if(!trainers.length||trainers.some(id=>!allUsers.some(x=>x.ID===id&&['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle))))
   throw new Error('Mindestens einen gültigen Ausbilder bzw. Verantwortlichen auswählen.');
  if(u.Rolle==='Ausbilder'&&!trainers.includes(u.ID))
   throw new Error('Der durchführende Ausbilder muss selbst angeführt sein.');
  const participants=Array.isArray(d.TeilnehmerIDs)?[...new Set(d.TeilnehmerIDs.map(String))]:[];
  if(participants.some(id=>!allMembers.some(m=>m.ID===id)))
   throw new Error('Ein Teilnehmer ist im Mitgliederverzeichnis nicht vorhanden.');
- const change={Titel,Kategorie,Ort,...details,AusbilderIDs:trainers.join(','),
+ const change={Titel,Kategorie,Ort,...details,Bereich:gaIsAdvOrg_(u)?GA_ADV_AREA:gaText_(d.Bereich,100),AusbilderIDs:trainers.join(','),
   TeilnehmerIDs:participants.join(','),ErfasstVon:u.ID,AktualisiertAm:gaNow_()};
  let id=gaText_(d.ID,100),old=id?gaFind_('FreieTaetigkeiten',id):null;
  if(id&&!old)throw new Error('Die Tätigkeit existiert nicht mehr.');
@@ -926,7 +991,7 @@ function gaSaveFreeActivity_(u,d){
 }
 
 function gaExportFreeActivityPdf_(u,d){
- gaRequire_(u,['Administrator','Ausbilder']);
+ gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
  const entry=gaFind_('FreieTaetigkeiten',gaText_(d?.ID,100));
  if(!entry)throw new Error('Tätigkeitsbericht nicht gefunden.');
  const memberRows=gaRows_('Mitglieder'),userRows=gaRows_('Benutzer');
@@ -983,15 +1048,15 @@ function gaExportFreeActivityPdf_(u,d){
 }
 
 
-function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder']);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
+function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
   if(!gaSheet_().getSheetByName('Ausbildungsberichte'))throw new Error('Tabelle Ausbildungsberichte fehlt. Im Google Sheet Grundausbildung → 7 · Tätigkeitsberichte einrichten ausführen.');
   const details=gaTrainingDetails_(d);
-  const members=gaRows_('Mitglieder').filter(m=>m.TurnusID===term.TurnusID&&gaBool_(m.Aktiv));
+  const members=gaIsAdvOrg_(u)?gaAdvAllowedMembers_(term.TurnusID):gaRows_('Mitglieder').filter(m=>m.TurnusID===term.TurnusID&&gaBool_(m.Aktiv));
   if(!Array.isArray(d.Anwesend)||d.Anwesend.length!==members.length)throw new Error('Die Anwesenheitsliste ist unvollständig.');
   const answers=new Map(d.Anwesend.map(x=>[String(x.MitgliedID),x.Anwesend===true]));
   if(members.some(m=>!answers.has(m.ID)))throw new Error('Anwesenheit für jedes Mitglied erforderlich.');
   const trainerIds=Array.isArray(d.AusbilderIDs)?d.AusbilderIDs:[];
-  const qualified=gaRows_('Benutzer').filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)).map(x=>x.ID);
+  const qualified=gaRows_('Benutzer').filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>x.ID);
   if(!trainerIds.length||trainerIds.some(id=>!qualified.includes(id)))throw new Error('Mindestens einen gültigen Ausbilder auswählen.');
   if(u.Rolle==='Ausbilder'&&!trainerIds.includes(u.ID))throw new Error('Der bestätigende Ausbilder muss selbst angeführt sein.');
   const previous=gaRows_('Teilnahmen');
@@ -1071,7 +1136,12 @@ function gaInviteLink_(token) {
   return base+'einladung.html#invite='+encodeURIComponent(token);
 }
 function gaInviteUser_(actor,d) {
-  gaRequire_(actor,['Administrator']);
+  gaRequire_(actor,['Administrator',GA_ADV_ROLE]);
+  if(gaIsAdvOrg_(actor)){
+   const m=gaFind_('Mitglieder',d.MitgliedID);
+   if(!gaAdvMemberAllowed_(m))throw new Error('Nur zugeordnete Mitglieder einladen.');
+   d={...d,Name:m.Vorname+' '+m.Nachname,Email:m.Email,Rolle:'Teilnehmer',Bereich:''};
+  }
   const name=gaNeed_(d.Name,'Name',140);
   const email=gaText_(d.Email,240).toLowerCase();
   if(!gaEmail_(email))throw new Error('Bitte gültige E-Mail angeben.');
@@ -1417,6 +1487,7 @@ function gaPushEinrichten(){
 const GA_RIGHTS=['KurseGestalten','KurseFreigeben','TerminePlanen','MeldungenBearbeiten','BewertungenAnsehen','KurseBearbeiten','FrageboegenBearbeiten'];
 function gaPermissions_(user,rightsRows){
  if(user.Rolle==='Administrator')return Object.fromEntries(GA_RIGHTS.map(k=>[k,true]));
+ if(gaIsAdvOrg_(user))return Object.fromEntries(GA_RIGHTS.map(k=>[k,['KurseGestalten','KurseBearbeiten','TerminePlanen','FrageboegenBearbeiten','BewertungenAnsehen','MeldungenBearbeiten'].includes(k)]));
  if(user.Rolle!=='Ausbilder')return Object.fromEntries(GA_RIGHTS.map(k=>[k,false]));
  const own=(rightsRows||gaOptionalRows_('Berechtigungen')).find(x=>x.BenutzerID===user.ID);
  return Object.fromEntries(GA_RIGHTS.map(k=>[k,!!own&&gaBool_(own[k])]));
@@ -1519,7 +1590,7 @@ function gaReviewProject_(u,d){
 
 /** Qualitätssicherung: Ideen, Ausbildungsmängel und App-Mängel. */
 function gaSubmitReport_(u,d){
- gaRequire_(u,['Administrator','Ausbilder']);
+ gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
  const val={Kategorie:gaChoice_(d.Kategorie,['Mangel App','Mangel Ausbildung','Idee Ausbildung','Idee App'],'Kategorie'),
   Titel:gaNeed_(d.Titel,'Titel',180),Beschreibung:gaNeed_(d.Beschreibung,'Beschreibung',5000),
   KursID:gaText_(d.KursID,100),Status:'Offen',ErstelltVon:u.ID,ErstelltAm:gaNow_(),
@@ -2014,11 +2085,12 @@ function gaQuizPublicQuestions_(questions){
 }
 function gaGetQuizEdit_(u,d){
  gaQuizRights_(u);gaQuizInstalled_();
+ if(gaIsAdvOrg_(u))gaAdvancedCourse_(u,d.KursID);
  const c=gaOptionalRows_('QuizKurse').find(x=>x.KursID===gaNeed_(d.KursID,'Kurs-ID',100));
  if(!c)return null;
  return {...gaQuizPublicConfig_(c),Fragen:JSON.parse(c.FragenJSON||'[]')};
 }
-function gaQuizRights_(u){if(u.Rolle==='Administrator')return;
+function gaQuizRights_(u){if(u.Rolle==='Administrator'||gaIsAdvOrg_(u))return;
  if(u.Rolle!=='Ausbilder'||!(gaCan_(u,'KurseGestalten')||gaCan_(u,'KurseBearbeiten')))
    throw new Error('Kein Recht zum Bearbeiten von Kursquiz.');
 }
@@ -2152,6 +2224,7 @@ function gaSubmitQuiz_(u,d){
 
 function gaUnlockQuiz_(u,d){
  gaQuizRights_(u);gaQuizInstalled_();
+ if(gaIsAdvOrg_(u))gaAdvancedCourse_(u,d.KursID);
  const courseId=gaNeed_(d.KursID,'Kurs-ID',100),memberId=gaNeed_(d.MitgliedID,'Mitglied-ID',100);
  const member=gaFind_('Mitglieder',memberId),config=gaOptionalRows_('QuizKurse').find(x=>x.KursID===courseId&&gaBool_(x.Aktiv));
  if(!member||!gaBool_(member.Aktiv)||!config)throw new Error('Mitglied oder aktives Kursquiz nicht vorhanden.');
