@@ -1,6 +1,7 @@
 /* Feuerwehr St. Pölten-Stadt – Ausbildungs-Tätigkeitsberichte / FDISK-Auszug V1.9.0 */
 'use strict';
 let GA_TRAINING_FILTER='';
+let GA_PDF_CHECK_RESULT='',GA_PDF_CHECK_KIND='';
 function gaReportByTerm(termId){return (STATE.ausbildungsberichte||[]).find(r=>r.TerminID===termId);}
 function gaReportVehicles(report){
  try{const a=JSON.parse(report?.FahrzeugeJSON||'[]');return Array.isArray(a)?a:[];}
@@ -125,6 +126,15 @@ function gaTrainingReportsPage(){
  const backendReady=Array.isArray(STATE.ausbildungsberichte);
  if(!backendReady)return '<section class="panel"><h2>Tätigkeitsberichte</h2>'+
  '<div class="ga-alert">Das Apps-Script-Backend muss auf den aktuellen Stand gebracht werden. Im Google Sheet unter „Grundausbildung → 7 · Tätigkeitsberichte einrichten“ zuerst die neue Tabelle erstellen.</div></section>';
+
+ const backendVersion=String(STATE?.version||'nicht gemeldet');
+ const oldBackend=!/^1\.(?:1[1-9]|[2-9]\d)\.|^1\.10\.(?:[2-9]|\d{2,})$/.test(backendVersion);
+ const checkPanel='<section class="ga-pdf-check-panel"><div class="ga-pdf-check-text"><strong>PDF-Vorlage prüfen</strong>'+
+ '<p>Verbundener Server: Version <b>'+h(backendVersion)+'</b> · Benötigt: <b>1.10.2</b> (FDISK-Design 2).</p>'+
+ (oldBackend?'<p class="ga-pdf-check-warning">Die verbundene Backend-Version ist noch zu alt oder unbekannt. GitHub und Apps Script können unterschiedliche Versionen haben.</p>':'')+
+ '</div><button type="button" class="secondary" data-pdf-check="1">Aktive PDF-Vorlage testen</button>'+
+ '<p id="gaPdfCheckResult" class="ga-pdf-check-result '+h(GA_PDF_CHECK_KIND)+'" aria-live="polite">'+h(GA_PDF_CHECK_RESULT)+'</p></section>';
+
  const modules=gaTrainingModuleRows(),filter=GA_TRAINING_FILTER;
  const current=filter?modules.filter(x=>x.id===filter):modules;
  const total=current.reduce((o,x)=>(o.terms+=x.saved.length,o.hours+=x.duration,o.participant+=x.pMinutes,o.trainers+=x.tMinutes,o.km+=x.km,o),{terms:0,hours:0,participant:0,trainers:0,km:0});
@@ -147,6 +157,7 @@ function gaTrainingReportsPage(){
  return '<div class="ga-page-heading"><div><h2>Tätigkeitsberichte für FDISK</h2>'+
  '<p>Jederzeit abrufbare Summen nach Modul, Ausbildungsstunden, Fahrzeugen, Teilnehmern und Ausbildern.</p></div>'+
  '<div class="ga-action-grid"><button type="button" class="secondary" data-view="attendance">Ausbildungstermin öffnen</button><button type="button" class="primary" data-view="freeActivities">Freie Tätigkeit erfassen</button></div></div>'+
+ checkPanel+
  '<div class="ga-admin-toolbar"><div><label>Modul auswählen</label><select data-training-filter>'+
  '<option value="">Alle Ausbildungsmodule</option>'+modules.map(x=>'<option value="'+h(x.id)+'" '+(x.id===filter?'selected':'')+'>'+h(x.title)+'</option>').join('')+'</select></div></div>'+
  '<div class="ga-kpis">'+
@@ -213,19 +224,50 @@ async function gaDownloadTrainingPdf(args,button){
   const free=!!args.FreieTaetigkeitID;
  const result=await api(free?'exportFreeActivityPdf':'exportTrainingPdf',free?{ID:args.FreieTaetigkeitID}:args);
   if(!result?.base64)throw new Error('PDF konnte nicht erzeugt werden.');
+  const designOk=result.pdfDesign==='FDISK-DESIGN-2';
+  GA_PDF_CHECK_KIND=designOk?'ok':'warn';
+  GA_PDF_CHECK_RESULT=designOk?
+   'Neues PDF-Design aktiv · Backend '+String(result.backendVersion||'1.10.2'):
+   'PDF stammt offenbar noch aus einer alten Apps-Script-Bereitstellung. Bitte die aktive Bereitstellungs-URL kontrollieren.';
+  const display=document.getElementById('gaPdfCheckResult');
+  if(display){display.textContent=GA_PDF_CHECK_RESULT;display.className='ga-pdf-check-result '+GA_PDF_CHECK_KIND;}
   const raw=atob(result.base64),u=new Uint8Array(raw.length);
   for(let i=0;i<raw.length;i++)u[i]=raw.charCodeAt(i);
   const blob=new Blob([u],{type:'application/pdf'}),url=URL.createObjectURL(blob),link=document.createElement('a');
   link.href=url;link.download=result.dateiname||'FDISK_Taetigkeitsbericht.pdf';
   document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
-  tip('Tätigkeitsbericht als PDF heruntergeladen.');
+  tip(designOk?'Neues Design 2 als PDF heruntergeladen.':'PDF heruntergeladen, aber der Server meldet noch nicht das neue Design! Bitte Backend prüfen.',!designOk);
  }catch(e){tip(e.message||'PDF-Export nicht möglich.',true);}
  finally{if(button){button.disabled=false;button.textContent=previous;}}
 }
+
+async function gaCheckPdfTemplate(button){
+ const original=button?.textContent;
+ if(button){button.disabled=true;button.textContent='Server wird geprüft …';}
+ try{
+  const info=await api('pdfTemplateInfo');
+  if(info?.template!=='FDISK-DESIGN-2'){
+   GA_PDF_CHECK_KIND='warn';
+   GA_PDF_CHECK_RESULT='Der Server antwortet, meldet aber nicht die aktuelle PDF-Vorlage. Bitte die Apps-Script-Bereitstellung aktualisieren.';
+  }else{
+   GA_PDF_CHECK_KIND='ok';
+   GA_PDF_CHECK_RESULT='Bestätigt: PDF-Design 2 aktiv · Backend '+String(info.backendVersion||'unbekannt')+'. Erneut einen Kursbericht herunterladen.';
+  }
+ }catch(error){
+  GA_PDF_CHECK_KIND='warn';
+  GA_PDF_CHECK_RESULT='Die verbundene Apps-Script-Bereitstellung kennt die neue PDF-Prüfung noch nicht ('+
+   String(error?.message||'keine Antwort')+'). Bitte die richtige /exec-Bereitstellung auf Version 1.10.2 setzen.';
+ }
+ const display=document.getElementById('gaPdfCheckResult');
+ if(display){display.textContent=GA_PDF_CHECK_RESULT;display.className='ga-pdf-check-result '+GA_PDF_CHECK_KIND;}
+ if(button){button.disabled=false;button.textContent=original;}
+}
+
 document.getElementById('app')?.addEventListener('click',event=>{
- const x=event.target.closest('[data-training-finish-open],[data-training-now],[data-training-vehicle-add],[data-training-vehicle-remove],[data-training-pdf-term],[data-training-pdf-course],[data-training-open]');
+ const x=event.target.closest('[data-pdf-check],[data-training-finish-open],[data-training-now],[data-training-vehicle-add],[data-training-vehicle-remove],[data-training-pdf-term],[data-training-pdf-course],[data-training-open]');
  if(!x)return;
+ if(x.dataset.pdfCheck!==undefined){gaCheckPdfTemplate(x);return;}
  if(x.dataset.trainingFinishOpen!==undefined){const box=document.getElementById('gaFinishTraining');if(box){box.open=true;box.scrollIntoView({block:'start',behavior:'smooth'});}return;}
  if(x.dataset.trainingNow){
   const now=new Date(),p=n=>String(n).padStart(2,'0');
