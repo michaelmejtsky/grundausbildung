@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.4',
+  VERSION: '1.12.5',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -560,8 +560,9 @@ function gaState_(u){
  const abschnitt=gaOptionalRows_('AbschnittNachweise');
  const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
  const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
+ const predecessors=gaCoursePredecessors_();
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
@@ -604,7 +605,7 @@ function gaState_(u){
   quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
   ersteHilfeNachweise:aidRowsVisible,
   ersteHilfeMail:admin?gaAidSettings_():null,
-  kursAnforderungen:admin?reqs:[],
+  kursAnforderungen:admin?reqs:[],kursVorgaenger:admin?predecessors:{},
   direktnachrichten,
   nachrichtenEmpfaenger:admin||trainer?users.filter(x=>gaBool_(x.Aktiv)).map(gaPublicUser_):
     gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&(['Administrator','Ausbilder','Fachverwaltung'].includes(x.Rolle)||(x.Rolle===GA_ADV_ROLE&&gaAdvMemberAllowed_(own)))).map(gaPublicUser_)
@@ -2056,21 +2057,44 @@ function gaResendAidEmail_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments){
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
  const memberTurns=new Set([m.TurnusID,...(assignments||[]).filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)]);
- const complete=id=>{
+ const ownComplete=(id,cutoff)=>{
    if(id==='GAB-ABSCHNITT-BLOCK-A'||id==='GAB-ABSCHNITT-BLOCK-B'){
      const proof=(abschnitt||[]).find(x=>x.MitgliedID===m.ID&&x.KursID===id);
      return !!proof&&valid(proof.Absolviert)&&(id!=='GAB-ABSCHNITT-BLOCK-B'||valid(proof.PruefungBestanden));
    }
-   const attended=terms.some(t=>t.KursID===id&&memberTurns.has(t.TurnusID)&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+   const attended=terms.some(t=>t.KursID===id&&(!cutoff||(/^\d{4}-\d{2}-\d{2}/.test(String(t.Beginn||''))&&String(t.Beginn).slice(0,10)<=cutoff))&&(!cutoff?memberTurns.has(t.TurnusID):true)&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
    if(!attended)return false;
-   const config=(quizCfg||[]).find(c=>c.KursID===id&&valid(c.Aktiv)&&valid(c.Pflicht));
+   const config=(quizCfg||[]).find(c=>c.KursID===id&&(!cutoff?valid(c.Aktiv):true)&&valid(c.Pflicht));
    if(!config)return true;
    return (quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&valid(a.Bestanden));
  };
- const gab=rs.filter(r=>valid(r.PflichtGAB)),bsw=rs.filter(r=>valid(r.PflichtBSW));
+ const complete=id=>{
+   const seen=new Set();let cutoff='';
+   while(id&&!seen.has(id)){
+     seen.add(id);
+     if(ownComplete(id,cutoff))return true;
+     const link=(predecessors||{})[id];
+     if(!link||typeof link!=='object'||!link.id||!/^\d{4}-\d{2}-\d{2}$/.test(link.bis||''))break;
+     cutoff=cutoff&&cutoff<link.bis?cutoff:link.bis;
+     id=link.id;
+   }
+   return false;
+ };
+ const effective=field=>{
+   const required=rs.filter(r=>valid(r[field]));
+   const obsolete=new Set();
+   required.forEach(r=>{
+     let id=r.KursID;const seen=new Set([id]);
+     while((predecessors||{})[id]?.id){
+       id=predecessors[id].id;if(seen.has(id))break;seen.add(id);obsolete.add(id);
+     }
+   });
+   return required.filter(r=>!obsolete.has(r.KursID));
+ };
+ const gab=effective('PflichtGAB'),bsw=effective('PflichtBSW');
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
@@ -2144,15 +2168,34 @@ function gaSaveQualification_(u,d){
  gaLog_(u.ID,'QUALIFIKATION','Mitglied',m.ID,{GAB:val.GABFreigabe,GABAnerkannt:val.GABAnerkannt,ErsteHilfeStatus:status});
  return {ok:true,message:'Qualifikationsnachweise gespeichert.'};
 }
+function gaCoursePredecessors_(){
+ const raw=PropertiesService.getScriptProperties().getProperty('GA_KURS_VORGAENGER');
+ if(!raw)return {};
+ const data=JSON.parse(raw);
+ if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Kursverknüpfungen sind ungültig.');
+ return data;
+}
 function gaSetCourseRequirement_(u,d){
  gaRequire_(u,['Administrator']);const c=gaFind_('Kurse',gaText_(d.KursID,100));
  if(!c||!gaBool_(c.Aktiv))throw new Error('Nur veröffentlichte Kurse als Pflichtmodul markieren.');
+ const links=gaCoursePredecessors_();
+ if(Object.prototype.hasOwnProperty.call(d,'VorgaengerID')){
+  const prior=gaText_(d.VorgaengerID,100);
+  if(prior){
+   const previous=gaFind_('Kurse',prior);
+   if(!previous||previous.ID===c.ID||previous.Bereich!==c.Bereich)throw new Error('Bitte einen anderen Kurs aus demselben Ausbildungsbereich auswählen.');
+   let cursor=prior;const visited=new Set([c.ID]);
+   while(cursor){if(visited.has(cursor))throw new Error('Diese Verknüpfung würde einen Kreis erzeugen.');visited.add(cursor);cursor=links[cursor]?.id||'';}
+   if(links[c.ID]?.id!==prior)links[c.ID]={id:prior,bis:Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd')};
+  }else delete links[c.ID];
+ }
  const val={PflichtGAB:d.PflichtGAB==='JA'?'JA':'NEIN',PflichtBSW:d.PflichtBSW==='JA'?'JA':'NEIN',
   AktualisiertVon:u.ID,AktualisiertAm:gaNow_()};
  const old=gaOptionalRows_('KursAnforderungen').find(x=>x.KursID===c.ID);
  if(old)gaReplace_('KursAnforderungen',old.ID,val);
  else gaAppend_('KursAnforderungen',{ID:gaId_(),KursID:c.ID,...val});
- gaLog_(u.ID,'PFLICHTMODUL','Kurs',c.ID,val);return {ok:true,message:'Pflichtmodulstatus gespeichert.'};
+ if(Object.prototype.hasOwnProperty.call(d,'VorgaengerID'))PropertiesService.getScriptProperties().setProperty('GA_KURS_VORGAENGER',JSON.stringify(links));
+ gaLog_(u.ID,'PFLICHTMODUL','Kurs',c.ID,{...val,VorgaengerID:links[c.ID]?.id||''});return {ok:true,message:'Pflichtmodulstatus gespeichert.'};
 }
 function gaSetAttendanceMember_(u,d){
  gaRequire_(u,['Administrator']);const t=gaFind_('Termine',gaText_(d.TerminID,100)),m=gaFind_('Mitglieder',gaText_(d.MitgliedID,100));
