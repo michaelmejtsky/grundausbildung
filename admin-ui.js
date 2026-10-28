@@ -213,6 +213,7 @@ function qualifications(){
  return '<form class="ga-requirement-row" data-form="requirement"><input type="hidden" name="KursID" value="'+h(c.ID)+'"><strong>'+h(c.Titel)+'</strong>'+
  '<label class="inline-check"><input type="checkbox" name="PflichtGAB" value="JA" '+(r.PflichtGAB==='JA'?'checked':'')+'> GAB</label>'+
  '<label class="inline-check"><input type="checkbox" name="PflichtBSW" value="JA" '+(r.PflichtBSW==='JA'?'checked':'')+'> BSW</label>'+
+ (STATE.kursVorgaenger?'<label>Vorgängerkurs <select name="VorgaengerID"><option value="">Keiner</option>'+(STATE.kurse||[]).filter(p=>p.ID!==c.ID&&p.Bereich===c.Bereich).map(p=>'<option value="'+h(p.ID)+'" '+(STATE.kursVorgaenger[c.ID]?.id===p.ID?'selected':'')+'>'+h(p.Titel)+'</option>').join('')+'</select></label><span class="small muted">Abgeschlossene Termine des Vorgängers bis zur Verknüpfung werden für das neue Pflichtmodul angerechnet. Ist auch der Vorgänger als Pflichtmodul markiert, zählt das neuere Modul für diese Pflicht.</span>':'<span class="small muted">Vorgängerkurse verfügbar nach Aktualisierung des Backends.</span>')+
  '<button class="smallbtn" type="submit">Speichern</button></form>'}).join('')+'</div></details>';
  const attendance='<details class="ga-member-fold ga-admin-bottom"><summary>Teilnahme nachträglich bestätigen oder korrigieren</summary><div class="ga-fold-body">'+
  '<form data-form="singleAttendance" class="grid"><div><label>Mitglied</label><select name="MitgliedID" required>'+option(STATE.mitglieder.filter(m=>m.Aktiv==='JA'),name)+'</select></div>'+
