@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.3',
+  VERSION: '1.12.4',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -2068,7 +2068,7 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
    if(!attended)return false;
    const config=(quizCfg||[]).find(c=>c.KursID===id&&valid(c.Aktiv)&&valid(c.Pflicht));
    if(!config)return true;
-   return (quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&a.QuizVersion===config.Version&&valid(a.Bestanden));
+   return (quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&valid(a.Bestanden));
  };
  const gab=rs.filter(r=>valid(r.PflichtGAB)),bsw=rs.filter(r=>valid(r.PflichtBSW));
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
@@ -2360,8 +2360,9 @@ function gaStartQuiz_(u,d){
  const course=gaFind_('Kurse',courseId),config=gaOptionalRows_('QuizKurse').find(c=>c.KursID===courseId&&gaBool_(c.Aktiv));
  if(!course||!gaBool_(course.Aktiv)||!config)throw new Error('Für diesen Kurs ist kein aktives Quiz vorhanden.');
  const term=gaQuizEligibleTerm_(m,courseId);
- const list=gaRows_('QuizVersuche').filter(a=>a.MitgliedID===m.ID&&a.KursID===courseId&&a.QuizVersion===config.Version);
- if(list.some(a=>gaBool_(a.Bestanden)))throw new Error('Du hast diese Quizversion bereits erfolgreich bestanden.');
+ const allAttempts=gaRows_('QuizVersuche').filter(a=>a.MitgliedID===m.ID&&a.KursID===courseId);
+ if(allAttempts.some(a=>gaBool_(a.Bestanden)))throw new Error('Du hast dieses Kursquiz bereits erfolgreich bestanden.');
+ const list=allAttempts.filter(a=>a.QuizVersion===config.Version);
  const questions=JSON.parse(config.FragenJSON).map(q=>q.typ==='match'?{...q,tokens:q.pairs.map(()=>gaId_())}:q);
  for(const attempt of list.filter(a=>a.Status==='In Bearbeitung')){
   const snapshot=JSON.parse(attempt.FragenSnapshotJSON||'[]');
