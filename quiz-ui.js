@@ -14,7 +14,7 @@ function qCourseStatus(courseId,memberId,turnusId){
  const attended=(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&terms.some(t=>t.ID===a.TerminID));
  const active=config?.Aktiv==='JA',required=active&&config.Pflicht==='JA';
  const success=active&&(STATE.quizVersuche||[]).some(a=>a.KursID===courseId&&a.MitgliedID===memberId&&
-  String(a.QuizVersion)===String(config.Version)&&a.Bestanden==='JA');
+  a.Bestanden==='JA');
  const complete=attended&&(!required||success);
  return {attended,required,success,complete,
    label:complete?'Kurs positiv abgeschlossen':attended&&required?'Theorie abgeschlossen · Pflichtquiz offen':'Noch nicht abgeschlossen',
@@ -293,7 +293,7 @@ function qParticipant(){
   const eligible=(STATE.teilnahmen||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.Anwesend==='JA'&&(STATE.termine||[]).some(t=>
     t.ID===a.TerminID&&t.KursID===q.KursID&&t.Status==='Durchgeführt'));
   const attempts=(STATE.quizVersuche||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID&&String(a.QuizVersion)===String(q.Version));
-  const passed=attempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
+  const passed=(STATE.quizVersuche||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID&&a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
   const last=attempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
   const extra=(STATE.quizFreigaben||[]).filter(u=>STATE.meMember&&u.MitgliedID===STATE.meMember.ID&&u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
   const courseStatus=qCourseStatus(q.KursID,STATE.meMember?.ID,STATE.meMember?.TurnusID);
