@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.5',
+  VERSION: '1.12.6',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -643,6 +643,10 @@ function gaNotify_(userId,type,title,message,reference){
 /** Send a course quiz announcement only once per member, version and quiz type. */
 function gaNotifyQuizAvailable_(user,course,quiz,known){
  if(!user||!course||!quiz||!gaBool_(quiz.Aktiv))return false;
+ // Ein bestandenes Kursquiz bleibt auch nach einer neuen Version gültig.
+ const member=gaOwnMember_(user);
+ if(!member)return false;
+ if(gaOptionalRows_('QuizVersuche').some(a=>a.MitgliedID===member.ID&&a.KursID===course.ID&&gaBool_(a.Bestanden)))return false;
  const required=gaBool_(quiz.Pflicht);
  const ref='QUIZREADY:'+course.ID+':'+String(quiz.Version||'1')+':'+(required?'P':'F');
  const notices=known||gaRows_('Benachrichtigungen');
