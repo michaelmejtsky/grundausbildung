@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.12.6',
+  VERSION: '1.13.0',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -331,6 +331,7 @@ function gaErweiterteTabellenEinrichten(){
 function gaAdvancedOrganizerState_(u){
  const allCourses=gaRows_('Kurse'),allTurns=gaRows_('Turnusse'),allMembers=gaRows_('Mitglieder');
  const courses=allCourses.filter(x=>x.Bereich===GA_ADV_AREA),turnusse=allTurns.filter(x=>x.Bereich===GA_ADV_AREA);
+ const validity=gaValidityConfig_(),projects=gaOptionalRows_('KursProjekte').filter(x=>x.Bereich===GA_ADV_AREA);
  const courseIDs=new Set(courses.map(x=>x.ID)),turnIDs=new Set(turnusse.map(x=>x.ID));
  const terms=gaRows_('Termine').filter(t=>courseIDs.has(t.KursID)&&turnIDs.has(t.TurnusID)),termIDs=new Set(terms.map(x=>x.ID));
  const assignments=gaAdvAssignments_().filter(x=>turnIDs.has(x.TurnusID));
@@ -351,7 +352,8 @@ function gaAdvancedOrganizerState_(u){
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
    .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
-  kursProjekte:gaOptionalRows_('KursProjekte').filter(x=>x.Bereich===GA_ADV_AREA),
+  kursProjekte:projects,
+  gueltigkeit:gaValidityVisible_(validity,turnusse,courses,projects),
   quizKurse:cfg.map(gaQuizPublicConfig_),
   quizVersuche:attempts.map(x=>({ID:x.ID,KursID:x.KursID,MitgliedID:x.MitgliedID,TerminID:x.TerminID,
    QuizVersion:x.QuizVersion,Versuch:x.Versuch,Status:x.Status,Prozent:x.Prozent,Bestanden:x.Bestanden})),
@@ -361,7 +363,7 @@ function gaAdvancedOrganizerState_(u){
   bewertungen:gaOptionalRows_('Bewertungen').filter(x=>courseIDs.has(x.KursID)),
   qualifikationen:native.filter(x=>gaBool_(x.Aktiv)).map(m=>gaQualificationStatus_(m,
    gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('KursAnforderungen'),courses,terms,attend,
-   turnusse,cfg,attempts,[],assignments)),
+   turnusse,cfg,attempts,[],assignments,{},validity)),
   ausbildungsberichte:gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID)),
   freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
   meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
@@ -448,7 +450,7 @@ function gaOrganizerGuard_(u,method,d){
 function gaApi(method,data,token){
   const u=gaSession_(token),d=data||{};
   gaOrganizerGuard_(u,method,d);
-  if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','saveCourse','saveTermin','saveMember','inviteUser',
+  if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
    'saveAdvancedEnrollment','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
@@ -458,6 +460,7 @@ function gaApi(method,data,token){
   if(method==='logout')return gaLogoutSession_(token);
   if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
+  if(method==='setValidity')return gaLock_(()=>gaSetValidity_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
   if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
   if(method==='getQuizEdit')return gaGetQuizEdit_(u,d);
@@ -561,17 +564,21 @@ function gaState_(u){
  const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
  const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
  const predecessors=gaCoursePredecessors_();
+ const validity=gaValidityConfig_();
+ const visibleTurns=admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID||extraTurns.has(t.ID)):[];
+ const visibleCourses=admin||trainer?allKurse:own?allKurse.filter(c=>gaBool_(c.Aktiv)&&(
+  visibleTurns.some(t=>t.Bereich===c.Bereich)||ownTerm.some(t=>t.KursID===c.ID))):[];
+ const visibleProjects=admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[];
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
-  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors));
+  .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors,validity));
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
-  turnusse:admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID||extraTurns.has(t.ID)):[],
+  turnusse:visibleTurns,
   // Teilnehmer sehen auch veröffentlichte Pflichtmodule ohne eigenen Termin (z. B. Block A/B im Abschnitt).
   // Fremde Ausbildungsbereiche bleiben ausgeschlossen, außer bei expliziter Teilnahme/Zuordnung.
-  kurse:admin||trainer?allKurse:own?allKurse.filter(c=>gaBool_(c.Aktiv)&&(
-    allTurnusse.some(t=>(t.ID===own.TurnusID||extraTurns.has(t.ID))&&t.Bereich===c.Bereich)||
-    ownTerm.some(t=>t.KursID===c.ID))):[],
+  kurse:visibleCourses,
+  gueltigkeit:gaValidityVisible_(validity,visibleTurns,visibleCourses,visibleProjects),
   termine:admin||trainer?allTermine:ownTerm,
   mitglieder:admin||trainer?allMembers:special?allMembers.filter(m=>gaBool_(m.Aktiv)).map(({ID,Vorname,Nachname,Telefon,TurnusID})=>({ID,Vorname,Nachname,Telefon,TurnusID})):own?[own]:[],
   checklistenpunkte:admin?allItems:special?allItems.filter(i=>i.Zustaendig===u.Bereich):participant?allItems:[],
@@ -585,7 +592,7 @@ function gaState_(u){
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
   benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
-  kursProjekte:admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[],
+  kursProjekte:visibleProjects,
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
@@ -597,10 +604,19 @@ function gaState_(u){
   meMember:own,
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
-  erweiterteZuordnungen:own?assignments.filter(x=>x.MitgliedID===own.ID).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})):[],
+  erweiterteZuordnungen:(admin||trainer?assignments:own?assignments.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   ausbildungsberichte:trainingReports,
   freieTaetigkeiten:freeActivities,
-  quizKurse:quizCfg.map(c=>gaQuizPublicConfig_(c)),
+  quizKurse:quizCfg.map(c=>{
+   const data=gaQuizPublicConfig_(c);
+   if(!participant||!own)return data;
+   const course=allKurse.find(x=>x.ID===c.KursID);
+   if(!gaValidityQuizDate_(validity,c.KursID))return {...data,GueltigkeitStatus:'legacy'};
+   let status=course?gaValidityQuizAttendance_(course,own,validity,allTurnusse,assignments,allTermine,ownAttendance):'unknown';
+   if(status==='not-attended'&&course&&gaValidityQuizDate_(validity,c.KursID))
+    status=gaValidityForMember_(course,own,validity,allTurnusse,assignments,'quiz');
+   return {...data,GueltigkeitStatus:status,Pflicht:status==='exempt'?'NEIN':data.Pflicht};
+  }),
   quizFreigaben:(admin||trainer?quizUnlocks:own?quizUnlocks.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({KursID:x.KursID,MitgliedID:x.MitgliedID,QuizVersion:x.QuizVersion,ZusatzVersuche:x.ZusatzVersuche,FreigegebenAm:x.FreigegebenAm})),
   quizVersuche:(admin||trainer?quizAttempts:own?quizAttempts.filter(a=>a.MitgliedID===own.ID):[]).map(a=>({ID:a.ID,KursID:a.KursID,MitgliedID:a.MitgliedID,TerminID:a.TerminID,QuizVersion:a.QuizVersion,Versuch:a.Versuch,Status:a.Status,BegonnenAm:a.BegonnenAm,AbgegebenAm:a.AbgegebenAm,Punkte:a.Punkte,MaxPunkte:a.MaxPunkte,Prozent:a.Prozent,Bestanden:a.Bestanden})),
   ersteHilfeNachweise:aidRowsVisible,
@@ -613,9 +629,23 @@ function gaState_(u){
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
 function gaChoice_(v,allowed,name){if(!allowed.includes(v))throw new Error('Ungültiger Wert für '+name+'.');return v;}
-function gaSaveTurnus_(u,d){gaRequire_(u,['Administrator',GA_ADV_ROLE]);let val={Bezeichnung:gaNeed_(d.Bezeichnung,'Bezeichnung',130),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Aktiv:'JA'};
-  if(d.ID){gaReplace_('Turnusse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Turnus',d.ID,val);return {ok:true};}
-  val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Turnusse',val);gaLog_(u.ID,'ANLEGEN','Turnus',val.ID,val);return {ok:true};}
+function gaSaveTurnus_(u,d){
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ const val={Bezeichnung:gaNeed_(d.Bezeichnung,'Bezeichnung',130),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Aktiv:'JA'};
+ const meta=gaValidityConfig_();
+ if(d.ID){
+  const existing=gaFind_('Turnusse',d.ID);if(!existing)throw new Error('Turnus nicht gefunden.');
+  if(existing.Bereich!==val.Bereich&&(gaValidityHasAreaRule_(existing.Bereich,meta)||gaValidityHasAreaRule_(val.Bereich,meta)))
+   throw new Error('Der Bereich dieses Turnus kann bei vorhandenen Datumsregeln nicht geändert werden.');
+  if(!meta.turnus[d.ID]&&gaValidityHasAreaRule_(val.Bereich,meta))throw new Error('Bitte zuerst das tatsächliche Turnus-Startdatum eintragen.');
+  gaReplace_('Turnusse',d.ID,val);gaLog_(u.ID,'BEARBEITEN','Turnus',d.ID,val);return {ok:true};
+ }
+ const start=String(d.Startdatum||'').trim();
+ if(!gaValidityValidDate_(start))throw new Error('Bitte das tatsächliche Startdatum des neuen Turnus eintragen.');
+ val.ID=gaId_();val.ErstelltAm=gaNow_();
+ gaValidityWithRollback_('turnus',val.ID,start,()=>gaAppend_('Turnusse',val));
+ gaLog_(u.ID,'ANLEGEN','Turnus',val.ID,{...val,Startdatum:start});return {ok:true};
+}
 function gaLinks_(x){const text=gaText_(x,5000);const lines=text.split(/\n/).map(s=>s.trim()).filter(Boolean);if(lines.length>12)throw new Error('Maximal 12 Links.');for(const l of lines){if(!/^https:\/\//i.test(l))throw new Error('Unterlagen müssen HTTPS-Links sein (ein Link pro Zeile).');}return lines.join('\n');}
 function gaSaveCourse_(u,d){
  gaRequireRight_(u,'KurseBearbeiten');
@@ -625,7 +655,14 @@ function gaSaveCourse_(u,d){
  Inhalt:gaNeed_(d.Inhalt,'Ausbildungsinhalt',8000),Lernziele:gaText_(d.Lernziele,3000),
  Links:gaLinks_(d.Links),Aktiv:'JA'};
  if(gaIsAdvOrg_(u)&&val.Bereich!==GA_ADV_AREA)throw new Error('Kursteil gehört nicht zur erweiterten Ausbildung.');
- gaReplace_('Kurse',id,val);
+ const meta=gaValidityConfig_(),hasDate=Object.prototype.hasOwnProperty.call(d,'GueltigAb');
+ const date=hasDate?String(d.GueltigAb||'').trim():(meta.kurs[id]||'');
+ if(date&&!gaValidityValidDate_(date))throw new Error('Bitte ein gültiges Gültigkeitsdatum auswählen.');
+ if(hasDate&&date!==(meta.kurs[id]||''))gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ if(old.Bereich!==val.Bereich&&(meta.kurs[id]||meta.quiz[id]||date))throw new Error('Der Ausbildungsbereich eines datierten Kurses kann nicht geändert werden.');
+ if(hasDate&&date)gaValidityRequireTurnDates_(val.Bereich,meta);
+ if(hasDate)gaValidityWithRollback_('kurs',id,date,()=>gaReplace_('Kurse',id,val));
+ else gaReplace_('Kurse',id,val);
  gaLog_(u.ID,'KURS_NACH_VEROEFFENTLICHUNG_BEARBEITEN','Kurs',id,{Vorher:old,Nachher:val});
  return {ok:true,message:'Veröffentlichter Kurs aktualisiert. Änderung protokolliert.'};
 }
@@ -640,13 +677,27 @@ function gaNotify_(userId,type,title,message,reference){
   return id;
 }
 
-/** Send a course quiz announcement only once per member, version and quiz type. */
-function gaNotifyQuizAvailable_(user,course,quiz,known){
+function gaQuizNoticeContext_(){
+ return {members:gaRows_('Mitglieder'),attempts:gaOptionalRows_('QuizVersuche'),meta:gaValidityConfig_(),
+  turns:gaRows_('Turnusse'),assignments:gaAdvAssignments_(),terms:gaRows_('Termine'),
+  attendance:gaRows_('Teilnahmen'),courses:gaRows_('Kurse'),quizzes:gaOptionalRows_('QuizKurse')};
+}
+function gaQuizNoticeEligible_(user,course,quiz,ctx){
  if(!user||!course||!quiz||!gaBool_(quiz.Aktiv))return false;
- // Ein bestandenes Kursquiz bleibt auch nach einer neuen Version gültig.
- const member=gaOwnMember_(user);
+ ctx=ctx||gaQuizNoticeContext_();
+ const member=gaOwnMember_(user,ctx.members);
  if(!member)return false;
- if(gaOptionalRows_('QuizVersuche').some(a=>a.MitgliedID===member.ID&&a.KursID===course.ID&&gaBool_(a.Bestanden)))return false;
+ if(ctx.attempts.some(a=>a.MitgliedID===member.ID&&a.KursID===course.ID&&gaBool_(a.Bestanden)))return false;
+ if(gaValidityQuizDate_(ctx.meta,course.ID)){
+  const status=gaValidityQuizAttendance_(course,member,ctx.meta,ctx.turns,ctx.assignments,ctx.terms,ctx.attendance);
+  if(status!=='applies')return false;
+ }
+ return true;
+}
+
+/** Send a course quiz announcement only once per member, version and quiz type. */
+function gaNotifyQuizAvailable_(user,course,quiz,known,ctx){
+ if(!gaQuizNoticeEligible_(user,course,quiz,ctx))return false;
  const required=gaBool_(quiz.Pflicht);
  const ref='QUIZREADY:'+course.ID+':'+String(quiz.Version||'1')+':'+(required?'P':'F');
  const notices=known||gaRows_('Benachrichtigungen');
@@ -1258,10 +1309,10 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
   // Both GAB and advanced course participants receive the correct quiz type.
   const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
   if(quiz&&course){
-   const known=gaRows_('Benachrichtigungen');
+   const known=gaRows_('Benachrichtigungen'),quizContext=gaQuizNoticeContext_();
    firstTime.forEach(m=>{
     const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
-    if(account)gaNotifyQuizAvailable_(account,course,quiz,known);
+    if(account)gaNotifyQuizAvailable_(account,course,quiz,known,quizContext);
    });
   }
   gaPushQueue_(5);
@@ -1626,7 +1677,24 @@ function gaPushQueue_(limit,onlyNotificationId){
   const pending=gaRows_('Benachrichtigungen').filter(n=>
     n.PushStatus==='Wartend'&&(!onlyNotificationId||n.ID===onlyNotificationId))
     .slice(0,Math.max(1,Math.min(10,limit||5)));
+  let quizContext=null,quizUsers=[];
+  if(pending.some(n=>String(n.BezugID||'').startsWith('QUIZREADY:'))){
+    try{quizContext=gaQuizNoticeContext_();quizUsers=gaRows_('Benutzer');}
+    catch(error){console.warn('Quiz-Push wartet auf erneute Gültigkeitsprüfung:',String(error));}
+  }
   for(const n of pending){
+    const ref=String(n.BezugID||'');
+    if(ref.startsWith('QUIZREADY:')){
+      if(!quizContext)continue;
+      const parts=ref.split(':'),course=quizContext.courses.find(c=>c.ID===parts[1]);
+      const quiz=quizContext.quizzes.find(c=>c.KursID===parts[1]);
+      const user=quizUsers.find(x=>x.ID===n.BenutzerID&&gaBool_(x.Aktiv));
+      if(parts.length!==4||!quiz||String(quiz.Version)!==parts[2]||
+         (gaBool_(quiz.Pflicht)?'P':'F')!==parts[3]||!gaQuizNoticeEligible_(user,course,quiz,quizContext)){
+        gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Nicht mehr erforderlich'});
+        continue;
+      }
+    }
     const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':n.Typ==='Bewertung'?'Bewertungen':'Aufgaben'];
     const selected=devices.filter(x=>x.BenutzerID===n.BenutzerID);
     if(!allowed||!selected.length){
@@ -1714,12 +1782,15 @@ function gaSaveProject_(u,d){
  gaRequireRight_(u,'KurseGestalten');
  if(gaIsAdvOrg_(u)&&d.Bereich!==GA_ADV_AREA)throw new Error('Nur erweiterte Kursprojekte.');
  const input=gaProjectData_(d),existing=d.ID?gaFind_('KursProjekte',gaText_(d.ID,100)):null;
+ const hasDate=Object.prototype.hasOwnProperty.call(d,'GueltigAb'),date=hasDate?String(d.GueltigAb||'').trim():'';
+ if(date&&!gaValidityValidDate_(date))throw new Error('Bitte ein gültiges Gültigkeitsdatum auswählen.');
  if(d.ID&&!existing)throw new Error('Kursprojekt nicht gefunden.');
  if(existing){
   if(existing.Status==='Veröffentlicht'||existing.Status==='Zur Prüfung')throw new Error('Dieses Projekt ist zur Prüfung eingereicht oder bereits veröffentlicht.');
   // Alle Ausbilder mit Gestaltungsrecht dürfen gemeinsam an noch offenen Projekten arbeiten.
   const status=gaChoice_(d.Status||existing.Status,['Neu','In Ausarbeitung','Zurück zur Bearbeitung'],'Projektstatus');
-  gaReplace_('KursProjekte',existing.ID,{...input,Status:status,GeaendertVon:u.ID,GeaendertAm:gaNow_()});
+  const update=()=>gaReplace_('KursProjekte',existing.ID,{...input,Status:status,GeaendertVon:u.ID,GeaendertAm:gaNow_()});
+  if(hasDate)gaValidityWithRollback_('projekt',existing.ID,date,update);else update();
   gaLog_(u.ID,'PROJEKT_BEARBEITEN','Kursprojekt',existing.ID,{Titel:input.Titel,Status:status});
   return {ok:true,message:'Kursprojekt aktualisiert.'};
  }
@@ -1727,7 +1798,8 @@ function gaSaveProject_(u,d){
  const project={ID:gaId_(),KursID:'',...input,Status:status,ErstelltVon:u.ID,
   ErstelltAm:gaNow_(),GeaendertVon:u.ID,GeaendertAm:gaNow_(),
   GeprueftVon:'',GeprueftAm:'',Rueckmeldung:''};
- gaAppend_('KursProjekte',project);
+ if(hasDate)gaValidityWithRollback_('projekt',project.ID,date,()=>gaAppend_('KursProjekte',project));
+ else gaAppend_('KursProjekte',project);
  gaLog_(u.ID,'PROJEKT_ANLEGEN','Kursprojekt',project.ID,{Titel:input.Titel});
  return {ok:true,message:'Neues Kursprojekt angelegt.'};
 }
@@ -1739,6 +1811,8 @@ function gaSubmitProject_(u,d){
    throw new Error('Dieses Projekt kann gerade nicht eingereicht werden.');
  // Gestaltungsberechtigte Ausbilder können gemeinsam ausgearbeitete Projekte einreichen.
  gaProjectComplete_(project);
+ const meta=gaValidityConfig_();
+ if(meta.projekt[project.ID])gaValidityRequireTurnDates_(project.Bereich,meta);
  gaReplace_('KursProjekte',project.ID,{Status:'Zur Prüfung',GeaendertVon:u.ID,GeaendertAm:gaNow_(),Rueckmeldung:''});
  gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID&&(!gaIsAdvOrg_(x)||project.Bereich===GA_ADV_AREA))
    .forEach(x=>gaNotify_(x.ID,'Aufgabe','Kurs wartet auf Freigabe',project.Titel,project.ID));
@@ -1757,15 +1831,23 @@ function gaReviewProject_(u,d){
   gaReplace_('KursProjekte',project.ID,{Status:'Zurück zur Bearbeitung',Rueckmeldung:notes,GeprueftVon:u.ID,GeprueftAm:gaNow_()});
  }else{
   gaProjectComplete_(project);
+  const meta=gaValidityConfig_(),date=meta.projekt[project.ID]||'';
+  if(date)gaValidityRequireTurnDates_(project.Bereich,meta);
   const links=[project.PraesentationURL,project.WeitereLinks].filter(Boolean).join('\n');
   let courseId=project.KursID;
   const changes={Titel:project.Titel,Bereich:project.Bereich,Inhalt:project.Inhalt,
     Lernziele:project.Lernziele,Links:links,Aktiv:'JA'};
   if(courseId){
    const c=gaFind_('Kurse',courseId);if(!c)throw new Error('Verknüpfter Kurs fehlt.');
-   gaReplace_('Kurse',courseId,changes);
+   if(date&&date!==(meta.kurs[courseId]||''))gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+   if(c.Bereich!==project.Bereich&&(meta.kurs[courseId]||meta.quiz[courseId]||date))
+    throw new Error('Der Ausbildungsbereich eines datierten Kurses kann nicht geändert werden.');
+   if(date)gaValidityWithRollback_('kurs',courseId,date,()=>gaReplace_('Kurse',courseId,changes));
+   else gaReplace_('Kurse',courseId,changes);
   }else{
-   courseId=gaId_();gaAppend_('Kurse',{ID:courseId,...changes,ErstelltAm:gaNow_()});
+   courseId=gaId_();
+   const create=()=>gaAppend_('Kurse',{ID:courseId,...changes,ErstelltAm:gaNow_()});
+   if(date)gaValidityWithRollback_('kurs',courseId,date,create);else create();
   }
   gaReplace_('KursProjekte',project.ID,{KursID:courseId,Status:'Veröffentlicht',Rueckmeldung:notes,
    GeprueftVon:u.ID,GeprueftAm:gaNow_()});
@@ -2061,19 +2143,156 @@ function gaResendAidEmail_(u,d){
 
 /** Qualifikationsfreigaben; keine öffentliche Daten-API. */
 function gaDateOnly_(v){const x=gaText_(v,10);if(x&&(!/^\d{4}-\d{2}-\d{2}$/.test(x)||new Date(x+'T12:00:00Z').toISOString().slice(0,10)!==x))throw new Error('Ungültiges Datum.');return x;}
-function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors){
+
+/* Kohortendaten werden ergänzend gespeichert; bestehende Sheet-Spalten bleiben unverändert. */
+const GA_VALIDITY_PREFIX='GA_VALIDITY_V1_';
+const GA_VALIDITY_TYPES=['turnus','kurs','quiz','projekt'];
+function gaValidityKey_(kind,id){
+ if(!GA_VALIDITY_TYPES.includes(kind)||!id)throw new Error('Ungültige Gültigkeitsregel.');
+ return GA_VALIDITY_PREFIX+kind+'_'+encodeURIComponent(String(id));
+}
+function gaValidityValidDate_(v){
+ const s=String(v||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;
+ const d=new Date(s+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===s;
+}
+function gaValidityConfig_(){
+ const result={turnus:Object.create(null),kurs:Object.create(null),quiz:Object.create(null),projekt:Object.create(null)};
+ const all=PropertiesService.getScriptProperties().getProperties();
+ for(const kind of GA_VALIDITY_TYPES){
+  const prefix=GA_VALIDITY_PREFIX+kind+'_';
+  for(const key of Object.keys(all))if(key.startsWith(prefix)){
+   let id;try{id=decodeURIComponent(key.slice(prefix.length));}catch(e){throw new Error('Ungültige gespeicherte Gültigkeitsregel.');}
+   const value=String(all[key]||'');
+   if(!id)throw new Error('Ungültige gespeicherte Gültigkeitsregel.');
+   // Fehlerhafte Einträge nie als "kein Datum" auslegen: Auswertung meldet ungeklärt.
+   result[kind][id]=value||'INVALID';
+  }
+ }
+ return result;
+}
+function gaValiditySet_(kind,id,value){
+ const props=PropertiesService.getScriptProperties(),key=gaValidityKey_(kind,id),v=String(value||'').trim();
+ if(v&&!gaValidityValidDate_(v))throw new Error('Bitte ein gültiges Datum auswählen.');
+ if(v)props.setProperty(key,v);else props.deleteProperty(key);
+}
+function gaValidityWithRollback_(kind,id,value,write){
+ const props=PropertiesService.getScriptProperties(),key=gaValidityKey_(kind,id),old=props.getProperty(key);
+ gaValiditySet_(kind,id,value);
+ try{return write();}catch(error){if(old===null)props.deleteProperty(key);else props.setProperty(key,old);throw error;}
+}
+function gaValidityDecision_(area,validFrom,memberTurnIds,turns,turnDates){
+ if(!validFrom)return 'applies';
+ if(!gaValidityValidDate_(validFrom))return 'unknown';
+ const ids=new Set((memberTurnIds||[]).filter(Boolean));
+ if(!ids.size)return 'unknown';
+ const knownIds=new Set((turns||[]).map(t=>t.ID));
+ const missingTurn=[...ids].some(id=>!knownIds.has(id));
+ const relevant=(turns||[]).filter(t=>ids.has(t.ID)&&t.Bereich===area);
+ if(!relevant.length)return missingTurn?'unknown':'unassigned';
+ let unknown=missingTurn;
+ for(const turn of relevant){
+  const start=(turnDates||{})[turn.ID];
+  if(!gaValidityValidDate_(start))unknown=true;
+  else if(start>=validFrom)return 'applies';
+ }
+ return unknown?'unknown':'exempt';
+}
+function gaValidityMemberTurns_(member,assignments){
+ return [member?.TurnusID,...(assignments||[]).filter(a=>a.MitgliedID===member?.ID).map(a=>a.TurnusID)].filter(Boolean);
+}
+function gaValidityQuizDate_(meta,courseId){
+ const a=meta.kurs[courseId]||'',b=meta.quiz[courseId]||'';
+ if((a&&!gaValidityValidDate_(a))||(b&&!gaValidityValidDate_(b)))return 'INVALID';
+ return a>b?a:b;
+}
+function gaValidityForMember_(course,member,meta,turns,assignments,kind){
+ if(!course)return 'unknown';
+ const date=kind==='quiz'?gaValidityQuizDate_(meta,course.ID):(meta.kurs[course.ID]||'');
+ return gaValidityDecision_(course.Bereich,date,gaValidityMemberTurns_(member,assignments),turns,meta.turnus);
+}
+function gaValidityForTerm_(course,term,meta,turns,kind){
+ if(!course||!term)return 'unknown';
+ const date=kind==='quiz'?gaValidityQuizDate_(meta,course.ID):(meta.kurs[course.ID]||'');
+ return gaValidityDecision_(course.Bereich,date,[term.TurnusID],turns,meta.turnus);
+}
+function gaValidityQuizAttendance_(course,member,meta,turns,assignments,terms,attendance){
+ if(!course||!member)return 'unknown';
+ const allowed=new Set(gaValidityMemberTurns_(member,assignments));
+ const matching=(terms||[]).filter(t=>t.KursID===course.ID&&t.Status==='Durchgeführt'&&allowed.has(t.TurnusID)&&
+  (attendance||[]).some(a=>a.TerminID===t.ID&&a.MitgliedID===member.ID&&gaBool_(a.Anwesend)));
+ if(!matching.length)return 'not-attended';
+ const decisions=matching.map(t=>gaValidityForTerm_(course,t,meta,turns,'quiz'));
+ if(decisions.includes('applies'))return 'applies';
+ return decisions.some(x=>x==='unknown'||x==='unassigned')?'unknown':'exempt';
+}
+function gaValidityVisible_(meta,turns,courses,projects){
+ const result={turnus:Object.create(null),kurs:Object.create(null),quiz:Object.create(null),projekt:Object.create(null)};
+ for(const [kind,rows] of [['turnus',turns],['kurs',courses],['quiz',courses],['projekt',projects]])
+  for(const row of rows||[])if(meta[kind][row.ID])result[kind][row.ID]=meta[kind][row.ID];
+ return result;
+}
+function gaValidityRequireTurnDates_(area,meta){
+ const turns=gaRows_('Turnusse'),members=gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv));
+ const turnIds=new Set(turns.map(t=>t.ID));
+ if(members.some(m=>!m.TurnusID||!turnIds.has(m.TurnusID)))
+  throw new Error('Mindestens ein aktives Mitglied hat keinen gültigen Hauptturnus. Bitte zuerst die Turnuszuordnung prüfen.');
+ const activeMemberIds=new Set(members.map(m=>m.ID));
+ const used=new Set(members.map(m=>m.TurnusID));
+ const assignments=gaAdvAssignments_().filter(a=>activeMemberIds.has(a.MitgliedID));
+ if(area===GA_ADV_AREA&&assignments.some(a=>!turns.some(t=>t.ID===a.TurnusID&&t.Bereich===GA_ADV_AREA)))
+  throw new Error('Eine zusätzliche erweiterte Turnuszuordnung ist ungültig. Bitte zuerst die Zuordnung prüfen.');
+ assignments.forEach(a=>used.add(a.TurnusID));
+ // Frühere bestätigte Teilnahmen bleiben auch nach einer späteren Umteilung relevant.
+ const attendedTerms=new Set(gaRows_('Teilnahmen').filter(a=>activeMemberIds.has(a.MitgliedID)&&gaBool_(a.Anwesend)).map(a=>a.TerminID));
+ const historical=gaRows_('Termine').filter(t=>attendedTerms.has(t.ID));
+ const areaCourses=new Set(gaRows_('Kurse').filter(c=>c.Bereich===area).map(c=>c.ID));
+ if(historical.some(t=>areaCourses.has(t.KursID)&&(!t.TurnusID||!turnIds.has(t.TurnusID))))
+  throw new Error('Bei einer bestehenden Teilnahme fehlt ein gültiger Turnus. Bitte die zugehörige Ausbildung prüfen.');
+ historical.forEach(t=>used.add(t.TurnusID));
+ const missing=turns.filter(t=>t.Bereich===area&&(gaBool_(t.Aktiv)||used.has(t.ID))&&!gaValidityValidDate_(meta.turnus[t.ID]));
+ if(missing.length)throw new Error('Bitte zuerst für diese Turnusse das tatsächliche Startdatum eintragen: '+missing.map(t=>t.Bezeichnung||t.ID).join(', ')+'.');
+}
+function gaValidityHasAreaRule_(area,meta){
+ return gaRows_('Kurse').some(c=>c.Bereich===area&&(meta.kurs[c.ID]||meta.quiz[c.ID]));
+}
+function gaValidityScope_(u,kind,id){
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ const name=kind==='turnus'?'Turnusse':kind==='kurs'?'Kurse':null;
+ if(!name)throw new Error('Ungültige Einstellung.');
+ const row=gaFind_(name,id);if(!row)throw new Error('Eintrag nicht gefunden.');
+ if(gaIsAdvOrg_(u)&&row.Bereich!==GA_ADV_AREA)throw new Error('Zugriff nur auf die erweiterte Ausbildung.');
+ return row;
+}
+function gaSetValidity_(u,d){
+ const kind=gaChoice_(d.Art,['turnus','kurs'],'Einstellung'),id=gaNeed_(d.ID,'ID',100),row=gaValidityScope_(u,kind,id);
+ const value=String(d.Datum||'').trim(),meta=gaValidityConfig_();
+ if(value&&!gaValidityValidDate_(value))throw new Error('Bitte ein gültiges Datum eingeben.');
+ if(kind==='kurs'&&value)gaValidityRequireTurnDates_(row.Bereich,meta);
+ if(kind==='turnus'&&!value&&gaValidityHasAreaRule_(row.Bereich,meta))throw new Error('Startdatum kann nicht entfernt werden, solange in diesem Bereich datierte Kurs- oder Quizregeln bestehen.');
+ gaValiditySet_(kind,id,value);
+ gaLog_(u.ID,'GUELTIGKEIT_SETZEN',kind,id,{Vorher:meta[kind][id]||'',Datum:value});
+ return {ok:true,message:'Datum gespeichert.'};
+}
+function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors,validity){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
+ validity=validity||{turnus:{},kurs:{},quiz:{},projekt:{}};
+ const unclear=new Set();
  const memberTurns=new Set([m.TurnusID,...(assignments||[]).filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)]);
  const ownComplete=(id,cutoff)=>{
    if(id==='GAB-ABSCHNITT-BLOCK-A'||id==='GAB-ABSCHNITT-BLOCK-B'){
      const proof=(abschnitt||[]).find(x=>x.MitgliedID===m.ID&&x.KursID===id);
      return !!proof&&valid(proof.Absolviert)&&(id!=='GAB-ABSCHNITT-BLOCK-B'||valid(proof.PruefungBestanden));
    }
-   const attended=terms.some(t=>t.KursID===id&&(!cutoff||(/^\d{4}-\d{2}-\d{2}/.test(String(t.Beginn||''))&&String(t.Beginn).slice(0,10)<=cutoff))&&(!cutoff?memberTurns.has(t.TurnusID):true)&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
-   if(!attended)return false;
+   const attended=terms.filter(t=>t.KursID===id&&(!cutoff||(/^\d{4}-\d{2}-\d{2}/.test(String(t.Beginn||''))&&String(t.Beginn).slice(0,10)<=cutoff))&&(!cutoff?memberTurns.has(t.TurnusID):true)&&t.Status==='Durchgeführt'&&attendances.some(a=>a.TerminID===t.ID&&a.MitgliedID===m.ID&&valid(a.Anwesend)));
+   if(!attended.length)return false;
    const config=(quizCfg||[]).find(c=>c.KursID===id&&(!cutoff?valid(c.Aktiv):true)&&valid(c.Pflicht));
    if(!config)return true;
-   return (quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&valid(a.Bestanden));
+   if((quizAttempts||[]).some(a=>a.MitgliedID===m.ID&&a.KursID===id&&valid(a.Bestanden)))return true;
+   if(!gaValidityQuizDate_(validity,id))return false;
+   const course=(courses||[]).find(c=>c.ID===id);
+   const decisions=attended.map(t=>gaValidityForTerm_(course,t,validity,turnusse,'quiz'));
+   if(decisions.some(x=>x==='unknown'||x==='unassigned'))unclear.add(id);
+   return decisions.includes('exempt');
  };
  const complete=id=>{
    const seen=new Set();let cutoff='';
@@ -2088,7 +2307,25 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
    return false;
  };
  const effective=field=>{
-   const required=rs.filter(r=>valid(r[field]));
+   const resolved=[],original=rs.filter(r=>valid(r[field]));
+   const directIds=new Set(original.map(r=>r.KursID)),expanded=new Set();
+   original.forEach(r=>{
+     let id=r.KursID;const seen=new Set();
+     while(id&&!seen.has(id)){
+       seen.add(id);
+       const course=(courses||[]).find(c=>c.ID===id);
+       const status=validity.kurs[id]?gaValidityForMember_(course,m,validity,turnusse,assignments,'kurs'):'applies';
+       if(status==='unassigned'&&field==='PflichtGAB'&&valid(q.GABAnerkannt)&&m.Ausbildungsweg===GA_ADV_AREA)break;
+       if(status==='unknown'||status==='unassigned')unclear.add(id);
+       if(status!=='exempt'){
+        if(id===r.KursID)resolved.push(r);
+        else if(!directIds.has(id)&&!expanded.has(id)){resolved.push({...r,KursID:id});expanded.add(id);}
+        break;
+       }
+       id=(predecessors||{})[id]?.id||'';
+     }
+   });
+   const required=resolved;
    const obsolete=new Set();
    required.forEach(r=>{
      let id=r.KursID;const seen=new Set([id]);
@@ -2120,6 +2357,7 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
  const bswDone=valid(m.Aktiv)&&bsw.length>0&&bswOpen.length===0;
  const requirements=[...new Set([...gab,...bsw].map(r=>r.KursID))],done=requirements.filter(complete).length;
  return {MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,TurnusID:m.TurnusID,Ausbildungsweg:actualPath,AusbildungswegAufnahme:m.Ausbildungsweg||'Grundausbildung',Standesbuchnummer:m.Standesbuchnummer||'',
+  GueltigkeitUnklar:[...unclear],
   Geburtsdatum:birth,ErsteHilfeStatus:q.ErsteHilfeStatus||'Ausständig',
   ErsteHilfeBestaetigtAm:q.ErsteHilfeBestaetigtAm||'',FDISKEintragDatum:q.FDISKEintragDatum||'',FDISKPlatzhalter:q.FDISKPlatzhalter||'NEIN',
   GABFreigabe:q.GABFreigabe||'NEIN',GABAnerkannt:q.GABAnerkannt||'NEIN',
@@ -2329,7 +2567,7 @@ function gaGetQuizEdit_(u,d){
  if(gaIsAdvOrg_(u))gaAdvancedCourse_(u,d.KursID);
  const c=gaOptionalRows_('QuizKurse').find(x=>x.KursID===gaNeed_(d.KursID,'Kurs-ID',100));
  if(!c)return null;
- return {...gaQuizPublicConfig_(c),Fragen:JSON.parse(c.FragenJSON||'[]')};
+ return {...gaQuizPublicConfig_(c),GueltigAb:gaValidityConfig_().quiz[c.KursID]||'',Fragen:JSON.parse(c.FragenJSON||'[]')};
 }
 function gaQuizRights_(u){if(u.Rolle==='Administrator'||gaIsAdvOrg_(u))return;
  if(u.Rolle!=='Ausbilder'||!(gaCan_(u,'KurseGestalten')||gaCan_(u,'KurseBearbeiten')))
@@ -2355,19 +2593,24 @@ function gaSaveQuiz_(u,d){
   FragenJSON:newQuestions,Version:String(old?(majorChange?Number(old.Version||0)+1:Number(old.Version||1)):1),
   AktualisiertVon:u.ID,AktualisiertAm:gaNow_()};
  if(val.FragenJSON.length>36000)throw new Error('Quiz ist zu groß. Fragen kürzen.');
- if(old)gaReplace_('QuizKurse',old.ID,val);
- else gaAppend_('QuizKurse',{ID:gaId_(),...val});
+ const meta=gaValidityConfig_(),hasDate=Object.prototype.hasOwnProperty.call(d,'GueltigAb');
+ const date=hasDate?String(d.GueltigAb||'').trim():(meta.quiz[id]||'');
+ if(date&&!gaValidityValidDate_(date))throw new Error('Bitte ein gültiges Gültigkeitsdatum auswählen.');
+ if(hasDate&&date)gaValidityRequireTurnDates_(course.Bereich,meta);
+ const save=()=>{if(old)gaReplace_('QuizKurse',old.ID,val);else gaAppend_('QuizKurse',{ID:gaId_(),...val});};
+ if(hasDate)gaValidityWithRollback_('quiz',id,date,save);else save();
  gaLog_(u.ID,'QUIZ_SPEICHERN','Kurs',id,{Aktiv:val.Aktiv,Pflicht:val.Pflicht,Version:val.Version,Fragen:questions.length});
  if(enabled){
   if(course.Bereich===GA_ADV_AREA)gaNotifyAdvancedOrganizers_('Aufgabe','Wissenstest veröffentlicht',course.Titel,id);
   // If a quiz is created after a completed course, notify those who attended.
-  const finishedIds=new Set(gaRows_('Termine').filter(t=>t.KursID===id&&t.Status==='Durchgeführt').map(t=>t.ID));
-  const attendeeIds=new Set(gaRows_('Teilnahmen').filter(a=>finishedIds.has(a.TerminID)&&gaBool_(a.Anwesend)).map(a=>a.MitgliedID));
-  const emails=new Set(gaRows_('Mitglieder').filter(m=>attendeeIds.has(m.ID)&&gaBool_(m.Aktiv))
+  const quizContext=gaQuizNoticeContext_();
+  const finishedIds=new Set(quizContext.terms.filter(t=>t.KursID===id&&t.Status==='Durchgeführt').map(t=>t.ID));
+  const attendeeIds=new Set(quizContext.attendance.filter(a=>finishedIds.has(a.TerminID)&&gaBool_(a.Anwesend)).map(a=>a.MitgliedID));
+  const emails=new Set(quizContext.members.filter(m=>attendeeIds.has(m.ID)&&gaBool_(m.Aktiv))
    .map(m=>String(m.Email||'').toLowerCase()).filter(Boolean));
   const known=gaRows_('Benachrichtigungen');
   gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&emails.has(String(x.Email||'').toLowerCase()))
-   .forEach(x=>gaNotifyQuizAvailable_(x,course,val,known));
+   .forEach(x=>gaNotifyQuizAvailable_(x,course,val,known,quizContext));
   gaPushQueue_(5);
  }
  return {ok:true,message:enabled?'Quiz gespeichert. Neue Quizversion '+val.Version+' ist aktiv.':'Quiz deaktiviert; bisherige Versuche bleiben erhalten.'};
@@ -2407,6 +2650,11 @@ function gaStartQuiz_(u,d){
  const course=gaFind_('Kurse',courseId),config=gaOptionalRows_('QuizKurse').find(c=>c.KursID===courseId&&gaBool_(c.Aktiv));
  if(!course||!gaBool_(course.Aktiv)||!config)throw new Error('Für diesen Kurs ist kein aktives Quiz vorhanden.');
  const term=gaQuizEligibleTerm_(m,courseId);
+ const validity=gaValidityConfig_();
+ if(gaValidityQuizDate_(validity,courseId)){
+  const status=gaValidityForTerm_(course,term,validity,gaRows_('Turnusse'),'quiz');
+  if(status==='unknown'||status==='unassigned')throw new Error('Für diesen Turnus fehlt ein gültiges Startdatum. Bitte die Ausbildungsleitung informieren.');
+ }
  const allAttempts=gaRows_('QuizVersuche').filter(a=>a.MitgliedID===m.ID&&a.KursID===courseId);
  if(allAttempts.some(a=>gaBool_(a.Bestanden)))throw new Error('Du hast dieses Kursquiz bereits erfolgreich bestanden.');
  const list=allAttempts.filter(a=>a.QuizVersion===config.Version);
@@ -2475,9 +2723,13 @@ function gaSubmitQuiz_(u,d){
   gaNotifyAdvancedOrganizers_('Aufgabe','Kursquiz abgegeben',m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);
  gaLog_(u.ID,'QUIZ_ABGEBEN','Kurs',attempt.KursID,{MitgliedID:m.ID,QuizVersion:attempt.QuizVersion,Prozent:percent,Bestanden:passed});
  const attempts=gaRows_('QuizVersuche').filter(x=>x.MitgliedID===m.ID&&x.KursID===attempt.KursID&&x.QuizVersion===config.Version).length;
+ const submittedCourse=gaFind_('Kurse',attempt.KursID),submittedTerm=gaFind_('Termine',attempt.TerminID);
+ const submittedMeta=gaValidityConfig_();
+ const submittedStatus=gaValidityQuizDate_(submittedMeta,attempt.KursID)?
+  gaValidityForTerm_(submittedCourse,submittedTerm,submittedMeta,gaRows_('Turnusse'),'quiz'):'applies';
  return {ok:true,Bestanden:passed,Punkte:correct,MaxPunkte:qs.length,Prozent:percent,
    Bestehensgrenze:Number(config.Bestehensgrenze),VersucheVerbleibend:Math.max(0,Number(config.MaxVersuche)+gaQuizExtra_(m.ID,attempt.KursID,config.Version)-attempts),
-   Pflicht:gaBool_(config.Pflicht)};
+   Pflicht:gaBool_(config.Pflicht)&&submittedStatus==='applies'};
 }
 
 function gaUnlockQuiz_(u,d){

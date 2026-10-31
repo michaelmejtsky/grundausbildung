@@ -49,23 +49,30 @@ function gaOrganizerInvite(){
 function gaOrganizerQualifications(){
  const people=STATE.mitglieder||[],courses=STATE.kurse||[],terms=STATE.termine||[];
  const present=STATE.teilnahmen||[],attempts=STATE.quizVersuche||[],quiz=STATE.quizKurse||[];
+ const validity=(...args)=>typeof gaUiValidityDecision==='function'?gaUiValidityDecision(...args):STATE.gueltigkeit?'unknown':'applies';
  const table=people.map(m=>{
+  const allowed=new Set([m.TurnusID,...(STATE.erweiterteZuordnungen||[]).filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)]);
   const progress=courses.map(c=>{
-   const attended=terms.some(t=>t.KursID===c.ID&&t.Status==='Durchgeführt'&&
+   const attendedTerms=terms.filter(t=>t.KursID===c.ID&&t.Status==='Durchgeführt'&&allowed.has(t.TurnusID)&&
     present.some(p=>p.TerminID===t.ID&&p.MitgliedID===m.ID&&p.Anwesend==='JA'));
-   const q=quiz.find(x=>x.KursID===c.ID&&x.Aktiv==='JA'),required=q?.Pflicht==='JA';
-   const passed=q&&attempts.some(a=>a.KursID===c.ID&&a.MitgliedID===m.ID&&
-    a.Bestanden==='JA'&&String(a.QuizVersion)===String(q.Version));
-   return {name:c.Titel,attended,passed,required,done:attended&&(!required||passed)};
+   const attended=attendedTerms.length>0,courseScope=validity(c.ID,m.ID,'kurs');
+   const quizScopes=attendedTerms.map(t=>validity(c.ID,m.ID,'quiz',t.TurnusID));
+   const q=quiz.find(x=>x.KursID===c.ID&&x.Aktiv==='JA');
+   const passed=!!q&&attempts.some(a=>a.KursID===c.ID&&a.MitgliedID===m.ID&&a.Bestanden==='JA');
+   const uncertain=courseScope==='unknown'||courseScope==='unassigned'||
+    (!!q&&q.Pflicht==='JA'&&!quizScopes.includes('exempt')&&quizScopes.some(x=>x==='unknown'||x==='unassigned'));
+   const required=!!q&&q.Pflicht==='JA'&&!quizScopes.includes('exempt');
+   return {name:c.Titel,attended,passed,required,uncertain,applicable:courseScope!=='exempt',
+    done:attended&&(!required||passed)&&!uncertain};
   });
-  const done=progress.filter(x=>x.done).length;
+  const applicable=progress.filter(x=>x.applicable),done=applicable.filter(x=>x.done).length;
   return '<details class="ga-member-fold ga-org-qualification"><summary><span>'+h(m.Nachname+', '+m.Vorname)+
-   '</span><span class="tag '+(done===progress.length&&progress.length?'ok':'blue')+'">'+done+' / '+progress.length+' Module</span></summary>'+
+   '</span><span class="tag '+(done===applicable.length&&applicable.length?'ok':'blue')+'">'+done+' / '+applicable.length+' Module</span></summary>'+
    '<div class="ga-fold-body">'+(m.Ausbildungsweg==='GAB-Gast'?
     '<p class="small muted">Als GAB-Gast aufgenommen. GAB-Ausbildungsstand und private Nachweise sind hier nicht einsehbar.</p>':'')+
    (progress.length?progress.map(c=>
     '<div class="ga-org-list-row"><strong>'+h(c.name)+'</strong><span class="tag '+(c.done?'ok':c.attended?'warn':'blue')+'">'+
-    (c.done?'Positiv abgeschlossen':c.attended&&c.required?'Pflichtquiz ausständig':'Noch offen')+'</span></div>').join(''):
+    (c.done?'Positiv abgeschlossen':c.uncertain?'Turnus-Startdatum prüfen':!c.applicable?'Für diesen Turnus nicht verpflichtend':c.attended&&c.required?'Pflichtquiz ausständig':'Noch offen')+'</span></div>').join(''):
     '<p class="muted">Noch keine erweiterten Module vorhanden.</p>')+'</div></details>';
  });
  return '<section class="panel"><h2>Qualifikationen – Erweiterte Ausbildung</h2>'+

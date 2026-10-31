@@ -1,12 +1,12 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v2.31';
-const CORE=['./','./index.html','./quiz-ui.js','./bsw-quiz-vorlage.json','./aid-ui.js','./admin-ui.js','./training-report-ui.js','./free-activity-ui.js','./organizer-ui.js','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
+const CACHE='ga-shell-v2.32';
+const CORE=['./','./index.html','./quiz-ui.js?v=gueltigkeit-1','./bsw-quiz-vorlage.json','./aid-ui.js','./admin-ui.js?v=gueltigkeit-1','./training-report-ui.js','./free-activity-ui.js','./organizer-ui.js?v=gueltigkeit-1','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     // Fehlende Offline-Dateien dürfen die Installation des Push-Dienstes nicht blockieren.
     try{
       const cache=await caches.open(CACHE);
-      await Promise.allSettled(CORE.map(url=>cache.add(url)));
+      await Promise.allSettled(CORE.map(url=>cache.add(new Request(new URL(url,self.location.href).href,{cache:'reload'}))));
     }catch(error){
       console.warn('Offline-Cache nicht vollständig verfügbar:',error);
     }
@@ -21,10 +21,10 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;
   if(event.request.mode==='navigate'){
-    event.respondWith(fetch(event.request).catch(()=>caches.match('./index.html')));
+    event.respondWith(fetch(event.request,{cache:'no-cache'}).catch(()=>caches.match('./index.html')));
     return;
   }
-  event.respondWith(fetch(event.request).then(response=>{
+  event.respondWith(fetch(event.request,{cache:'no-cache'}).then(response=>{
     if(response.ok&&CORE.some(p=>new URL(p,self.location.href).pathname===new URL(event.request.url).pathname)){
       const clone=response.clone();caches.open(CACHE).then(c=>c.put(event.request,clone));
     }

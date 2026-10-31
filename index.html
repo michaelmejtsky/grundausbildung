@@ -98,6 +98,7 @@ const $=id=>document.getElementById(id);
 const h=s=>String(s===null||s===undefined?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const by=(arr,id)=>(arr||[]).find(x=>x.ID===id);
 const dt=v=>h(String(v||'').replace('T',' '));
+const gaShortDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?String(v).split('-').reverse().join('.'):String(v||'');
 // Termine aus Google Sheets können ein Leerzeichen statt "T" enthalten.
 // Mit lokaler Uhrzeit vergleichen und geplante Termine bis zu ihrem Ende anzeigen.
 function gaTrainingTimestamp(value){
@@ -342,6 +343,7 @@ function courses(){
  '<form data-form="course"><div class="grid">'+
  '<div><label>Titel</label><input name="Titel" required value="'+h(edit.Titel)+'"></div>'+
  '<div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions(edit.Bereich)+'</select></div>'+
+ (STATE.gueltigkeit&&['Administrator','Organisator Erweiterte Ausbildung'].includes(role())?'<div><label>Für Turnusse gültig ab</label><input type="date" name="GueltigAb" value="'+h(STATE.gueltigkeit.kurs?.[edit.ID]||'')+'"><p class="small muted">Leer: Pflichtstatus gilt für alle Turnusse. Mit Datum: Pflicht für Turnusse mit Start ab diesem Tag. Eine Änderung wirkt sich auch auf die Einordnung bestehender Turnusse aus; Nachweise bleiben erhalten.</p></div>':'')+
  '<div class="wide"><label>Ausbildungsinhalt (Pflicht)</label><textarea name="Inhalt" required>'+h(edit.Inhalt||'')+'</textarea></div>'+
  '<div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit.Lernziele||'')+'</textarea></div>'+
  '<div class="wide"><label>Präsentation und Unterlagen (HTTPS-Links, je Zeile)</label><textarea name="Links">'+h(edit.Links||'')+'</textarea></div>'+
@@ -362,6 +364,7 @@ function gaProjectReviewDetail(p){
   '<div class="row between"><div><p class="ga-eyebrow">MODULPRÜFUNG · ZUR FREIGABE</p><h2>'+h(p.Titel)+'</h2>'+
   '<p class="muted">'+h(p.Bereich)+' · '+h(p.Typ)+' · Eingereicht von '+h(owner?.Name||'Ausbilder')+'</p></div>'+
   '<button type="button" class="secondary" data-close-review="1">← Zur Projektübersicht</button></div>'+
+  (STATE.gueltigkeit?.projekt?.[p.ID]?'<p class="notice">Für Turnusse gültig ab: <b>'+h(gaShortDate(STATE.gueltigkeit.projekt[p.ID]))+'</b></p>':'')+
   '<div class="ga-review-grid">'+
    '<div class="ga-review-block"><h3>Ausbildungsinhalt</h3><div class="msg ga-readable">'+h(p.Inhalt||'Kein Inhalt hinterlegt')+'</div></div>'+
    '<div class="ga-review-block"><h3>Lernziele</h3><div class="msg ga-readable">'+h(p.Lernziele||'Keine Lernziele eingetragen')+'</div></div>'+
@@ -393,6 +396,7 @@ function projects(){
  '<form data-form="project"><div class="grid">'+
  '<div><label>Kurstitel</label><input name="Titel" required maxlength="160" value="'+h(project?.Titel||'')+'"></div>'+
  '<div><label>Bereich</label><select name="Bereich">'+areaOptions(project?.Bereich)+'</select></div>'+
+ (STATE.gueltigkeit?'<div><label>Für Turnusse gültig ab</label><input type="date" name="GueltigAb" value="'+h(STATE.gueltigkeit.projekt?.[project?.ID]||'')+'"><p class="small muted">Leer: für alle Turnusse. Mit Datum: Pflicht nur für Turnusse mit Start ab diesem Tag.</p></div>':'')+
  '<div><label>Kursart</label><select name="Typ"><option value="Theorie" '+(project?.Typ!=='Praxis'?'selected':'')+'>Theorie / Unterricht</option><option value="Praxis" '+(project?.Typ==='Praxis'?'selected':'')+'>Praxisschulung</option></select></div>'+
  '<div><label>Bearbeitungsstand</label><select name="Status">'+['Neu','In Ausarbeitung','Zurück zur Bearbeitung'].filter(st=>st!=='Zurück zur Bearbeitung'||project?.Status===st).map(st=>'<option value="'+h(st)+'" '+((project?.Status||'Neu')===st?'selected':'')+'>'+h(st)+'</option>').join('')+'</select></div>'+
  '<div class="wide"><label>Ausbildungsinhalt (bei Einreichung Pflicht)</label><textarea name="Inhalt" maxlength="8000">'+h(project?.Inhalt||'')+'</textarea></div>'+
@@ -591,7 +595,22 @@ function terms(){
  return create+'<section class="panel"><h2>Geplante und durchgeführte Termine</h2>'+
  termCards(STATE.termine.slice().sort((a,b)=>b.Beginn.localeCompare(a.Beginn)))+'</section>';
 }
-function turnusse(){return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid"><div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div><div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div></div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section><section class="panel"><h2>Turnusse</h2><div class="items">'+STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div></div>').join('')+'</div></section>'}
+function turnusse(){
+ const enabled=!!STATE.gueltigkeit;
+ const startField=enabled?'<div><label>Startdatum des Turnus</label><input name="Startdatum" type="date" required></div>':'';
+ return '<section class="panel"><h2>Neuen Turnus anlegen</h2><form data-form="turnus"><div class="grid">'+
+  '<div><label>Bezeichnung</label><input name="Bezeichnung" required placeholder="z. B. Grundausbildung Herbst 2026"></div>'+
+  '<div><label>Ausbildungsbereich</label><select name="Bereich">'+areaOptions()+'</select></div>'+startField+
+  '</div><div class="btnline"><button class="primary">Turnus erstellen</button></div></form></section>'+
+  '<section class="panel"><h2>Turnusse</h2><p class="muted">Das tatsächliche Startdatum legt fest, welche datierten Pflichtmodule für diesen Turnus gelten. Eine Änderung kann die Auswertung beeinflussen; gespeicherte Nachweise bleiben erhalten.</p><div class="items">'+
+  STATE.turnusse.map(t=>'<div class="item"><b>'+h(t.Bezeichnung)+'</b><div class="detail">'+h(t.Bereich)+' · '+
+   STATE.mitglieder.filter(m=>m.TurnusID===t.ID).length+' Mitglieder</div>'+
+   (enabled?'<form data-form="validity" class="grid"><input type="hidden" name="Art" value="turnus">'+
+    '<input type="hidden" name="ID" value="'+h(t.ID)+'"><label>Startdatum<input name="Datum" type="date" required value="'+h(STATE.gueltigkeit.turnus?.[t.ID]||'')+'"></label>'+
+    '<div><button type="submit" class="smallbtn">Startdatum speichern</button></div></form>':
+    '<p class="small muted">Für Startdaten ist eine Aktualisierung des Backends erforderlich.</p>')+
+   '</div>').join('')+'</div></section>';
+}
 function gaStatusBadge(ok,yes,no){return '<span class="tag '+(ok?'ok':'bad')+'">'+h(ok?yes:no)+'</span>';}
 function qualifications(){
  const qs=STATE.qualifikationen||[],req=STATE.kursAnforderungen||[];
@@ -803,7 +822,7 @@ function mine(){
   '<div class="ga-fold-body"><p class="small muted">Deine Nachweise kannst du hier hochladen oder ihren Prüfstatus ansehen.</p>'+
   aidPanel(false)+
   '<p class="small muted">FDISK: '+h(q.FDISKPlatzhalter==='JA'?'Platzhalter erfasst – kein Ausbildungsnachweis':q.FDISKEintragDatum||'Noch kein Datum hinterlegt')+'</p></div></details>';
- return hero+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>'+gaParticipantDiagnosticBox();
+ return hero+((q.GueltigkeitUnklar||[]).length?'<div class="notice">Für deinen Turnus muss das Startdatum geprüft werden. Bitte wende dich an die Ausbildungsleitung.</div>':'')+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>'+gaParticipantDiagnosticBox();
 }
 function myterms(){
  const allowed=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
@@ -1151,6 +1170,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  }
  else if(type==='term')await doSave('saveTermin',data);
  else if(type==='turnus')await doSave('saveTurnus',data);
+ else if(type==='validity')await doSave('setValidity',data);
  else if(type==='member'){
   if(EDIT)data.ID=EDIT;
   const invite=data.SofortEinladen==='JA',email=String(data.Email||'').trim();
@@ -1205,4 +1225,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=quizabschluss-1"></script><script src="./admin-ui.js?v=course-predecessor-1"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=gueltigkeit-1"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>

@@ -181,6 +181,7 @@ function gaQualForm(q){
   '<p class="small muted">'+h(q.GABHinweis||'')+'</p>';
  return '<section class="panel ga-person-detail"><div class="row between"><div><p class="ga-eyebrow">QUALIFIKATION · MITGLIED</p><h2>'+h(q.Name)+'</h2></div>'+
  '<button type="button" class="secondary" data-ga-clear="qual">Schließen</button></div>'+
+ ((q.GueltigkeitUnklar||[]).length?'<div class="ga-alert">Das Startdatum eines zugeordneten Turnus fehlt. Bitte unter „Turnusse“ ergänzen; die Pflicht wird bis dahin geprüft.</div>':'')+
  '<div class="ga-status-line">'+gaStatusBadge(q.GABAbgeschlossen,'GAB abgeschlossen','GAB nicht bestätigt')+
  gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul vollständig','BSW noch offen')+
  gaStatusBadge(q.Alter16,'Mindestalter erreicht','Alter fehlt/unter 16')+'</div>'+warn+
@@ -211,6 +212,7 @@ function qualifications(){
  const requirements='<details class="ga-member-fold ga-admin-bottom"><summary>Pflichtmodule für GAB und BSW festlegen</summary><div class="ga-fold-body"><p class="small muted">Hier werden die Ausbildungsanforderungen definiert. Sie werden unabhängig von einer ausdrücklich erteilten GAB-Bestätigung weiterhin angezeigt.</p>'+
  (STATE.kurse||[]).filter(c=>c.Aktiv==='JA').map(c=>{const r=(STATE.kursAnforderungen||[]).find(x=>x.KursID===c.ID)||{};
  return '<form class="ga-requirement-row" data-form="requirement"><input type="hidden" name="KursID" value="'+h(c.ID)+'"><strong>'+h(c.Titel)+'</strong>'+
+ (STATE.gueltigkeit?.kurs?.[c.ID]?'<span class="small muted">Gültig für Turnusse ab '+h(gaShortDate(STATE.gueltigkeit.kurs[c.ID]))+'</span>':'')+
  '<label class="inline-check"><input type="checkbox" name="PflichtGAB" value="JA" '+(r.PflichtGAB==='JA'?'checked':'')+'> GAB</label>'+
  '<label class="inline-check"><input type="checkbox" name="PflichtBSW" value="JA" '+(r.PflichtBSW==='JA'?'checked':'')+'> BSW</label>'+
  (STATE.kursVorgaenger?'<label>Vorgängerkurs <select name="VorgaengerID"><option value="">Keiner</option>'+(STATE.kurse||[]).filter(p=>p.ID!==c.ID&&p.Bereich===c.Bereich).map(p=>'<option value="'+h(p.ID)+'" '+(STATE.kursVorgaenger[c.ID]?.id===p.ID?'selected':'')+'>'+h(p.Titel)+'</option>').join('')+'</select></label><span class="small muted">Abgeschlossene Termine des Vorgängers bis zur Verknüpfung werden für das neue Pflichtmodul angerechnet. Ist auch der Vorgänger als Pflichtmodul markiert, zählt das neuere Modul für diese Pflicht.</span>':'<span class="small muted">Vorgängerkurse verfügbar nach Aktualisierung des Backends.</span>')+

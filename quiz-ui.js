@@ -4,21 +4,56 @@ let Q_EDIT='',Q_META=null,Q_ITEMS=[],Q_SESSION=null,Q_RESULT=null,Q_PREVIEW_LIMI
 let Q_TEMPLATE_BACKUP=null;
 const qCfg=id=>(STATE.quizKurse||[]).find(q=>q.KursID===id);
 
+function gaUiValidDate(value){
+ const s=String(value||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;
+ const d=new Date(s+'T12:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===s;
+}
+/** Keine Schätzung aus Erstellungsdatum: ein fehlender Turnusstart bleibt ungeklärt. */
+function gaUiValidityDecision(courseId,memberId,kind,termTurnusId){
+ const meta=STATE.gueltigkeit;if(!meta)return 'applies';
+ const course=(STATE.kurse||[]).find(c=>c.ID===courseId);
+ const courseDate=meta.kurs?.[courseId]||'',quizDate=meta.quiz?.[courseId]||'';
+ if((courseDate&&!gaUiValidDate(courseDate))||(kind==='quiz'&&quizDate&&!gaUiValidDate(quizDate)))return 'unknown';
+ const date=kind==='quiz'?(courseDate>quizDate?courseDate:quizDate):courseDate;
+ if(!date)return 'applies';
+ if(!course)return 'unknown';
+ const member=(STATE.mitglieder||[]).find(m=>m.ID===memberId)||
+  (STATE.meMember?.ID===memberId?STATE.meMember:null);
+ const ids=termTurnusId?[termTurnusId]:[member?.TurnusID,...(STATE.erweiterteZuordnungen||[])
+  .filter(a=>a.MitgliedID===memberId).map(a=>a.TurnusID)].filter(Boolean);
+ if(!ids.length)return 'unknown';
+ const known=new Set((STATE.turnusse||[]).map(t=>t.ID));
+ const missingTurn=ids.some(id=>!known.has(id));
+ const turns=(STATE.turnusse||[]).filter(t=>ids.includes(t.ID)&&t.Bereich===course.Bereich);
+ if(!turns.length)return missingTurn?'unknown':'unassigned';
+ let unknown=missingTurn;
+ for(const t of turns){const start=meta.turnus?.[t.ID];
+  if(!gaUiValidDate(start))unknown=true;
+  else if(start>=date)return 'applies';
+ }
+ return unknown?'unknown':'exempt';
+}
+
 /** Abgeleiteter Ausbildungsabschluss: keine künstliche Kursabschluss-Tabelle und keine geänderten Nachweise. */
 function qCourseStatus(courseId,memberId,turnusId){
  const config=qCfg(courseId);
  const member=memberId?(STATE.mitglieder||[]).find(m=>m.ID===memberId):null;
  const turnus=turnusId||member?.TurnusID||STATE.meMember?.TurnusID||'';
- const allowed=new Set([turnus,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
+ const allowed=new Set([turnus,...(STATE.erweiterteZuordnungen||[]).filter(x=>x.MitgliedID===memberId).map(x=>x.TurnusID)]);
  const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||allowed.has(t.TurnusID)));
- const attended=(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&terms.some(t=>t.ID===a.TerminID));
- const active=config?.Aktiv==='JA',required=active&&config.Pflicht==='JA';
+ const attendedTerms=terms.filter(t=>(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&a.TerminID===t.ID));
+ const attended=attendedTerms.length>0;
+ const decisions=attendedTerms.map(t=>gaUiValidityDecision(courseId,memberId,'quiz',t.TurnusID));
+ const active=config?.Aktiv==='JA';
+ const uncertain=active&&config.Pflicht==='JA'&&!decisions.includes('exempt')&&decisions.some(x=>x==='unknown'||x==='unassigned');
+ const required=active&&config.Pflicht==='JA'&&!decisions.includes('exempt');
  const success=active&&(STATE.quizVersuche||[]).some(a=>a.KursID===courseId&&a.MitgliedID===memberId&&
   a.Bestanden==='JA');
- const complete=attended&&(!required||success);
- return {attended,required,success,complete,
-   label:complete?'Kurs positiv abgeschlossen':attended&&required?'Theorie abgeschlossen · Pflichtquiz offen':'Noch nicht abgeschlossen',
-   note:attended&&required&&success?'Pflichtquiz bestanden':attended&&active&&!required&&success?'Freiwilliges Quiz bestanden':
+ const complete=attended&&(!required||success)&&(!uncertain||success);
+ return {attended,required,success,complete,uncertain,
+   label:complete?'Kurs positiv abgeschlossen':attended&&uncertain?'Turnus-Startdatum prüfen':attended&&required?'Theorie abgeschlossen · Pflichtquiz offen':'Noch nicht abgeschlossen',
+   note:attended&&required&&success?'Pflichtquiz bestanden':attended&&active&&!required&&success?'Quiz bestanden':
+    attended&&active&&(config?.GueltigkeitStatus==='exempt'||(config?.Pflicht==='JA'&&decisions.includes('exempt'))) ?'Für diesen Turnus nicht verpflichtend':
     attended&&active&&!required?'Freiwilliges Quiz möglich':attended&&required?'Pflichtquiz ausständig':''};
 }
 function qCourseBadge(courseId,memberId,turnusId){
@@ -172,7 +207,9 @@ function qEditPage(){
   '<label class="inline-check"><input type="checkbox" name="Pflicht" value="JA" '+(cfg.Pflicht==='JA'?'checked':'')+'> Zum Abschluss verpflichtend</label></div>'+
   '<div class="q-setting-grid"><label>Bestehensgrenze (%)<input name="Bestehensgrenze" type="number" min="50" max="100" required value="'+h(cfg.Bestehensgrenze??80)+'"></label>'+
   '<label>Versuche<input name="MaxVersuche" type="number" min="1" max="10" required value="'+h(cfg.MaxVersuche??3)+'"></label>'+
-  '<label>Zeitlimit in Minuten<input name="ZeitlimitMinuten" type="number" min="0" max="120" required value="'+h(cfg.ZeitlimitMinuten??0)+'"></label></div></section>'+
+  '<label>Zeitlimit in Minuten<input name="ZeitlimitMinuten" type="number" min="0" max="120" required value="'+h(cfg.ZeitlimitMinuten??0)+'"></label>'+
+  (STATE.gueltigkeit?'<label>Quiz für Turnusse gültig ab<input type="date" name="GueltigAb" value="'+h(cfg.GueltigAb??STATE.gueltigkeit.quiz?.[Q_EDIT]??'')+'"><span class="small muted">Frühere Turnusse erhalten keine Pflicht für dieses Quiz. Bei einem bereits zuvor verpflichtenden Quiz ändert dies auch die Einordnung für ältere Turnusse; gespeicherte Ergebnisse bleiben erhalten. Ein späteres Kursdatum gilt weiterhin.</span></label>':'')+
+  '</div></section>'+
   '<div class="q-editor-head"><div><h3>Fragenkatalog <span class="q-count" id="qTotal">'+total+'</span></h3>'+
   '<p><span id="qReady">'+done+'</span> von '+total+' Fragen vollständig</p></div>'+
   '<div class="q-editor-actions"><button type="button" class="secondary" data-qadd="1" '+(total>=20?'disabled':'')+'>+ Frage hinzufügen</button>'+
@@ -287,22 +324,25 @@ function qExam(){
 function qParticipant(){
  if(Q_SESSION)return qExam();
  const assigned=new Set((STATE.kurse||[]).map(c=>c.ID));
- const quizzes=(STATE.quizKurse||[]).filter(c=>c.Aktiv==='JA'&&assigned.has(c.KursID));
+ const quizzes=(STATE.quizKurse||[]).filter(c=>c.Aktiv==='JA'&&assigned.has(c.KursID)&&
+  (!['exempt','unassigned'].includes(c.GueltigkeitStatus)||(STATE.quizVersuche||[]).some(a=>a.MitgliedID===STATE.meMember?.ID&&a.KursID===c.KursID)));
  const cards=quizzes.map(q=>{
   const course=by(STATE.kurse,q.KursID);
   const eligible=(STATE.teilnahmen||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.Anwesend==='JA'&&(STATE.termine||[]).some(t=>
     t.ID===a.TerminID&&t.KursID===q.KursID&&t.Status==='Durchgeführt'));
-  const attempts=(STATE.quizVersuche||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID&&String(a.QuizVersion)===String(q.Version));
-  const passed=(STATE.quizVersuche||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID&&a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
-  const last=attempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
+  const allAttempts=(STATE.quizVersuche||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID);
+  const attempts=allAttempts.filter(a=>String(a.QuizVersion)===String(q.Version));
+  const passed=allAttempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');
+  const last=allAttempts.filter(a=>a.Status==='Abgegeben').slice(-1)[0];
+  const unclear=q.GueltigkeitStatus==='unknown';
   const extra=(STATE.quizFreigaben||[]).filter(u=>STATE.meMember&&u.MitgliedID===STATE.meMember.ID&&u.KursID===q.KursID&&String(u.QuizVersion)===String(q.Version)).reduce((n,u)=>n+Number(u.ZusatzVersuche||0),0);
   const courseStatus=qCourseStatus(q.KursID,STATE.meMember?.ID,STATE.meMember?.TurnusID);
   return '<article class="ga-project-card"><div class="row between"><div><b>'+h(course?.Titel||'Kurs')+'</b>'+
    '<div class="detail">'+h(q.FrageAnzahl)+' Fragen · Bestehensgrenze '+h(q.Bestehensgrenze)+' %</div></div>'+
-   '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?(q.Pflicht==='JA'?'Pflichtquiz bestanden':'Freiwilliges Quiz bestanden'):!eligible?'Noch gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwilliges Quiz')+'</span></div>'+
+   '<span class="tag '+(passed?'ok':eligible?'warn':'blue')+'">'+(passed?'Quiz bestanden':unclear?'Startdatum prüfen':!eligible?'Noch gesperrt':q.Pflicht==='JA'?'Pflichtquiz':'Freiwilliges Quiz')+'</span></div>'+
    (last?'<p>Letztes Ergebnis: <b>'+h(last.Prozent)+' %</b></p>':'')+
   (courseStatus.attended?'<p class="q-course-status">'+qCourseBadge(q.KursID,STATE.meMember?.ID,STATE.meMember?.TurnusID)+'</p>':'')+
-   (passed?'<p class="muted small">Dein Ergebnis wurde gespeichert.</p>':!eligible?'<p class="muted small">Nach bestätigter Kursteilnahme verfügbar.</p>':
+   (passed?'<p class="muted small">Dein Ergebnis wurde gespeichert.</p>':unclear?'<p class="muted small">Das Startdatum des Turnus muss durch die Ausbildungsleitung ergänzt werden.</p>':!eligible?'<p class="muted small">Nach bestätigter Kursteilnahme verfügbar.</p>':
    attempts.length<Number(q.MaxVersuche)+extra?'<div class="btnline"><button class="primary" type="button" data-qstart="'+h(q.KursID)+'">'+(started?'Fortsetzen':'Quiz starten')+'</button></div>':
    '<p class="muted small">Maximale Versuche erreicht. Ausbilder kontaktieren.</p>')+'</article>';
  }).join('');
@@ -320,6 +360,7 @@ function qCurrentMeta(form){
  const fd=new FormData(form);
  return {...(Q_META||qCfg(Q_EDIT)||{}),
   Aktiv:fd.has('Aktiv')?'JA':'NEIN',Pflicht:fd.has('Pflicht')?'JA':'NEIN',
+  ...(form.elements.namedItem('GueltigAb')?{GueltigAb:String(fd.get('GueltigAb')||'')} : {}),
   Bestehensgrenze:Number(fd.get('Bestehensgrenze')||80),
   MaxVersuche:Number(fd.get('MaxVersuche')||3),
   ZeitlimitMinuten:Number(fd.get('ZeitlimitMinuten')||0)};
@@ -337,6 +378,8 @@ async function qOpenEditor(id){
   const draft=qGetDraft(id);
   if(draft&&draft.saved&&draft.saved>Date.now()-14*86400000){
    Q_ITEMS=draft.items;Q_META={...Q_META,...draft.meta};
+   // Ein alter lokaler Entwurf darf eine inzwischen veröffentlichte Datumsregel nicht überschreiben.
+   if(saved?.ID||STATE.gueltigkeit?.quiz?.[id])Q_META.GueltigAb=saved?.GueltigAb??STATE.gueltigkeit?.quiz?.[id]??'';
    tip('Dein zwischengespeicherter Quiz-Entwurf wurde wiederhergestellt.');
   }
   render();
@@ -353,6 +396,7 @@ async function qSave(form,fd){
  const payload={KursID:form.dataset.course,Aktiv:meta.Aktiv,Pflicht:meta.Pflicht,
   Bestehensgrenze:meta.Bestehensgrenze,MaxVersuche:meta.MaxVersuche,
   ZeitlimitMinuten:meta.ZeitlimitMinuten,Fragen:Q_ITEMS};
+ if(form.elements.namedItem('GueltigAb'))payload.GueltigAb=meta.GueltigAb;
  const response=await api('saveQuiz',payload);
  qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_TEMPLATE_BACKUP=null;
  Q_PREVIEW=false;Q_PREVIEW_RESULT=null;
