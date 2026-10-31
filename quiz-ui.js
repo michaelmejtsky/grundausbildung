@@ -66,20 +66,34 @@ function qCourseBadge(courseId,memberId,turnusId){
 
 /* Editor V2.0: Einzelantworten, sichere Entwurfssicherung und lokale Testvorschau. */
 let Q_PREVIEW=false,Q_PREVIEW_RESULT=null,Q_PREVIEW_ANSWERS=null,Q_OPEN=0;
+let Q_EDITOR_LOADING=false,Q_EDITOR_READY=false,Q_EDITOR_ERROR='',Q_EDITOR_SEQ=0;
+let Q_RECOVERABLE=null,Q_RECOVERY_BACKED_UP=false;
 const qNew=(typ='single')=>({typ,text:'',options:['','','',''],correct:typ==='multi'?[0,1]:[0],pairs:[['',''],['','']]});
 const qDraftKey=id=>'ga-quiz-draft-v2-'+String(STATE?.user?.ID||'')+'-'+String(id||'');
 const qLetter=n=>String.fromCharCode(65+n);
+function qArchiveDraft(id,draft){
+ const prefix=qDraftKey(id)+'-recovery-',base=prefix+Date.now();let key=base,n=0;
+ while(sessionStorage.getItem(key)!==null)key=base+'-'+(++n);
+ sessionStorage.setItem(key,JSON.stringify({saved:draft.saved,items:draft.items,meta:draft.meta}));
+}
 function qAutoDraft(){
- if(!Q_EDIT)return;
+ if(!Q_EDIT||!Q_EDITOR_READY||Q_EDITOR_LOADING)return;
  try{const form=document.querySelector('form[data-form="quizSave"]');
   const meta=form?qCurrentMeta(form):(Q_META||qCfg(Q_EDIT)||{});
+  // Einen bisher nicht gewählten Entwurf vor dem Überschreiben aufbewahren.
+  if(Q_RECOVERABLE&&!Q_RECOVERY_BACKED_UP&&Q_RECOVERABLE.storageKey===qDraftKey(Q_EDIT)){
+   qArchiveDraft(Q_EDIT,Q_RECOVERABLE);Q_RECOVERY_BACKED_UP=true;
+  }
   sessionStorage.setItem(qDraftKey(Q_EDIT),JSON.stringify({saved:Date.now(),items:Q_ITEMS,meta}));}
  catch(e){/* Unavailable storage must never prevent saving on the server. */}
 }
 function qClearDraft(id){try{sessionStorage.removeItem(qDraftKey(id));}catch(e){}}
 function qGetDraft(id){
- try{const x=JSON.parse(sessionStorage.getItem(qDraftKey(id))||'null');
-  return x&&Array.isArray(x.items)&&x.items.length?x:null;
+ try{const key=qDraftKey(id),keys=[key],prefix=key+'-recovery-';
+  for(let i=0;i<sessionStorage.length;i++){const k=sessionStorage.key(i);if(k&&k.startsWith(prefix))keys.push(k);}
+  const drafts=keys.map(k=>{try{return {...JSON.parse(sessionStorage.getItem(k)||'null'),storageKey:k};}catch(e){return null;}})
+   .filter(x=>x&&Array.isArray(x.items)&&x.items.length&&Number(x.saved)>Date.now()-14*86400000);
+  return drafts.sort((a,b)=>Number(b.saved)-Number(a.saved))[0]||null;
  }catch(e){return null;}
 }
 function qCapture(){
@@ -201,6 +215,8 @@ function qEditPage(){
  return '<section class="panel q-studio"><div class="q-studio-hero"><div><p class="ga-eyebrow">QUIZ-STUDIO / AUSBILDER</p>'+
   '<h2>'+h(course?.Titel||'Kursquiz')+'</h2><p>Fragen zusammenstellen, richtige Antworten auswählen und das Quiz vor der Veröffentlichung testen.</p></div>'+
   '<button type="button" class="secondary" data-qback="1">← Zur Übersicht</button></div>'+
+  (Q_RECOVERABLE?'<div class="notice">Ein zwischengespeicherter Entwurf ist vorhanden. Die aktuell gespeicherten Fragen sind geladen. '+
+   '<button type="button" class="smallbtn" data-qrestore="1">Entwurf wiederherstellen</button></div>':'')+
   '<form data-form="quizSave" data-course="'+h(Q_EDIT)+'">'+
   '<section class="q-studio-settings"><div class="q-studio-settings-top"><h3>Quiz-Einstellungen</h3><span class="tag blue">Nur nach bestätigter Teilnahme</span></div>'+
   '<div class="q-checkboxes"><label class="inline-check"><input type="checkbox" name="Aktiv" value="JA" '+(cfg.Aktiv==='JA'?'checked':'')+'> Quiz für den Kurs aktivieren</label>'+
@@ -284,7 +300,11 @@ function qPreviewSubmit(form){
 }
 
 function qAdmin(){
- if(Q_EDIT)return Q_PREVIEW?qPreviewPage():qEditPage();
+ if(Q_EDIT){
+  if(Q_EDITOR_LOADING)return '<section class="panel"><h2>Quiz wird geladen …</h2><p>Die gespeicherten Fragen werden geladen. Bitte einen Moment warten.</p><button type="button" class="secondary" data-qback="1">Zur Übersicht</button></section>';
+  if(Q_EDITOR_ERROR||!Q_EDITOR_READY)return '<section class="panel"><h2>Quiz konnte nicht geladen werden</h2><p>'+h(Q_EDITOR_ERROR||'Die gespeicherten Fragen sind noch nicht verfügbar.')+'</p><p>Es wurden keine Fragen verändert.</p><div class="btnline"><button type="button" class="primary" data-qretry="'+h(Q_EDIT)+'">Erneut laden</button><button type="button" class="secondary" data-qback="1">Zur Übersicht</button></div></section>';
+  return Q_PREVIEW?qPreviewPage():qEditPage();
+ }
  const courses=(STATE.kurse||[]).filter(c=>c.Aktiv==='JA');
  const cards=courses.map(c=>{
   const cfg=qCfg(c.ID),enabled=cfg?.Aktiv==='JA';
@@ -368,28 +388,46 @@ function qCurrentMeta(form){
 async function qOpenEditor(id){
  const course=by(STATE.kurse,id);
  if(!course)return tip('Kurs nicht gefunden.',true);
- Q_EDIT=id;Q_META=null;Q_ITEMS=[qNew()];Q_OPEN=0;Q_TEMPLATE_BACKUP=null;Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ const request=++Q_EDITOR_SEQ;
+ Q_EDIT=id;Q_META=null;Q_ITEMS=[];Q_OPEN=0;Q_TEMPLATE_BACKUP=null;Q_PREVIEW=false;Q_PREVIEW_RESULT=null;Q_PREVIEW_ANSWERS=null;
+ Q_EDITOR_LOADING=true;Q_EDITOR_READY=false;Q_EDITOR_ERROR='';Q_RECOVERABLE=null;Q_RECOVERY_BACKED_UP=false;
  VIEW='quizzes';render();
  try{
   const saved=await api('getQuizEdit',{KursID:id});
-  if(Q_EDIT!==id)return;
-  Q_META=saved||qCfg(id)||{};
-  Q_ITEMS=saved?.Fragen?.length?saved.Fragen:[qNew()];
-  const draft=qGetDraft(id);
-  if(draft&&draft.saved&&draft.saved>Date.now()-14*86400000){
-   Q_ITEMS=draft.items;Q_META={...Q_META,...draft.meta};
-   // Ein alter lokaler Entwurf darf eine inzwischen veröffentlichte Datumsregel nicht überschreiben.
-   if(saved?.ID||STATE.gueltigkeit?.quiz?.[id])Q_META.GueltigAb=saved?.GueltigAb??STATE.gueltigkeit?.quiz?.[id]??'';
-   tip('Dein zwischengespeicherter Quiz-Entwurf wurde wiederhergestellt.');
+  if(request!==Q_EDITOR_SEQ||Q_EDIT!==id)return;
+  if(saved==null){
+   if(qCfg(id))throw new Error('Das vorhandene Quiz wurde vom Server nicht vollständig geladen. Bitte erneut versuchen.');
+   Q_META={};Q_ITEMS=[qNew()];
+  }else{
+   if((saved.KursID&&String(saved.KursID)!==String(id))||!Array.isArray(saved.Fragen)||!saved.Fragen.length)
+    throw new Error('Die gespeicherten Quizfragen wurden nicht vollständig geladen. Bitte erneut versuchen.');
+   Q_META=saved;Q_ITEMS=saved.Fragen;
   }
-  render();
+  // Ein lokaler Entwurf ersetzt die gespeicherten Fragen nur nach ausdrücklicher Auswahl.
+  Q_RECOVERABLE=qGetDraft(id);Q_EDITOR_READY=true;
  }catch(error){
-  const draft=qGetDraft(id);
-  if(draft){Q_ITEMS=draft.items;Q_META=draft.meta;render();tip('Server derzeit nicht erreichbar. Lokaler Entwurf geöffnet.',true);}
-  else{Q_EDIT='';render();tip(error.message,true);}
+  if(request!==Q_EDITOR_SEQ||Q_EDIT!==id)return;
+  Q_EDITOR_ERROR=String(error?.message||'Verbindung zum Server fehlgeschlagen.');Q_EDITOR_READY=false;
+ }finally{
+  if(request===Q_EDITOR_SEQ&&Q_EDIT===id){Q_EDITOR_LOADING=false;render();}
  }
 }
+function qRestoreDraft(){
+ if(!Q_EDITOR_READY||!Q_RECOVERABLE)return;
+ if(!confirm('Den gespeicherten Entwurf aus diesem Browser laden? Die aktuell angezeigten Fragen im Editor werden ersetzt. Das veröffentlichte Quiz bleibt bis zum Speichern unverändert.'))return;
+ const draft=Q_RECOVERABLE,form=document.querySelector('form[data-form="quizSave"]');
+ qCapture();
+ const current=form?qCurrentMeta(form):(Q_META||{});
+ try{qArchiveDraft(Q_EDIT,{saved:Date.now(),items:Q_ITEMS,meta:current});}catch(e){}
+ Q_ITEMS=JSON.parse(JSON.stringify(draft.items));Q_META={...current,...(draft.meta||{})};
+ // Alte Entwürfe dürfen eine inzwischen veröffentlichte Datumsregel nicht zurücksetzen.
+ if(STATE.gueltigkeit)Q_META.GueltigAb=current.GueltigAb??STATE.gueltigkeit.quiz?.[Q_EDIT]??'';
+ Q_RECOVERABLE=null;Q_RECOVERY_BACKED_UP=false;Q_OPEN=0;render();qAutoDraft();
+ tip('Entwurf geladen. Bitte vor dem Speichern prüfen.');
+}
 async function qSave(form,fd){
+ if(!Q_EDITOR_READY||Q_EDITOR_LOADING||Q_EDITOR_ERROR||Q_EDIT!==form.dataset.course)
+  throw new Error('Die gespeicherten Quizfragen müssen zuerst vollständig geladen werden.');
  qCapture();
  qValidateBeforeSave();
  const meta=qCurrentMeta(form);
@@ -398,7 +436,7 @@ async function qSave(form,fd){
   ZeitlimitMinuten:meta.ZeitlimitMinuten,Fragen:Q_ITEMS};
  if(form.elements.namedItem('GueltigAb'))payload.GueltigAb=meta.GueltigAb;
  const response=await api('saveQuiz',payload);
- qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_TEMPLATE_BACKUP=null;
+ qClearDraft(Q_EDIT);Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_TEMPLATE_BACKUP=null;Q_EDITOR_READY=false;Q_RECOVERABLE=null;
  Q_PREVIEW=false;Q_PREVIEW_RESULT=null;
  tip(response.message||'Quiz gespeichert.');
  await reload();
@@ -501,7 +539,7 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  const x=event.target.closest(
   '[data-qedit],[data-qback],[data-qadd],[data-qdel],[data-qmove],[data-qcopy],'+
   '[data-qpair-add],[data-qpair-delete],[data-qpreview],[data-qpreview-back],[data-qpreview-again],'+
-  '[data-qbackup],[data-qimport],[data-qbsw-template],[data-qbsw-undo],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
+  '[data-qbackup],[data-qimport],[data-qrestore],[data-qretry],[data-qbsw-template],[data-qbsw-undo],[data-qstart],[data-qresult-close],[data-course-quiz],[data-qunlock]');
  if(!x)return;
  if(x.dataset.qresultClose!==undefined){Q_RESULT=null;render();return;}
  if(x.dataset.qpreviewBack!==undefined){qExitPreview();return;}
@@ -509,8 +547,10 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  if(x.dataset.qback!==undefined){
   qCapture();
   if(Q_ITEMS.some(q=>q.text||q.options?.some(Boolean)||q.pairs?.some(p=>p[0]||p[1]))&&!confirm('Editor verlassen? Der Entwurf ist nur in diesem Browser zwischengespeichert.'))return;
-  Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_PREVIEW=false;render();return;
+  Q_EDITOR_SEQ++;Q_EDIT='';Q_META=null;Q_ITEMS=[];Q_PREVIEW=false;Q_EDITOR_READY=false;Q_EDITOR_LOADING=false;Q_EDITOR_ERROR='';Q_RECOVERABLE=null;render();return;
  }
+ if(x.dataset.qretry!==undefined){await qOpenEditor(Q_EDIT);return;}
+ if(x.dataset.qrestore!==undefined){qRestoreDraft();return;}
  if(x.dataset.qpreview!==undefined){try{qGoPreview();}catch(e){tip(e.message,true);}return;}
  if(x.dataset.qbackup!==undefined){try{qLocalExport();}catch(e){tip(e.message,true);}return;}
  if(x.dataset.qimport!==undefined){document.getElementById('gaQuizDraftImport')?.click();return;}
