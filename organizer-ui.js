@@ -1,19 +1,55 @@
 /* Organisator Erweiterte Ausbildung – getrennte Verwaltungsansichten V1.11 */
 'use strict';
 const GA_ORG_ROLE='Organisator Erweiterte Ausbildung';
-function gaOrganizerOverview(){
- const members=STATE.mitglieder||[],terms=STATE.termine||[],courses=STATE.kurse||[];
- const ready=Array.isArray(STATE.gabAbgeschlossen)?STATE.gabAbgeschlossen.filter(m=>!m.ErweiterteTurnusIDs?.length).length:null;
- return '<div class="ga-page-heading"><div><p class="ga-eyebrow">FEUERWEHR ST. PÖLTEN-STADT</p><h2>Erweiterte Ausbildung</h2>'+
- '<p>Deine organisatorische Übersicht – GAB-Daten bleiben beim GAB-Team.</p></div></div>'+
- '<div class="ga-kpis">'+gaMetric(members.length,'Zugeordnete Teilnehmer','Inklusive GAB-Gästen')+
- gaMetric(courses.length,'Erweiterte Module','Kurskatalog')+gaMetric(terms.length,'Ausbildungstermine','Geplant & durchgeführt')+'</div>'+
- '<div class="ga-organizer-cards">'+
- '<button type="button" data-view="advReady" class="ga-organizer-tile"><strong>GAB-Absolventen'+(ready===null?'':' · '+ready+' offen')+'</strong><span>Abgeschlossene Grundausbildung und Zuordnung zur erweiterten Ausbildung</span></button>'+
- '<button type="button" data-view="advMembers" class="ga-organizer-tile"><strong>Teilnehmer & GAB-Gäste</strong><span>Personen für erweiterte Module zuordnen</span></button>'+
- '<button type="button" data-view="terms" class="ga-organizer-tile"><strong>Termine planen</strong><span>Nur Kurse und Turnusse der erweiterten Ausbildung</span></button>'+
- '<button type="button" data-view="messages" class="ga-organizer-tile"><strong>Nachrichten</strong><span>Einzeln, gesamter Turnus oder alle zugeordneten Mitglieder</span></button>'+
- '<button type="button" data-view="trainingReports" class="ga-organizer-tile"><strong>FDISK-Tätigkeitsberichte</strong><span>Stunden, Personen und Fahrzeuge</span></button></div>';
+function gaOrganizerOverview(now=Date.now()){
+ const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
+ const readyKnown=Array.isArray(STATE.gabAbgeschlossen);
+ const ready=readyKnown?STATE.gabAbgeschlossen.filter(m=>!m.ErweiterteTurnusIDs?.length):[];
+ const upcoming=gaHomeUpcoming(now),unread=(STATE.benachrichtigungen||[]).filter(n=>!n.GelesenAm);
+ const pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
+ const reports=(STATE.meldungen||[]).filter(m=>['Offen','In Bearbeitung'].includes(m.Status));
+ const first=String(STATE.user?.Name||'').trim().split(/\s+/)[0]||'Ausbildungsleitung';
+ const shortcuts=[['advReady','🎓','GAB-Absolventen','Abschlüsse und Übergaben ansehen'],
+  ['advMembers','👥','Teilnehmer & GAB-Gäste','Personen zusätzlich zuordnen'],
+  ['terms','📅','Termine planen','Erweiterte Ausbildungen verwalten'],
+  ['attendance','🚒','Ausbildung durchführen','Kurse öffnen und Anwesenheit erfassen'],
+  ['courses','📚','Erweiterter Kurskatalog','Module, Inhalte und Unterlagen'],
+  ['projects','📝','Kursprojekte','Module bearbeiten und freigeben'],
+  ['quizzes','✅','Quizverwaltung','Wissenstests und Ergebnisse'],
+  ['messages','✉️','Nachrichten','Zugeordnete Teilnehmer informieren']];
+ const more=[['advInvite','📨','Teilnehmer einladen','App-Zugang einrichten'],
+  ['advQual','🏅','Qualifikationen','Erweiterte Module und Abschlüsse'],
+  ['turnus','🗓️','Erweiterte Turnusse','Ausbildungsgruppen verwalten'],
+  ['trainingReports','📊','Tätigkeitsberichte','Berichte und FDISK-Auszüge'],
+  ['freeActivities','🔧','Freie Tätigkeiten','Diensttätigkeiten dokumentieren'],
+  ['questionnaires','📋','Bewertungsfragebögen','Fragen gestalten'],
+  ['reviews','⭐','Kursbewertungen','Rückmeldungen ansehen'],
+  ['reports','💡','Mängel & Ideen','Rückmeldungen bearbeiten']];
+ const people=ready.slice().sort((a,b)=>String(a.Nachname||'').localeCompare(String(b.Nachname||''),'de')).slice(0,4)
+  .map(m=>'<div class="ga-trainer-module"><span class="ga-home-person-icon" aria-hidden="true">🎓</span><div><strong>'+h([m.Vorname,m.Nachname].filter(Boolean).join(' '))+
+   '</strong><small>GAB abgeschlossen · noch keinem erweiterten Turnus zugeordnet</small></div></div>').join('');
+ const readyText=!readyKnown?'Die Übersicht ist mit dem aktuell verbundenen Backend noch nicht verfügbar.':
+  !ready.length?'Derzeit warten keine GAB-Absolventen auf eine Zuordnung.':'';
+ return '<div class="ga-trainer-home ga-lead-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · ERWEITERTE AUSBILDUNG</p>'+
+  '<h2>Servus, '+h(first)+'!</h2><p>Deine Teilnehmer, Module und Termine für die erweiterte Ausbildung auf einen Blick.</p>'+
+  '<button type="button" class="ga-trainer-hero-button" data-view="advMembers">Teilnehmer verwalten <span aria-hidden="true">→</span></button></div>'+
+  '<div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
+  '<div class="ga-trainer-stats ga-home-stats">'+gaHomeStat(members.length,'Aktive Teilnehmer','Inklusive zugeordneter GAB-Gäste')+
+  gaHomeStat(readyKnown?ready.length:'–','GAB zur Zuordnung',readyKnown?'Abgeschlossen, noch nicht zugeordnet':'Derzeit nicht verfügbar')+
+  gaHomeStat(upcoming.length,'Kommende Termine','Erweiterte Ausbildung')+
+  gaHomeStat(unread.length,'Ungelesene Mitteilungen','Unter deinen letzten 100')+'</div>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">SCHNELLZUGRIFF</p><h2>Was möchtest du tun?</h2></div></div>'+
+  '<div class="ga-trainer-shortcuts">'+gaHomeShortcuts(shortcuts)+'</div><details class="ga-home-more"><summary>Weitere Funktionen anzeigen</summary><div class="ga-trainer-shortcuts">'+gaHomeShortcuts(more)+'</div></details></section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">AUSBILDUNGSPLAN</p><h2>Nächste Termine</h2><p>Geplante Kurse der erweiterten Ausbildung.</p></div><button type="button" class="smallbtn" data-view="terms">Alle öffnen</button></div>'+
+  gaHomeAppointments(upcoming)+(upcoming.length>4?'<p class="ga-trainer-footnote">'+h(upcoming.length-4)+' weitere geplante Termine.</p>':'')+'</section>'+
+  '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">ÜBERGABE AUS DER GAB</p><h2>GAB-Absolventen</h2><p>'+h(readyKnown?ready.length+' noch ohne erweiterten Turnus':'Übersicht derzeit nicht verfügbar')+'</p></div><button type="button" class="smallbtn" data-view="advReady">Alle ansehen</button></div>'+
+  (people||'<p class="ga-trainer-empty">'+h(readyText)+'</p>')+
+  (ready.length>4?'<p class="ga-trainer-footnote">'+h(ready.length-4)+' weitere Personen in der Übersicht.</p>':'')+'</section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2><p>'+h(unread.length)+' ungelesen · letzte 100 Mitteilungen</p></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
+  gaHomeNoticeList(unread)+'</section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">ERWEITERTE AUSBILDUNG</p><h2>Offene Aufgaben</h2><p>Projekte und Rückmeldungen in deinem Bereich.</p></div></div><div class="ga-home-tasks">'+
+  gaHomeTask('projects',pending.length,'Kursprojekte','Zur Prüfung eingereicht')+
+  gaHomeTask('reports',reports.length,'Mängel & Ideen','Offen oder in Bearbeitung')+'</div></section></div></div>';
 }
 function gaOrganizerReady(){
  if(!Array.isArray(STATE.gabAbgeschlossen))return '<section class="panel"><h2>GAB-Absolventen</h2><p>Für diese Übersicht bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';

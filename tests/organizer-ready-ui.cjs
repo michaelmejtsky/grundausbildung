@@ -6,10 +6,13 @@ const ctx=vm.createContext({console,STATE:{user:{ID:'org'},kurse:[],termine:[],m
  gabAbgeschlossen:[{ID:'one',Vorname:'Erste',Nachname:'Person',ErweiterteTurnusIDs:[]},
  {ID:'two',Vorname:'Zweite',Nachname:'Person',ErweiterteTurnusIDs:['adv']}]},
  h:s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'),
+ gaTrainingUpcoming:()=>false,gaTrainingTimestamp:()=>0,gaTrainerTime:s=>String(s||''),
+ by:(items,id)=>(items||[]).find(x=>x.ID===id),role:()=> 'Organisator Erweiterte Ausbildung',
  gaMetric:(n,label)=>`${n} ${label}`,document:{getElementById:()=>null}});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','admin-ui.js'),'utf8'),ctx,{filename:'admin-ui.js'});
 vm.runInContext(source,ctx,{filename:'organizer-ui.js'});
 const overview=ctx.gaOrganizerOverview(),list=ctx.gaOrganizerReady();
-assert(overview.includes('1 offen'));assert(overview.includes('data-view="advReady"'));
+assert(overview.includes('1 noch ohne erweiterten Turnus'));assert(overview.includes('data-view="advReady"'));
 assert(list.includes('Erste Person'));assert(list.includes('Zweite Person'));assert(list.includes('Noch nicht zugeordnet'));
 assert(list.includes('Bereits zugeordnet'));assert(list.includes('name="MitgliedID" value="one"'));
 assert(list.includes('Erweiterter Turnus')||list.includes('Turnus auswählen'));

@@ -41,30 +41,86 @@ function gaMenuHtml(tabs){
  return out.join('');
 }
 const gaMetric=(n,label,help)=>'<div class="ga-kpi"><strong>'+h(n)+'</strong><span>'+h(label)+'</span><small>'+h(help||'')+'</small></div>';
-function overview(){
- const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
- const qs=STATE.qualifikationen||[],pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
- const activeMemberIds=new Set(members.map(m=>m.ID));
- const checks=(STATE.checks||[]).filter(c=>activeMemberIds.has(c.MitgliedID)&&c.Status==='Offen');
+// Gemeinsame, rein darstellende Bausteine für die beiden Leitungs-Startseiten.
+const gaHomeStat=(n,label,help)=>'<div class="ga-trainer-stat"><strong>'+h(n)+'</strong><span>'+h(label)+'</span><small>'+h(help)+'</small></div>';
+function gaHomeShortcuts(items){
+ return items.map(([view,icon,label,help])=>'<button type="button" class="ga-trainer-shortcut" data-view="'+h(view)+'">'+
+  '<span class="ga-trainer-shortcut-icon" aria-hidden="true">'+h(icon)+'</span><span><strong>'+h(label)+'</strong><small>'+h(help)+'</small></span>'+
+  '<span class="ga-trainer-arrow" aria-hidden="true">›</span></button>').join('');
+}
+function gaHomeUpcoming(now){
+ return (STATE.termine||[]).filter(t=>gaTrainingUpcoming(t,now)).slice()
+  .sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn));
+}
+function gaHomeAppointments(upcoming){
+ return upcoming.slice(0,4).map(t=>{
+  const course=by(STATE.kurse||[],t.KursID),turnus=by(STATE.turnusse||[],t.TurnusID);
+  return '<article class="ga-trainer-appointment"><div class="ga-trainer-calendar" aria-hidden="true">📅</div><div class="ga-trainer-appointment-main">'+
+   '<p class="ga-trainer-when">'+h(gaTrainerTime(t.Beginn))+'</p><h3>'+h(course?.Titel||'Ausbildung')+'</h3>'+
+   '<p class="ga-trainer-detail">'+h([turnus?.Bezeichnung,t.Ort||'Ort folgt'].filter(Boolean).join(' · '))+'</p></div>'+
+   '<button type="button" class="smallbtn" data-training-open="'+h(t.ID)+'">Kurs öffnen</button></article>';
+ }).join('')||'<p class="ga-trainer-empty">Derzeit sind keine kommenden Ausbildungstermine eingetragen.</p>';
+}
+function gaHomeNoticeList(unread){
+ return unread.slice(0,3).map(n=>'<div class="ga-trainer-notice"><span class="ga-trainer-notice-dot" aria-hidden="true"></span><div><strong>'+h(n.Titel||'Mitteilung')+
+  '</strong><small>'+h(gaTrainerTime(n.ErstelltAm))+'</small></div></div>').join('')||'<p class="ga-trainer-empty">Du hast keine ungelesenen Benachrichtigungen.</p>';
+}
+function gaHomeTask(view,count,label,detail){
+ return '<button type="button" class="ga-home-task" data-view="'+h(view)+'"><span class="ga-home-task-count '+(Number(count)>0?'has-items':'')+'">'+h(count)+'</span>'+
+  '<span><strong>'+h(label)+'</strong><small>'+h(detail)+'</small></span><span aria-hidden="true">›</span></button>';
+}
+function overview(now=Date.now()){
+ const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),ids=new Set(members.map(m=>m.ID));
+ const qs=(STATE.qualifikationen||[]).filter(q=>ids.has(q.MitgliedID));
+ const checks=(STATE.checks||[]).filter(c=>ids.has(c.MitgliedID)&&c.Status==='Offen');
  const openMembers=new Set(checks.map(c=>c.MitgliedID));
- const qbad=qs.filter(q=>!q.GABAbgeschlossen).length,good=qs.filter(q=>q.GABAbgeschlossen).length;
- const due=(STATE.termine||[]).filter(t=>gaTrainingUpcoming(t)).sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn)).slice(0,4);
- const attention=qs.filter(q=>!q.GABAbgeschlossen||q.ErsteHilfeStatus!=='Bestätigt').slice(0,6);
+ const pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
+ const proofs=(STATE.ersteHilfeNachweise||[]).filter(p=>p.Status==='Eingereicht'&&ids.has(p.MitgliedID));
+ const reports=(STATE.meldungen||[]).filter(m=>['Offen','In Bearbeitung'].includes(m.Status));
+ const upcoming=gaHomeUpcoming(now),unread=(STATE.benachrichtigungen||[]).filter(n=>!n.GelesenAm);
+ const good=qs.filter(q=>q.GABAbgeschlossen).length,qbad=qs.filter(q=>!q.GABAbgeschlossen).length;
+ const attention=qs.filter(q=>!q.GABAbgeschlossen||q.ErsteHilfeStatus!=='Bestätigt');
+ const first=String(STATE.user?.Name||'').trim().split(/\s+/)[0]||'Ausbildungsleitung';
  const shortcuts=[
- ['members','Teilnehmer verwalten','users-round'],['checks','Checklisten bearbeiten','list-checks'],['qualifications','GAB & Qualifikationen','award'],['projects','Module zur Kontrolle','clipboard-check'],['terms','Ausbildungstermine','calendar-days']
+  ['members','👥','Teilnehmer verwalten','Mitglieder und Turnuszuordnung'],
+  ['checks','☑️','Checklisten','Offene Punkte bearbeiten'],
+  ['qualifications','🎓','GAB & Qualifikationen','Ausbildungsstände und Nachweise'],
+  ['projects','📝','Kursprojekte','Module bearbeiten und freigeben'],
+  ['terms','📅','Termine planen','Ausbildungen anlegen und verwalten'],
+  ['attendance','🚒','Ausbildung durchführen','Kurse öffnen und Anwesenheit erfassen'],
+  ['quizzes','✅','Quizverwaltung','Wissenstests und Ergebnisse'],
+  ['messages','✉️','Nachrichten','Mitglieder und Team informieren']
  ];
- return '<div class="ga-admin-intro"><div><span>FEUERWEHR ST. PÖLTEN-STADT</span><h2>Ausbildung im Überblick</h2>'+
- '<p>Die wichtigsten offenen Punkte und Ausbildungsstände – ohne endlose Tabellen.</p></div><span class="ga-dashboard-count">'+members.length+' aktive Mitglieder</span></div>'+
- '<div class="ga-kpis">'+gaMetric(good,'GAB bestätigt','Abgeschlossen')+gaMetric(qbad,'GAB noch offen','Freigabe prüfen')+
- gaMetric(openMembers.size,'Mitglieder mit Aufgaben',checks.length+' offene Checklistenpunkte')+
- gaMetric(pending.length,'Module zur Prüfung','Freigaben ausständig')+'</div>'+
- '<section class="panel"><h2>Schnellzugriff</h2><div class="ga-action-grid">'+shortcuts.map(x=>'<button type="button" data-view="'+x[0]+'">'+h(x[1])+'<span>Öffnen ›</span></button>').join('')+'</div></section>'+
- '<div class="ga-admin-two"><section class="panel"><div class="row between"><h2>Ausbildungsstand prüfen</h2><button type="button" data-view="qualifications" class="smallbtn">Alle ansehen</button></div>'+
- (attention.length?attention.map(q=>'<div class="ga-dense-row"><div><strong>'+h(q.Name)+'</strong><small>'+h(q.GABAbgeschlossen?'GAB bestätigt · Erste Hilfe prüfen':q.GABHinweis||'GAB offen')+'</small></div>'+
- '<button type="button" class="smallbtn" data-go-qual="'+h(q.MitgliedID)+'">Ansehen</button></div>').join(''):'<p class="muted">Keine offenen Hinweise bei den aktiven Mitgliedern.</p>')+'</section>'+
- '<section class="panel"><div class="row between"><h2>Nächste Ausbildungen</h2><button type="button" data-view="terms" class="smallbtn">Termine öffnen</button></div>'+
- (due.length?due.map(t=>'<div class="ga-dense-row"><div><strong>'+h(by(STATE.kurse,t.KursID)?.Titel||'Kurs')+'</strong>'+
- '<small>'+dt(t.Beginn)+' · '+h(t.Ort||'Ort folgt')+'</small></div></div>').join(''):'<p class="muted">Derzeit sind keine kommenden Termine eingetragen.</p>')+'</section></div>';
+ const more=[['courses','📚','Kurskatalog','Inhalte und Unterlagen'],
+  ['trainingReports','📊','Tätigkeitsberichte','Berichte und FDISK-Auszüge'],
+  ['users','🔐','Zugänge & Rollen','Konten verwalten'],['rights','🛠️','Ausbilderrechte','Berechtigungen vergeben'],
+  ['reports','💡','Mängel & Ideen','Rückmeldungen bearbeiten'],['pushadmin','🔔','Push-Steuerung','Benachrichtigungen verwalten'],
+  ['abschnitt','🧭','Abschnittsmodule','Block A und B dokumentieren'],['reviews','⭐','Kursbewertungen','Rückmeldungen ansehen']];
+ const attentionHtml=attention.slice(0,4).map(q=>'<div class="ga-trainer-appointment"><div class="ga-trainer-appointment-main"><h3>'+h(q.Name||'Mitglied')+'</h3>'+
+  '<p class="ga-trainer-detail">'+h(q.GABAbgeschlossen?'GAB bestätigt · Erste Hilfe prüfen':q.GABHinweis||'GAB noch offen')+'</p></div>'+
+  '<button type="button" class="smallbtn" data-go-qual="'+h(q.MitgliedID)+'">Ansehen</button></div>').join('');
+ return '<div class="ga-trainer-home ga-lead-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · AUSBILDUNGSLEITUNG</p>'+
+  '<h2>Servus, '+h(first)+'!</h2><p>Deine Ausbildung im Überblick – von den Teilnehmern bis zu den nächsten Kursen.</p>'+
+  '<button type="button" class="ga-trainer-hero-button" data-view="members">Teilnehmer verwalten <span aria-hidden="true">→</span></button></div>'+
+  '<div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
+  '<div class="ga-trainer-stats ga-home-stats">'+gaHomeStat(members.length,'Aktive Mitglieder','In allen Turnussen')+
+   gaHomeStat(checks.length,'Offene Checklistenpunkte',openMembers.size+' Mitglieder mit Aufgaben')+
+   gaHomeStat(pending.length,'Module zur Prüfung','Kursprojekte zur Freigabe')+
+   gaHomeStat(upcoming.length,'Kommende Termine','GAB und erweiterte Ausbildung')+'</div>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">SCHNELLZUGRIFF</p><h2>Was möchtest du tun?</h2></div></div>'+
+  '<div class="ga-trainer-shortcuts">'+gaHomeShortcuts(shortcuts)+'</div><details class="ga-home-more"><summary>Weitere Funktionen anzeigen</summary><div class="ga-trainer-shortcuts">'+gaHomeShortcuts(more)+'</div></details></section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">AUSBILDUNGSPLAN</p><h2>Nächste Termine</h2><p>Geplante Ausbildungen in beiden Bereichen.</p></div><button type="button" class="smallbtn" data-view="terms">Alle öffnen</button></div>'+
+  gaHomeAppointments(upcoming)+(upcoming.length>4?'<p class="ga-trainer-footnote">'+h(upcoming.length-4)+' weitere geplante Termine.</p>':'')+'</section>'+
+  '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">JETZT IM BLICK</p><h2>Offene Aufgaben</h2><p>Direkt zu den Bereichen, die Aufmerksamkeit brauchen.</p></div></div>'+
+  '<div class="ga-home-tasks">'+gaHomeTask('checks',checks.length,'Checklistenpunkte',openMembers.size+' Mitglieder betroffen')+
+  gaHomeTask('projects',pending.length,'Kursprojekte','Zur Prüfung eingereicht')+
+  gaHomeTask('qualifications',proofs.length,'Erste-Hilfe-Nachweise','Eingereicht und noch zu prüfen')+
+  gaHomeTask('reports',reports.length,'Mängel & Ideen','Offen oder in Bearbeitung')+'</div></section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2><p>'+h(unread.length)+' ungelesen · letzte 100 Mitteilungen</p></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
+  gaHomeNoticeList(unread)+'</section></div>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">AUSBILDUNGSSTAND</p><h2>GAB & Qualifikationen</h2><p>'+h(good)+' GAB abgeschlossen · '+h(qbad)+' noch offen</p></div><button type="button" class="smallbtn" data-view="qualifications">Alle ansehen</button></div>'+
+  (attentionHtml||'<p class="ga-trainer-empty">Keine offenen Hinweise bei aktiven Mitgliedern.</p>')+
+  (attention.length>4?'<p class="ga-trainer-footnote">'+h(attention.length-4)+' weitere Mitglieder in der Qualifikationsübersicht.</p>':'')+'</section></div>';
 }
 function gaCheckSelect(row){
  return '<form data-form="check" data-id="'+h(row.ID)+'" class="ga-task-form"><div><strong>'+h(by(STATE.checklistenpunkte,row.PunktID)?.Titel||'Checklistenpunkt')+'</strong>'+
