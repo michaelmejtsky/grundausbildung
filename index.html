@@ -44,6 +44,16 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 @media(max-width:840px){.ga-review-grid,.ga-member-hero,.ga-qualification-grid{grid-template-columns:1fr}.ga-review-banner{align-items:flex-start}.ga-review-banner h2{font-size:22px}.ga-member-hero{padding:21px}.ga-member-hero h2{font-size:26px}.ga-member-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.ga-member-stat{padding:11px}.ga-member-stat strong{font-size:24px}.ga-member-stat span,.ga-member-stat small{font-size:11px}.ga-next-course{grid-template-columns:1fr;gap:9px}.ga-next-date{text-align:left}.ga-review-panel .row h2{font-size:22px}}
 @media(max-width:420px){.ga-member-stats{grid-template-columns:1fr}.ga-review-banner{flex-direction:column}.ga-member-fold>summary{padding:15px}.ga-fold-body{padding:12px}}
 
+/* Persönlicher Startbereich für Ausbilder. */
+.ga-trainer-home{max-width:1200px;margin:0 auto}.ga-trainer-hero{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:center;gap:22px;padding:30px 32px;border-radius:21px;background:linear-gradient(115deg,#10283f 2%,#194a70 70%,#24638a);color:#fff;box-shadow:0 12px 30px #153c5c1c}
+.ga-trainer-hero:before{content:"";position:absolute;left:0;top:26px;bottom:26px;width:5px;border-radius:0 8px 8px 0;background:#df5960}.ga-trainer-eyebrow{margin:0 0 11px;color:#c2e0f6;font-size:11px;font-weight:800;letter-spacing:.12em}.ga-trainer-hero h2{margin:0 0 8px;font-size:clamp(26px,3.5vw,36px);line-height:1.15}.ga-trainer-hero p:not(.ga-trainer-eyebrow){max-width:570px;margin:0;color:#dcebf7;line-height:1.55}.ga-trainer-hero-mark{display:grid;place-items:center;flex:none;width:82px;height:82px;border:1px solid #ffffff35;border-radius:23px;background:#ffffff17;font-size:40px}.ga-trainer-hero-button{display:inline-flex;align-items:center;gap:15px;margin-top:20px;padding:11px 15px;border:0;border-radius:10px;background:#fff;color:#173d5d;font-weight:800}.ga-trainer-hero-button:hover{background:#eaf4fc}
+.ga-trainer-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:15px 0 20px}.ga-trainer-stat{min-width:0;padding:17px 19px;border:1px solid #dce6ef;border-radius:15px;background:#fff;display:flex;flex-direction:column;gap:5px}.ga-trainer-stat strong{font-size:29px;line-height:1;color:#173851}.ga-trainer-stat span{font-size:13px;font-weight:800;line-height:1.35}.ga-trainer-stat small{color:#647b8e;font-size:11px;line-height:1.4}
+.ga-trainer-panel{min-width:0;padding:21px;margin:15px 0;border:1px solid #dce6ef;border-radius:17px;background:#fff;box-shadow:0 4px 15px #18344b08}.ga-trainer-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}.ga-trainer-panel-head h2{margin:0;font-size:20px;line-height:1.25;color:#17344d}.ga-trainer-panel-head p:not(.ga-trainer-kicker){margin:5px 0 0;color:#647b8e;font-size:13px;line-height:1.45}.ga-trainer-kicker{margin:0 0 6px;color:#3473a8;font-size:10px;font-weight:850;letter-spacing:.12em}.ga-trainer-panel-head button{flex:none;white-space:nowrap}
+.ga-trainer-shortcuts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.ga-trainer-shortcut{display:flex;align-items:center;gap:12px;min-width:0;padding:14px;border:1px solid #dce9f3;border-radius:13px;background:#f7fbff;color:#173c59;text-align:left}.ga-trainer-shortcut:hover{background:#eaf4fc;border-color:#a7cce6}.ga-trainer-shortcut>span:nth-child(2){flex:1;min-width:0}.ga-trainer-shortcut strong,.ga-trainer-shortcut small{display:block}.ga-trainer-shortcut strong{font-size:14px;line-height:1.3}.ga-trainer-shortcut small{margin-top:4px;font-size:12px;line-height:1.4;color:#617b90}.ga-trainer-shortcut-icon{display:grid;place-items:center;width:39px;height:39px;flex:none;border-radius:11px;background:#e7f2fc;font-size:19px}.ga-trainer-arrow{color:#6f91aa;font-size:24px;line-height:1}.ga-trainer-shortcut:focus-visible,.ga-trainer-hero-button:focus-visible{outline:3px solid #75b5ec;outline-offset:2px}
+.ga-trainer-appointment{display:flex;align-items:center;gap:13px;padding:14px 0;border-top:1px solid #e5edf3}.ga-trainer-appointment-main{flex:1;min-width:0}.ga-trainer-appointment h3{margin:3px 0 4px;color:#1a3850;font-size:16px;overflow-wrap:anywhere}.ga-trainer-calendar{display:grid;place-items:center;width:43px;height:43px;flex:none;border-radius:12px;background:#eaf4fc;font-size:21px}.ga-trainer-when{margin:0;color:#246494;font-size:12px;font-weight:800}.ga-trainer-detail{margin:0;color:#6a8194;font-size:12px;line-height:1.45}.ga-trainer-badge{display:inline-block;margin-top:7px;padding:4px 8px;border-radius:999px;background:#e9f4ed;color:#27623f;font-size:11px;font-weight:700}.ga-trainer-appointment>button{flex:none}.ga-trainer-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.ga-trainer-columns>.ga-trainer-panel{margin:0}.ga-trainer-columns>.ga-trainer-panel:last-child:nth-child(odd){grid-column:1/-1}
+.ga-trainer-module,.ga-trainer-notice,.ga-trainer-project{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-top:1px solid #e5edf3}.ga-trainer-module strong,.ga-trainer-module small,.ga-trainer-notice strong,.ga-trainer-notice small{display:block}.ga-trainer-module strong,.ga-trainer-notice strong,.ga-trainer-project strong{font-size:14px;line-height:1.4;overflow-wrap:anywhere}.ga-trainer-module small,.ga-trainer-notice small,.ga-trainer-project span{margin-top:4px;color:#687f92;font-size:12px}.ga-trainer-module p{margin:6px 0 0;color:#536e83;font-size:12px;line-height:1.45;overflow-wrap:anywhere}.ga-trainer-notice-dot{width:8px;height:8px;margin-top:6px;flex:none;border-radius:50%;background:#cf5155}.ga-trainer-project{justify-content:space-between;flex-wrap:wrap}.ga-trainer-project span{white-space:nowrap}.ga-trainer-review{padding:10px 12px;border-radius:10px;background:#fff6e7;color:#78511d;font-size:13px}.ga-trainer-empty{margin:0;padding:16px;border:1px dashed #c9d8e4;border-radius:12px;background:#f9fbfd;color:#647b8e;font-size:13px;line-height:1.5}.ga-trainer-footnote{margin:10px 0 0;color:#687f92;font-size:12px;line-height:1.45}
+@media(max-width:680px){.ga-trainer-hero{padding:23px 21px}.ga-trainer-hero-mark{width:55px;height:55px;border-radius:16px;font-size:28px}.ga-trainer-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ga-trainer-stat:last-child{grid-column:1/-1}.ga-trainer-stat{padding:14px}.ga-trainer-stat strong{font-size:25px}.ga-trainer-panel{padding:17px}.ga-trainer-columns{grid-template-columns:1fr;gap:12px}.ga-trainer-columns>.ga-trainer-panel:last-child:nth-child(odd){grid-column:auto}.ga-trainer-shortcuts{grid-template-columns:1fr}.ga-trainer-appointment{flex-wrap:wrap}.ga-trainer-appointment>button{margin-left:55px}}
+@media(max-width:380px){.ga-trainer-hero-mark{display:none}.ga-trainer-panel-head{align-items:flex-start}.ga-trainer-panel-head h2{font-size:18px}.ga-trainer-appointment>button{margin-left:0}}
 </style><link rel="stylesheet" href="./admin-ui.css"></head><body>
 <div id="login" class="login-wrap"><div class="login-card"><div class="logo">🚒</div><h1>Grundausbildung</h1><p class="sub">Ausbildungsplattform · Feuerwehr St. Pölten Stadt</p><form id="loginForm"><label>E-Mail-Adresse</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><label>Passwort</label><input type="password" name="password" autocomplete="current-password" required><div id="loginError" class="hidden error"></div><label class="inline-check ga-stay-logged"><input type="checkbox" name="remember" value="JA"> 30 Tage angemeldet bleiben</label><p class="small muted" style="margin:6px 0 11px">Nur auf deinem eigenen Gerät aktivieren. Beim Abmelden wird die Sitzung beendet.</p><button class="primary full" style="margin-top:8px" type="submit">Anmelden</button></form>
 <details class="ga-forgot-panel"><summary>Passwort vergessen?</summary><form id="gaForgotForm"><label>E-Mail-Adresse deines Zugangs</label><input type="email" name="email" autocomplete="username" required placeholder="name@feuerwehr..."><div class="small muted" id="gaForgotResult" role="status"></div><button type="submit" class="secondary full">Reset-Link anfordern</button></form></details>
@@ -245,7 +255,9 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
   });
 }
 initInvite();
-gaRestoreLogin();
+// Angemeldete Nutzer erst wiederherstellen, wenn Navigation und Oberflächen geladen sind.
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',gaRestoreLogin,{once:true});
+else gaRestoreLogin();
 function gaPushFeedback(msg,error=false){
  PUSH_FEEDBACK=String(msg);PUSH_FEEDBACK_ERROR=!!error;
  const el=$('pushActionResult');if(el){el.textContent=PUSH_FEEDBACK;el.className='push-result'+(PUSH_FEEDBACK_ERROR?' bad':'');}
@@ -284,7 +296,7 @@ function navs(){
  ['turnus','Turnusse'],['advQual','Qualifikationen'],['questionnaires','Bewertungsfragebögen'],
  ['reviews','Kursbewertungen'],['messages','Nachrichten'],['reports','Mängel & Ideen']
  ]:trainer?[
- ['courses','Kurskatalog'],['projects','Kursprojekte'],
+ ['trainerHome','Übersicht'],['courses','Kurskatalog'],['projects','Kursprojekte'],
  ...(can.KurseGestalten||can.KurseBearbeiten?[['quizzes','Quizverwaltung']]:[]),
  ...(can.TerminePlanen?[['terms','Termine planen']]:[]),
  ['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['freeActivities','Freie Tätigkeiten'],['reports','Mängel & Ideen'],
@@ -298,7 +310,7 @@ function navs(){
  return personal.concat([['notifications','Benachrichtigungen']]);
 }
 function title(){return ({
- advOverview:'Erweiterte Übersicht',advMembers:'Teilnehmer & Gäste',advInvite:'Teilnehmer einladen',advQual:'Qualifikationen der erweiterten Ausbildung',overview:'Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
+ advOverview:'Erweiterte Übersicht',advMembers:'Teilnehmer & Gäste',advInvite:'Teilnehmer einladen',advQual:'Qualifikationen der erweiterten Ausbildung',overview:'Übersicht',trainerHome:'Meine Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',abschnitt:'Abschnittsmodule A/B',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
@@ -311,8 +323,70 @@ function gaCoursePrivacyBanner(){
  const current=parts.length===3&&(parts[0]>1||parts[0]===1&&(parts[1]>13||parts[1]===13&&parts[2]>=1));
  return current?'':'<div class="notice">⚠️ Der verbundene Server liefert Kursunterlagen möglicherweise noch an Teilnehmer. Bitte Code.gs 1.13.1 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</div>';
 }
+function gaTrainerTime(value){
+ const time=gaTrainingTimestamp(value);
+ if(!Number.isFinite(time))return String(value||'').replace('T',' ');
+ return new Intl.DateTimeFormat('de-AT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(time)).replace(',',' ·')+' Uhr';
+}
+function gaTrainerOverview(now=Date.now()){
+ if(role()!=='Ausbilder')return '';
+ const user=STATE.user||{},rights=STATE.rechte||{},courses=STATE.kurse||[],projects=STATE.kursProjekte||[];
+ const plans=STATE.kursPlanung?.kurse,planAvailable=!!plans&&typeof plans==='object';
+ const planIncomplete=planAvailable&&Object.values(plans).some(p=>p?.Fehler);
+ const assigned=planAvailable?courses.filter(c=>c.Aktiv==='JA'&&Array.isArray(plans[c.ID]?.VerantwortlicheIDs)&&plans[c.ID].VerantwortlicheIDs.includes(user.ID)):[];
+ const assignedIds=new Set(assigned.map(c=>c.ID));
+ const upcoming=(STATE.termine||[]).filter(t=>gaTrainingUpcoming(t,now))
+  .slice().sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn));
+ const unread=(STATE.benachrichtigungen||[]).filter(n=>!n.GelesenAm);
+ const mine=projects.filter(p=>p.ErstelltVon===user.ID&&['Neu','In Ausarbeitung','Zurück zur Bearbeitung','Zur Prüfung'].includes(p.Status));
+ const review=rights.KurseFreigeben?projects.filter(p=>p.Status==='Zur Prüfung'):[];
+ const first=String(user.Name||'').trim().split(/\s+/)[0]||'Ausbilder';
+ const stat=(n,label,help)=>'<div class="ga-trainer-stat"><strong>'+h(n)+'</strong><span>'+h(label)+'</span><small>'+h(help)+'</small></div>';
+ const shortcuts=[['attendance','📋','Ausbildung durchführen','Kurs öffnen und Anwesenheit erfassen'],
+  ['courses','📚','Kurskatalog','Inhalte und Unterlagen ansehen'],
+  ['trainingReports','📊','Tätigkeitsberichte','Berichte und FDISK-Auszüge öffnen']];
+ if(rights.KurseGestalten||rights.KurseFreigeben||mine.length)shortcuts.push(['projects','📝','Kursprojekte','Module ausarbeiten und prüfen']);
+ if(rights.KurseGestalten||rights.KurseBearbeiten)shortcuts.push(['quizzes','✅','Quizverwaltung','Wissenstests verwalten']);
+ if(rights.TerminePlanen)shortcuts.push(['terms','📅','Termine planen','Ausbildungen anlegen und verwalten']);
+ const shortcutHtml=shortcuts.map(([view,icon,label,help])=>'<button type="button" class="ga-trainer-shortcut" data-view="'+view+'"><span class="ga-trainer-shortcut-icon" aria-hidden="true">'+icon+'</span><span><strong>'+h(label)+'</strong><small>'+h(help)+'</small></span><span class="ga-trainer-arrow" aria-hidden="true">›</span></button>').join('');
+ const appointmentHtml=upcoming.slice(0,4).map(t=>{
+  const course=by(courses,t.KursID),turnus=by(STATE.turnusse||[],t.TurnusID);
+  return '<article class="ga-trainer-appointment"><div class="ga-trainer-calendar" aria-hidden="true">📅</div><div class="ga-trainer-appointment-main">'+
+   '<p class="ga-trainer-when">'+h(gaTrainerTime(t.Beginn))+'</p><h3>'+h(course?.Titel||'Ausbildung')+'</h3>'+
+   '<p class="ga-trainer-detail">'+h([turnus?.Bezeichnung,t.Ort||'Ort folgt'].filter(Boolean).join(' · '))+'</p>'+
+   (assignedIds.has(t.KursID)?'<span class="ga-trainer-badge">Deine Modulzuständigkeit</span>':'')+'</div>'+
+   '<button type="button" class="smallbtn" data-training-open="'+h(t.ID)+'">Kurs öffnen</button></article>';
+ }).join('');
+ const moduleHtml=assigned.slice(0,4).map(c=>{
+  const note=String(plans[c.ID]?.MaterialNotiz||'').replace(/\s+/g,' ').trim();
+  return '<div class="ga-trainer-module"><div><strong>'+h(c.Titel||'Modul')+'</strong><small>'+h(c.Bereich||'Ausbildung')+'</small>'+
+   (note?'<p>Material: '+h(note.length>110?note.slice(0,107)+'…':note)+'</p>':'')+'</div></div>';
+ }).join('');
+ const moduleMessage=!planAvailable?'Die Modulzuständigkeiten sind derzeit noch nicht verfügbar.':
+  planIncomplete?'Ein Teil der Modulzuständigkeiten muss von der Ausbildungsleitung geprüft werden.':
+  'Du bist derzeit keinem Modul als zuständig zugeordnet.';
+ const noticeHtml=unread.slice(0,3).map(n=>'<div class="ga-trainer-notice"><span class="ga-trainer-notice-dot" aria-hidden="true"></span><div><strong>'+h(n.Titel||'Mitteilung')+'</strong><small>'+h(gaTrainerTime(n.ErstelltAm))+'</small></div></div>').join('');
+ const projectHtml=mine.slice(0,3).map(p=>'<div class="ga-trainer-project"><strong>'+h(p.Titel||'Kursprojekt')+'</strong><span>'+h(p.Status||'In Bearbeitung')+'</span></div>').join('');
+ const projectPanel=(rights.KurseGestalten||rights.KurseFreigeben||mine.length)?
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">KURSE ENTWICKELN</p><h2>Kursprojekte</h2></div><button type="button" class="smallbtn" data-view="projects">Öffnen</button></div>'+
+  (review.length?'<p class="ga-trainer-review">'+h(review.length)+' '+(review.length===1?'Modul wartet':'Module warten')+' auf Prüfung.</p>':'')+
+  (projectHtml||'<p class="ga-trainer-empty">Keine eigenen offenen Kursprojekte.</p>')+'</section>':'';
+ return '<div class="ga-trainer-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · AUSBILDER</p><h2>Servus, '+h(first)+'!</h2><p>Hier findest du Termine, deine Module und alles für die nächste Ausbildung.</p><button type="button" class="ga-trainer-hero-button" data-view="attendance">Ausbildung öffnen <span aria-hidden="true">→</span></button></div><div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
+  '<div class="ga-trainer-stats">'+stat(upcoming.length,'Kommende Termine','Alle geplanten Ausbildungen')+
+   stat(!planAvailable||planIncomplete?'–':assigned.length,'Meine Modulzuständigkeiten',!planAvailable?'Noch nicht verfügbar':planIncomplete?'Prüfung erforderlich':'Aktive Module mit Zuordnung')+
+   stat(unread.length,'Ungelesene Mitteilungen','Unter deinen letzten 100')+'</div>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">SCHNELLZUGRIFF</p><h2>Was möchtest du tun?</h2></div></div><div class="ga-trainer-shortcuts">'+shortcutHtml+'</div></section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">AUSBILDUNGSPLAN</p><h2>Nächste Termine</h2><p>Alle geplanten Ausbildungen im Team.</p></div><button type="button" class="smallbtn" data-view="attendance">Alle öffnen</button></div>'+
+   (appointmentHtml||'<p class="ga-trainer-empty">Derzeit sind keine kommenden Ausbildungstermine eingetragen.</p>')+
+   (upcoming.length>4?'<p class="ga-trainer-footnote">'+h(upcoming.length-4)+' weitere geplante Termine in der Durchführung.</p>':'')+'</section>'+
+  '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">DEINE VORBEREITUNG</p><h2>Meine Module</h2><p>Module, bei denen du als zuständig eingetragen bist.</p></div><button type="button" class="smallbtn" data-view="courses">Kurskatalog</button></div>'+
+   (moduleHtml||'<p class="ga-trainer-empty">'+h(moduleMessage)+'</p>')+(moduleHtml&&planIncomplete?'<p class="ga-trainer-footnote">'+h(moduleMessage)+'</p>':'')+
+   (assigned.length>4?'<p class="ga-trainer-footnote">'+h(assigned.length-4)+' weitere zugeordnete Module im Kurskatalog.</p>':'')+'</section>'+
+  '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
+   (noticeHtml||'<p class="ga-trainer-empty">Du hast keine ungelesenen Benachrichtigungen.</p>')+'</section>'+projectPanel+'</div></div>';
+}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
+ const root=$('content');root.innerHTML=VIEW==='trainerHome'?gaTrainerOverview():VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -1270,4 +1344,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=trainer-start-1"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>

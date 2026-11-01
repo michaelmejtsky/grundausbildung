@@ -23,6 +23,7 @@ function gaMenuHtml(tabs){
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
  ]:trainer?[
+  ['Start',['trainerHome','notifications']],
   ['Ausbildung',['courses','projects','quizzes','terms']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Nachrichten',['reports','reviews','questionnaires','notifications']]
