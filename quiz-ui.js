@@ -40,7 +40,8 @@ function qCourseStatus(courseId,memberId,turnusId){
  const member=memberId?(STATE.mitglieder||[]).find(m=>m.ID===memberId):null;
  const turnus=turnusId||member?.TurnusID||STATE.meMember?.TurnusID||'';
  const allowed=new Set([turnus,...(STATE.erweiterteZuordnungen||[]).filter(x=>x.MitgliedID===memberId).map(x=>x.TurnusID)]);
- const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||allowed.has(t.TurnusID)));
+ const ownAttendance=new Set((STATE.teilnahmen||[]).filter(a=>a.MitgliedID===memberId&&a.Anwesend==='JA').map(a=>a.TerminID));
+ const terms=(STATE.termine||[]).filter(t=>t.KursID===courseId&&t.Status==='Durchgeführt'&&(!turnus||allowed.has(t.TurnusID)||ownAttendance.has(t.ID)));
  const attendedTerms=terms.filter(t=>(STATE.teilnahmen||[]).some(a=>a.MitgliedID===memberId&&a.Anwesend==='JA'&&a.TerminID===t.ID));
  const attended=attendedTerms.length>0;
  const decisions=attendedTerms.map(t=>gaUiValidityDecision(courseId,memberId,'quiz',t.TurnusID));
@@ -344,12 +345,14 @@ function qExam(){
 function qParticipant(){
  if(Q_SESSION)return qExam();
  const assigned=new Set((STATE.kurse||[]).map(c=>c.ID));
+ const allowedTurns=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[])
+  .filter(a=>a.MitgliedID===STATE.meMember?.ID).map(a=>a.TurnusID)]);
  const quizzes=(STATE.quizKurse||[]).filter(c=>c.Aktiv==='JA'&&assigned.has(c.KursID)&&
   (!['exempt','unassigned'].includes(c.GueltigkeitStatus)||(STATE.quizVersuche||[]).some(a=>a.MitgliedID===STATE.meMember?.ID&&a.KursID===c.KursID)));
  const cards=quizzes.map(q=>{
   const course=by(STATE.kurse,q.KursID);
   const eligible=(STATE.teilnahmen||[]).some(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.Anwesend==='JA'&&(STATE.termine||[]).some(t=>
-    t.ID===a.TerminID&&t.KursID===q.KursID&&t.Status==='Durchgeführt'));
+    t.ID===a.TerminID&&t.KursID===q.KursID&&t.Status==='Durchgeführt'&&allowedTurns.has(t.TurnusID)));
   const allAttempts=(STATE.quizVersuche||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID&&a.KursID===q.KursID);
   const attempts=allAttempts.filter(a=>String(a.QuizVersion)===String(q.Version));
   const passed=allAttempts.some(a=>a.Bestanden==='JA'),started=attempts.some(a=>a.Status==='In Bearbeitung');

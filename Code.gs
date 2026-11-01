@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.0',
+  VERSION: '1.13.1',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -511,6 +511,29 @@ function gaApi(method,data,token){
   throw new Error('Unbekannte Aktion.');
 }
 
+/** Teilnehmer erhalten nur eigene Termine und daraus ableitbare persönliche Kurse. */
+function gaPersonalCourseScope_(member,assignments,terms,attendance,attempts,abschnitt){
+ if(!member)return {terms:[],courseIds:new Set(),turnIds:new Set()};
+ const turnIds=new Set([member.TurnusID,...(assignments||[])
+  .filter(a=>a.MitgliedID===member.ID).map(a=>a.TurnusID)].filter(Boolean));
+ const oldTermIds=new Set((attendance||[]).filter(a=>a.MitgliedID===member.ID).map(a=>a.TerminID));
+ const ownAttempts=(attempts||[]).filter(a=>a.MitgliedID===member.ID);
+ ownAttempts.forEach(a=>{if(a.TerminID)oldTermIds.add(a.TerminID);});
+ const ownTerms=(terms||[]).filter(t=>turnIds.has(t.TurnusID)||oldTermIds.has(t.ID));
+ const courseIds=new Set(ownTerms.map(t=>t.KursID).filter(Boolean));
+ ownAttempts.forEach(a=>{if(a.KursID)courseIds.add(a.KursID);});
+ (abschnitt||[]).filter(a=>a.MitgliedID===member.ID&&a.KursID).forEach(a=>courseIds.add(a.KursID));
+ ownTerms.forEach(t=>{if(t.TurnusID)turnIds.add(t.TurnusID);});
+ return {terms:ownTerms,courseIds,turnIds};
+}
+function gaParticipantCourseText_(value){
+ return String(value||'').replace(/(?:https?:\/\/|www\.|(?:drive|docs)\.google\.com\/)[^\s<>"']+/gi,'[Link nur für das Ausbildungsteam]');
+}
+function gaParticipantCourse_(course){
+ return {ID:course.ID,Titel:gaParticipantCourseText_(course.Titel),Bereich:course.Bereich,
+  Inhalt:gaParticipantCourseText_(course.Inhalt),Lernziele:gaParticipantCourseText_(course.Lernziele),Aktiv:course.Aktiv};
+}
+
 /** Selbstdiagnose ohne persönliche Daten Dritter. Beweist, welche Backend-Version der Teilnehmer erreicht. */
 function gaParticipantStatus_(u){
  gaRequire_(u,['Teilnehmer']);
@@ -518,11 +541,11 @@ function gaParticipantStatus_(u){
  if(!member)return {ok:true,backendVersion:GA.VERSION,mitgliedGefunden:false,
   termine:0,kurse:0,qualifikationen:0,nachrichten:0,benachrichtigungen:0,
   hinweis:'Kein eindeutig zugeordnetes aktives Mitglied gefunden. Bitte E-Mail und mögliche doppelte Mitgliedseinträge prüfen.'};
- const turns=gaRows_('Turnusse'),allTerms=gaRows_('Termine'),courses=gaRows_('Kurse');
- const turnIDs=new Set([member.TurnusID,...gaAdvAssignments_().filter(x=>x.MitgliedID===member.ID).map(x=>x.TurnusID)]);
- const terms=allTerms.filter(t=>turnIDs.has(t.TurnusID));
- const allowedCourses=courses.filter(c=>gaBool_(c.Aktiv)&&(
-  turns.some(t=>turnIDs.has(t.ID)&&t.Bereich===c.Bereich)||terms.some(t=>t.KursID===c.ID)));
+ const allTerms=gaRows_('Termine'),courses=gaRows_('Kurse'),assignments=gaAdvAssignments_();
+ const turnIDs=new Set([member.TurnusID,...assignments.filter(x=>x.MitgliedID===member.ID).map(x=>x.TurnusID)]);
+ const scope=gaPersonalCourseScope_(member,assignments,allTerms,gaRows_('Teilnahmen'),
+  gaOptionalRows_('QuizVersuche'),gaOptionalRows_('AbschnittNachweise'));
+ const terms=scope.terms,allowedCourses=courses.filter(c=>scope.courseIds.has(c.ID));
  const visibleMessages=gaRows_('Nachrichten').filter(n=>!n.TurnusID||turnIDs.has(n.TurnusID)||
   n.TurnusID==='M:'+member.ID||(n.TurnusID==='ADV:ALLE'&&gaAdvMemberAllowed_(member)));
  return {ok:true,backendVersion:GA.VERSION,mitgliedGefunden:true,
@@ -554,29 +577,35 @@ function gaState_(u){
  const devices=gaOptionalRows_('PushGeraete'),pushRulesRows=gaOptionalRows_('PushRegeln');
  const assignments=gaAdvAssignments_();
  const extraTurns=own?new Set(assignments.filter(x=>x.MitgliedID===own.ID).map(x=>x.TurnusID)):new Set();
- const ownTerm=own?allTermine.filter(t=>t.TurnusID===own.TurnusID||extraTurns.has(t.TurnusID)):[];
- const ownAttendance=own?gaRows_('Teilnahmen').filter(t=>t.MitgliedID===own.ID):[];
+ const att=gaRows_('Teilnahmen'),ownAttendance=own?att.filter(t=>t.MitgliedID===own.ID):[];
  const ownRatings=own?ratings.filter(r=>r.MitgliedID===own.ID):[];
  const notifications=gaRows_('Benachrichtigungen').filter(n=>n.BenutzerID===u.ID).slice(-100).reverse();
- const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen'),att=gaRows_('Teilnahmen');
+ const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen');
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
  const abschnitt=gaOptionalRows_('AbschnittNachweise');
  const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
  const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
  const predecessors=gaCoursePredecessors_();
  const validity=gaValidityConfig_();
- const visibleTurns=admin||trainer?allTurnusse:own?allTurnusse.filter(t=>t.ID===own.TurnusID||extraTurns.has(t.ID)):[];
- const visibleCourses=admin||trainer?allKurse:own?allKurse.filter(c=>gaBool_(c.Aktiv)&&(
-  visibleTurns.some(t=>t.Bereich===c.Bereich)||ownTerm.some(t=>t.KursID===c.ID))):[];
+ const personalScope=gaPersonalCourseScope_(own,assignments,allTermine,ownAttendance,quizAttempts,abschnitt);
+ const ownTerm=personalScope.terms;
+ const visibleTurns=admin||trainer?allTurnusse:allTurnusse.filter(t=>personalScope.turnIds.has(t.ID));
+ const visibleCourses=admin||trainer?allKurse:
+  allKurse.filter(c=>personalScope.courseIds.has(c.ID)).map(gaParticipantCourse_);
+ const visibleCourseIds=new Set(visibleCourses.map(c=>c.ID));
  const visibleProjects=admin?projects:trainer?projects.filter(x=>x.ErstelltVon===u.ID||rights.KurseGestalten||rights.KurseFreigeben):[];
  const qualifikationen=(admin||trainer?allMembers.filter(m=>gaBool_(m.Aktiv)):own?[own]:[])
   .map(m=>gaQualificationStatus_(m,qrows,reqs,allKurse,allTermine,att,allTurnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors,validity));
+ if(!admin&&!trainer)qualifikationen.forEach(q=>{
+  q.OffeneGABKurse=(q.OffeneGABKurse||[]).map(gaParticipantCourseText_);
+  q.OffeneBSWKurse=(q.OffeneBSWKurse||[]).map(gaParticipantCourseText_);
+ });
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
   turnusse:visibleTurns,
-  // Teilnehmer sehen auch veröffentlichte Pflichtmodule ohne eigenen Termin (z. B. Block A/B im Abschnitt).
-  // Fremde Ausbildungsbereiche bleiben ausgeschlossen, außer bei expliziter Teilnahme/Zuordnung.
+  // Das Ausbildungsteam erhält den Katalog mit Unterlagen. Teilnehmer erhalten
+  // ausschließlich eigene Kursinformationen ohne Präsentations- oder Dokumentenlinks.
   kurse:visibleCourses,
   gueltigkeit:gaValidityVisible_(validity,visibleTurns,visibleCourses,visibleProjects),
   termine:admin||trainer?allTermine:ownTerm,
@@ -597,7 +626,7 @@ function gaState_(u){
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
   eigeneBewertungen:ownRatings,
-  frageboegen:questionnaires.filter(x=>x.Aktiv==='JA'),
+  frageboegen:questionnaires.filter(x=>x.Aktiv==='JA'&&(admin||trainer||!!own&&(x.KursID==='ALLGEMEIN'||visibleCourseIds.has(x.KursID)))),
   offeneBewertungen:participant&&own?ownAttendance.filter(t=>gaBool_(t.Anwesend)).map(t=>allTermine.find(term=>term.ID===t.TerminID)).filter(term=>
     term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
@@ -607,7 +636,7 @@ function gaState_(u){
   erweiterteZuordnungen:(admin||trainer?assignments:own?assignments.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   ausbildungsberichte:trainingReports,
   freieTaetigkeiten:freeActivities,
-  quizKurse:quizCfg.map(c=>{
+  quizKurse:quizCfg.filter(c=>admin||trainer||!!own&&visibleCourseIds.has(c.KursID)).map(c=>{
    const data=gaQuizPublicConfig_(c);
    if(!participant||!own)return data;
    const course=allKurse.find(x=>x.ID===c.KursID);

@@ -305,8 +305,14 @@ function title(){return ({
  attendance:'Ausbildung durchführen',trainingReports:'FDISK-Tätigkeitsberichte',freeActivities:'Freie Tätigkeiten',mine:'Mein Ausbildungsstand',myterms:'Meine Termine',
  tasks:'Aufgaben der Fachverwaltung',notifications:'Benachrichtigungen',pushadmin:'Push-Steuerung'
 })[VIEW]||'Grundausbildung';}
+function gaCoursePrivacyBanner(){
+ if(role()!=='Administrator')return '';
+ const v=String(STATE.version||'').match(/^(\d+)\.(\d+)\.(\d+)/),parts=v?v.slice(1).map(Number):[];
+ const current=parts.length===3&&(parts[0]>1||parts[0]===1&&(parts[1]>13||parts[1]===13&&parts[2]>=1));
+ return current?'':'<div class="notice">⚠️ Der verbundene Server liefert Kursunterlagen möglicherweise noch an Teilnehmer. Bitte Code.gs 1.13.1 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</div>';
+}
 function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaPushOnboardingBanner());}
+ const root=$('content');root.innerHTML=VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -335,7 +341,8 @@ function overview(){
  termCards(STATE.termine.filter(t=>gaTrainingUpcoming(t)).slice().sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn)).slice(0,8))+
  '</section>';
 }
-function courseCard(c){const links=safeLinks(c.Links);return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(c.Inhalt)+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(c.Lernziele)+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':'<p class="muted small">Noch keine Präsentation verlinkt</p>')+''+'</div>'}
+function gaParticipantCourseText(value){return String(value||'').replace(/(?:https?:\/\/|www\.|(?:drive|docs)\.google\.com\/)[^\s<>"']+/gi,'[Link nur für das Ausbildungsteam]');}
+function courseCard(c){const allowed=['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()),links=allowed?safeLinks(c.Links):'';return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(allowed?c.Inhalt:gaParticipantCourseText(c.Inhalt))+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(allowed?c.Lernziele:gaParticipantCourseText(c.Lernziele))+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':allowed?'<p class="muted small">Noch keine Präsentation verlinkt</p>':'')+''+'</div>'}
 function courses(){
  const cards=STATE.kurse.filter(c=>c.Aktiv==='JA');
  const edit=FORM==='course'&&EDIT?by(cards,EDIT):null;
@@ -792,7 +799,6 @@ function mine(){
   '<button type="button" class="smallbtn" data-view="myterms">Alle Termine ansehen</button></div>'+
   (next?'<div class="ga-next-course"><div class="ga-next-date">'+dt(next.Beginn)+'</div>'+
     '<div><h3>'+h(nextCourse?.Titel||'Ausbildungstermin')+'</h3><p class="muted">'+h(next.Ort||'Ort wird noch bekanntgegeben')+'</p>'+
-    (nextCourse?.Links?'<details><summary>Unterlagen öffnen</summary><ul class="url-list">'+safeLinks(nextCourse.Links)+'</ul></details>':'')+
     '</div></div>':'<div class="ga-empty">Aktuell ist noch kein kommender Ausbildungstermin eingetragen.</div>')+'</section>';
  const courseRows=(list,prefix)=>list.length?list.map((title,i)=>
    '<div class="ga-course-row"><span class="ga-course-dot">'+String(i+1).padStart(2,'0')+'</span><span>'+h(title)+'</span><span class="tag warn">Offen</span></div>').join(''):
@@ -826,7 +832,8 @@ function mine(){
 }
 function myterms(){
  const allowed=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
- const all=(STATE.termine||[]).filter(t=>STATE.meMember&&allowed.has(t.TurnusID));
+ const attendanceIds=new Set((STATE.teilnahmen||[]).filter(a=>STATE.meMember&&a.MitgliedID===STATE.meMember.ID).map(a=>a.TerminID));
+ const all=(STATE.termine||[]).filter(t=>STATE.meMember&&(allowed.has(t.TurnusID)||attendanceIds.has(t.ID)));
  const now=Date.now();
  const coming=all.filter(t=>gaTrainingUpcoming(t,now))
   .sort((a,b)=>gaTrainingTimestamp(a.Beginn)-gaTrainingTimestamp(b.Beginn));
@@ -841,11 +848,12 @@ function myterms(){
    '<p class="small muted">'+dt(t.Beginn)+(t.Ende?' bis '+dt(t.Ende):'')+'</p></div>'+
    (attended?qCourseBadge(t.KursID,STATE.meMember.ID,t.TurnusID):'<span class="tag '+(old?'blue':'warn')+'">'+(old?'Vergangen':'Geplant')+'</span>')+'</div>'+
    '<p class="small">📍 '+h(t.Ort||'Ort noch offen')+'</p>'+
-   (course?.Inhalt?'<details class="ga-mini-preview"><summary>Ausbildungsinhalt ansehen</summary><div class="msg ga-readable">'+h(course.Inhalt)+'</div></details>':'')+
-   (course?.Links&&safeLinks(course.Links)?'<details class="ga-mini-preview"><summary>Präsentation und Unterlagen</summary><ul class="url-list">'+safeLinks(course.Links)+'</ul></details>':'')+
+   (course?.Inhalt||course?.Lernziele?'<details class="ga-mini-preview"><summary>Ausbildungsinhalt und Lernziele</summary>'+
+     (course.Inhalt?'<h4>Ausbildungsinhalt</h4><div class="msg ga-readable">'+h(gaParticipantCourseText(course.Inhalt))+'</div>':'')+
+     (course.Lernziele?'<h4>Lernziele</h4><div class="msg ga-readable">'+h(gaParticipantCourseText(course.Lernziele))+'</div>':'')+'</details>':'')+
    '</article>';
  };
- return '<section class="ga-review-banner"><div><span class="ga-eyebrow">DEIN AUSBILDUNGSPLAN</span><h2>Meine Termine</h2><p>Termine, Ausbildungsinhalte und Unterlagen auf einen Blick.</p></div><strong>'+coming.length+' geplant</strong></section>'+
+ return '<section class="ga-review-banner"><div><span class="ga-eyebrow">DEIN AUSBILDUNGSPLAN</span><h2>Meine Termine</h2><p>Termine, Ausbildungsinhalte und Lernziele auf einen Blick.</p></div><strong>'+coming.length+' geplant</strong></section>'+
   '<section class="panel"><h2>Nächste Ausbildungen ('+coming.length+')</h2><div class="ga-project-list">'+
    (coming.length?coming.map(item).join(''):'<div class="ga-empty">Derzeit sind keine zukünftigen Ausbildungstermine geplant.</div>')+
    '</div></section>'+
@@ -1225,4 +1233,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=quiz-laden-2"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
