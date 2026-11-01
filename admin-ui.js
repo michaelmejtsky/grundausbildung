@@ -19,7 +19,7 @@ function gaMenuHtml(tabs){
   ['Organisation',['rights','reports','messages','pushadmin']]
  ]:organizer?[
   ['Start',['advOverview','notifications']],
-  ['Erweiterte Ausbildung',['advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
+  ['Erweiterte Ausbildung',['advReady','advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
  ]:trainer?[

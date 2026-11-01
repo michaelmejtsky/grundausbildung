@@ -70,6 +70,11 @@ let Q_PREVIEW=false,Q_PREVIEW_RESULT=null,Q_PREVIEW_ANSWERS=null,Q_OPEN=0;
 let Q_EDITOR_LOADING=false,Q_EDITOR_READY=false,Q_EDITOR_ERROR='',Q_EDITOR_SEQ=0;
 let Q_RECOVERABLE=null,Q_RECOVERY_BACKED_UP=false;
 const qNew=(typ='single')=>({typ,text:'',options:['','','',''],correct:typ==='multi'?[0,1]:[0],pairs:[['',''],['','']]});
+function qSupportsYesNo(){
+ const parts=String(STATE?.version||'').split('.').map(Number),need=[1,13,3];
+ for(let i=0;i<need.length;i++){if(!Number.isFinite(parts[i]))return false;if(parts[i]!==need[i])return parts[i]>need[i];}
+ return true;
+}
 const qDraftKey=id=>'ga-quiz-draft-v2-'+String(STATE?.user?.ID||'')+'-'+String(id||'');
 const qLetter=n=>String.fromCharCode(65+n);
 function qArchiveDraft(id,draft){
@@ -97,18 +102,20 @@ function qGetDraft(id){
   return drafts.sort((a,b)=>Number(b.saved)-Number(a.saved))[0]||null;
  }catch(e){return null;}
 }
-function qCapture(){
+function qCapture(changingType=null){
  const root=document.getElementById('q-editor-rows');
  if(!root)return;
- Q_ITEMS=Array.from(root.querySelectorAll('[data-qitem]')).map(el=>{
-  const typ=el.querySelector('[data-qtype]').value;
+ Q_ITEMS=Array.from(root.querySelectorAll('[data-qitem]')).map((el,i)=>{
+  const typeSelect=el.querySelector('[data-qtype]');
+  // Beim change-Ereignis zeigt das Select schon den neuen Typ, die Felder aber noch den alten.
+  const typ=typeSelect===changingType?(Q_ITEMS[i]?.typ||typeSelect.value):typeSelect.value;
   const text=el.querySelector('[name=qtext]').value;
   if(typ==='match'){
    const left=Array.from(el.querySelectorAll('[data-qleft]')).map(x=>x.value.trim());
    const right=Array.from(el.querySelectorAll('[data-qright]')).map(x=>x.value.trim());
    return {typ,text,pairs:left.map((value,i)=>[value,right[i]])};
   }
-  if(typ==='tf')return {typ,text,correct:[Number(el.querySelector('[name=qtf]').value)]};
+  if(typ==='tf'||typ==='yn')return {typ,text,correct:[Number(el.querySelector('[name=qtf]').value)]};
   const options=Array.from(el.querySelectorAll('[data-qanswer]')).map(x=>x.value.trim());
   const correct=Array.from(el.querySelectorAll('[data-qcorrect]:checked')).map(x=>Number(x.value));
   return {typ,text,options,correct};
@@ -126,7 +133,8 @@ function qValidity(q){
    return {field:'qright',message:'Die rechten Zuordnungsantworten müssen unterschiedlich sein.'};
   return null;
  }
- if(q.typ==='tf')return [0,1].includes(Number(q.correct?.[0]))?null:{field:'qtf',message:'Bitte Richtig oder Falsch als Lösung auswählen.'};
+ if(q.typ==='yn'&&!qSupportsYesNo())return {field:'qtf',message:'Für Ja / Nein bitte zuerst Code.gs 1.13.3 bereitstellen.'};
+ if(q.typ==='tf'||q.typ==='yn')return [0,1].includes(Number(q.correct?.[0]))?null:{field:'qtf',message:'Bitte die richtige Lösung auswählen.'};
  const answers=q.options||[];
  if(answers.length!==4)return {field:'qanswer',message:'Es sind genau vier Antwortfelder erforderlich.'};
  const empty=answers.findIndex(a=>!String(a).trim());
@@ -159,9 +167,9 @@ function qValidateBeforeSave(){
  }
 }
 function qAnswerHtml(q,i){
- if(q.typ==='tf')return '<div class="q-right-toggle"><label>Welche Aussage ist richtig?</label><select name="qtf">'+
-  '<option value="0" '+(Number(q.correct?.[0]??0)===0?'selected':'')+'>Richtig</option>'+
-  '<option value="1" '+(Number(q.correct?.[0]??0)===1?'selected':'')+'>Falsch</option></select></div>';
+ if(q.typ==='tf'||q.typ==='yn')return '<div class="q-right-toggle"><label>Welche Antwort ist richtig?</label><select name="qtf">'+
+  '<option value="0" '+(Number(q.correct?.[0]??0)===0?'selected':'')+'>'+(q.typ==='yn'?'Ja':'Richtig')+'</option>'+
+  '<option value="1" '+(Number(q.correct?.[0]??0)===1?'selected':'')+'>'+(q.typ==='yn'?'Nein':'Falsch')+'</option></select></div>';
  if(q.typ==='match')return '<div class="q-matching"><div class="q-match-head"><span>Begriff / Links</span><span>Passende Zuordnung / Rechts</span></div>'+
   (q.pairs||[['',''],['','']]).map((pair,j)=>'<div class="q-match-row">'+
    '<input type="text" data-qleft="'+j+'" maxlength="150" placeholder="Begriff '+(j+1)+'" value="'+h(pair[0]||'')+'">'+
@@ -181,14 +189,15 @@ function qEditorRows(){
   return '<details class="q-author-card '+(issue?'q-unfinished':'q-complete')+'" data-qitem="'+i+'" '+(open?'open':'')+'>'+
    '<summary class="q-author-summary"><span class="q-number">'+String(i+1).padStart(2,'0')+'</span>'+
    '<span class="q-author-title"><strong>'+h(q.text||'Neue Frage')+'</strong><small>'+(
-      q.typ==='multi'?'Mehrfachauswahl':q.typ==='tf'?'Richtig / Falsch':q.typ==='match'?'Zuordnung':'Eine richtige Antwort')+'</small></span>'+
+      q.typ==='multi'?'Mehrfachauswahl':q.typ==='tf'?'Richtig / Falsch':q.typ==='yn'?'Ja / Nein':q.typ==='match'?'Zuordnung':'Eine richtige Antwort')+'</small></span>'+
    '<span class="q-status '+(issue?'q-status-warn':'q-status-ok')+'">'+(issue?'Unvollständig':'Fertig')+'</span></summary>'+
    '<div class="q-author-body"><div class="q-item-toolbar"><button type="button" class="smallbtn" data-qmove="-1" '+(i===0?'disabled':'')+'>↑ Hinauf</button>'+
    '<button type="button" class="smallbtn" data-qmove="1" '+(i===Q_ITEMS.length-1?'disabled':'')+'>↓ Hinunter</button>'+
    '<button type="button" class="smallbtn" data-qcopy="1">Duplizieren</button>'+
    '<button type="button" class="smallbtn q-remove" data-qdel="1">Entfernen</button></div>'+
    '<div class="q-author-fields"><label>Fragetyp<select data-qtype="'+i+'">'+
-   [['single','Eine richtige Antwort'],['multi','Mehrere richtige Antworten'],['tf','Richtig / Falsch'],['match','Begriffe zuordnen']].map(a=>
+   [['single','Eine richtige Antwort'],['multi','Mehrere richtige Antworten'],['tf','Richtig / Falsch'],
+    ...((qSupportsYesNo()||q.typ==='yn')?[['yn','Ja / Nein']]:[]),['match','Begriffe zuordnen']].map(a=>
     '<option value="'+a[0]+'" '+(a[0]===q.typ?'selected':'')+'>'+a[1]+'</option>').join('')+'</select></label>'+
    '<label>Fragestellung<textarea name="qtext" rows="2" maxlength="450" placeholder="Was sollen die Teilnehmer beantworten?">'+h(q.text||'')+'</textarea></label>'+
    qAnswerHtml(q,i)+'</div>'+
@@ -249,11 +258,11 @@ function qPreviewPage(){
  const content=Q_ITEMS.map((q,i)=>{
   const selected=answers[i];
   const correctLabel=q.typ==='match'?(q.pairs||[]).map(p=>p[0]+' → '+p[1]).join('; '):
-   (q.correct||[]).map(j=>q.typ==='tf'?(j===0?'Richtig':'Falsch'):q.options?.[j]).join(', ');
+   (q.correct||[]).map(j=>q.typ==='tf'?(j===0?'Richtig':'Falsch'):q.typ==='yn'?(j===0?'Ja':'Nein'):q.options?.[j]).join(', ');
   const choices=q.typ==='match'?'<div class="q-preview-matches">'+q.pairs.map((pair,j)=>
    '<label>'+h(pair[0])+'<select name="pm'+i+'_'+j+'" '+(result?'disabled':'required')+'><option value="">Bitte zuordnen</option>'+
     q.pairs.map((p,k)=>'<option value="'+k+'" '+(selected?.[j]===k?'selected':'')+'>'+h(p[1])+'</option>').reverse().join('')+'</select></label>').join('')+'</div>':
-   (q.typ==='tf'?['Richtig','Falsch']:q.options).map((t,j)=>
+   (q.typ==='tf'?['Richtig','Falsch']:q.typ==='yn'?['Ja','Nein']:q.options).map((t,j)=>
     '<label class="q-preview-choice"><span class="q-choice-letter" aria-hidden="true">'+qLetter(j)+'</span>'+
     '<input name="pa'+i+'" type="'+(q.typ==='multi'?'checkbox':'radio')+'" value="'+j+'" '+
     ((Array.isArray(selected)?selected.includes(j):selected===j)?'checked':'')+' '+(result?'disabled':'')+
@@ -613,11 +622,15 @@ document.getElementById('app')?.addEventListener('input',event=>{
 document.getElementById('app')?.addEventListener('change',event=>{
  const el=event.target.closest('[data-qtype]');
  if(el){
-  qCapture();const i=Number(el.closest('[data-qitem]').dataset.qitem);
+  qCapture(el);const i=Number(el.closest('[data-qitem]').dataset.qitem);
   const previous=Q_ITEMS[i],fresh=qNew(el.value);
+  if(['single','multi'].includes(previous?.typ)&&['single','multi'].includes(el.value)){
+   fresh.options=previous.options;fresh.correct=el.value==='single'?(previous.correct||[]).slice(0,1):(previous.correct||[]);
+  }else if(['tf','yn'].includes(previous?.typ)&&['tf','yn'].includes(el.value))fresh.correct=previous.correct;
   Q_ITEMS[i]={...fresh,text:previous?.text||''};
   Q_OPEN=i;qAutoDraft();qRepaint();return;
  }
+ if(event.target.matches('[data-qitem] [name="qtf"]')){qCapture();qUpdateStats();return;}
  const file=event.target.closest('[data-quiz-import-file]');
  if(file){qLocalImport(file.files?.[0]).catch(e=>tip(e.message,true));}
 });

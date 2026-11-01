@@ -70,12 +70,13 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.12.1</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.13.3</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="gaViewButton" type="button" class="secondary hidden">👁 Ansicht wechseln</button><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><section id="gaViewChooser" class="panel hidden"><h2>Ansicht wechseln</h2><p>Sieh dir die App eines aktiven Kontos an. Diese Vorschau ist schreibgeschützt.</p><label>Konto und Rolle<select id="gaViewAccount"><option value="">Konto auswählen</option></select></label><div class="btnline"><button id="gaViewPreview" type="button" class="primary">Vorschau öffnen</button><button id="gaViewAdvanced" type="button" class="secondary">Erweiterte Ausbildung verwalten</button><button id="gaViewCancel" type="button" class="secondary">Schließen</button></div><p class="small muted">In der Verwaltung der erweiterten Ausbildung arbeitest du weiterhin als Administrator; Änderungen werden gespeichert.</p></section><div id="gaViewBanner" class="notice hidden"></div><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
 let GA_MANUAL_LOGIN_PENDING=false;
+let GA_ADMIN_ADV_VIEW=false,GA_ROLE_PREVIEW='',GA_ADMIN_USERS=[],GA_VIEW_BUSY=false;
 const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 let PUSH_FEEDBACK='',PUSH_FEEDBACK_ERROR=false;
@@ -90,7 +91,7 @@ function gaCountAppVisit(){
  GA_PUSH_ONBOARD_DISMISSED=false;
 }
 function gaPushOnboardingBanner(){
- if(STATE?.user?.Rolle!=='Teilnehmer'||GA_PUSH_ONBOARD_VISITS<2||
+ if(GA_ROLE_PREVIEW||STATE?.user?.Rolle!=='Teilnehmer'||GA_PUSH_ONBOARD_VISITS<2||
   GA_PUSH_ONBOARD_DISMISSED||Number(STATE.pushGeraeteAnzahl||0)>0)return '';
  const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
  const denied=supported&&Notification.permission==='denied';
@@ -283,8 +284,65 @@ if('serviceWorker' in navigator){
  });
 }
 function tip(msg,error=false){let e=$('toast');e.textContent=msg;e.className='toast'+(error?' err':'');clearTimeout(tip.timer);tip.timer=setTimeout(()=>e.classList.add('hidden'),5000);}
-async function api(action,payload={}){return rpc('gaApi',action,payload,TOKEN)}
-async function reload(){STATE=await api('state');render();}
+async function api(action,payload={}){
+ const preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW;
+ if(preview&&!['state','getQuizEdit','participantStatus'].includes(action))throw new Error('Die Rollenvorschau ist schreibgeschützt.');
+ const scoped=preview?{...payload,_gaRolePreview:preview}:advanced?{...payload,_gaAdvancedView:true}:payload;
+ const result=await rpc('gaApi',action,scoped,TOKEN);
+ if(action==='state'&&((preview&&(!result.administratorRollenvorschau||result.user?.ID!==preview))||
+  (advanced&&(!result.administratorErweitert||!result.organisatorErweitert))))
+  throw new Error('Bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
+ return result;
+}
+async function reload(){
+ const token=TOKEN,preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW,next=await api('state');
+ if(token!==TOKEN||preview!==GA_ROLE_PREVIEW||advanced!==GA_ADMIN_ADV_VIEW)return;
+ STATE=next;render();
+}
+function gaUpdateViewControls(){
+ const allowed=role()==='Administrator'||GA_ADMIN_ADV_VIEW||!!GA_ROLE_PREVIEW;
+ if(role()==='Administrator'&&!GA_ADMIN_ADV_VIEW&&!GA_ROLE_PREVIEW)GA_ADMIN_USERS=STATE.benutzer||[];
+ $('gaViewButton').classList.toggle('hidden',!allowed);
+ $('gaViewButton').textContent=(GA_ADMIN_ADV_VIEW||GA_ROLE_PREVIEW)?'← Zurück zur Verwaltung':'👁 Ansicht wechseln';
+ const banner=$('gaViewBanner');banner.classList.toggle('hidden',!GA_ADMIN_ADV_VIEW&&!GA_ROLE_PREVIEW);
+ banner.textContent=GA_ROLE_PREVIEW?'Schreibgeschützte Vorschau: '+STATE.user.Name+' · '+STATE.user.Rolle+'. Du bist weiterhin als Administrator angemeldet.':
+  GA_ADMIN_ADV_VIEW?'Administrator · Erweiterte Ausbildung: Änderungen in diesem Bereich werden gespeichert.':'';
+}
+async function gaSwitchView(mode,id=''){
+ if(GA_VIEW_BUSY||!(role()==='Administrator'||GA_ADMIN_ADV_VIEW||GA_ROLE_PREVIEW))return;
+ if(mode==='preview'&&!id){tip('Bitte ein aktives Konto auswählen.',true);return;}
+ const token=TOKEN,oldPreview=GA_ROLE_PREVIEW,oldAdvanced=GA_ADMIN_ADV_VIEW;
+ const payload=mode==='preview'?{_gaRolePreview:id}:mode==='advanced'?{_gaAdvancedView:true}:{};
+ GA_VIEW_BUSY=true;$('gaViewButton').disabled=true;$('gaViewPreview').disabled=true;$('gaViewAdvanced').disabled=true;
+ try{
+  const next=await rpc('gaApi','state',payload,token);
+  if(token!==TOKEN||oldPreview!==GA_ROLE_PREVIEW||oldAdvanced!==GA_ADMIN_ADV_VIEW)return;
+  if(mode==='preview'&&(!next.administratorRollenvorschau||next.user?.ID!==id)||
+   mode==='advanced'&&(!next.administratorErweitert||!next.organisatorErweitert)||
+   mode==='admin'&&next.user?.Rolle!=='Administrator')
+   throw new Error('Bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
+  if(typeof Q_EDIT!=='undefined'&&Q_EDIT){try{qAutoDraft();}catch(_){} Q_EDIT='';Q_SESSION=null;Q_META=null;Q_ITEMS=[];}
+  GA_ROLE_PREVIEW=mode==='preview'?id:'';GA_ADMIN_ADV_VIEW=mode==='advanced';STATE=next;
+  VIEW=GA_ADMIN_ADV_VIEW?'advOverview':'overview';FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';
+  $('gaViewChooser').classList.add('hidden');document.body.classList.remove('ga-nav-open');render();
+ }catch(e){tip(e.message||'Ansicht konnte nicht geladen werden.',true);}
+ finally{GA_VIEW_BUSY=false;$('gaViewButton').disabled=false;$('gaViewPreview').disabled=false;$('gaViewAdvanced').disabled=false;}
+}
+$('gaViewButton').addEventListener('click',()=>{
+ if(GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW){gaSwitchView('admin');return;}
+ const select=$('gaViewAccount'),users=GA_ADMIN_USERS.filter(u=>u.Aktiv==='JA'||u.Aktiv===true||u.Aktiv==='TRUE');
+ const roles=['Administrator','Ausbilder','Organisator Erweiterte Ausbildung','Fachverwaltung','Teilnehmer'];
+ select.innerHTML='<option value="">Konto auswählen</option>'+roles.map(r=>{
+  const group=users.filter(u=>u.Rolle===r).sort((a,b)=>String(a.Name||'').localeCompare(String(b.Name||''),'de'));
+  return group.length?'<optgroup label="'+h(r)+'">'+group.map(u=>'<option value="'+h(u.ID)+'">'+h(u.Name)+' · '+h(u.Email||'')+'</option>').join('')+'</optgroup>':'';
+ }).join('');
+ $('gaViewChooser').classList.toggle('hidden');
+});
+$('gaViewPreview').addEventListener('click',()=>gaSwitchView('preview',$('gaViewAccount').value));
+$('gaViewAdvanced').addEventListener('click',()=>gaSwitchView('advanced'));
+$('gaViewCancel').addEventListener('click',()=>$('gaViewChooser').classList.add('hidden'));
+$('app').addEventListener('submit',e=>{if(GA_ROLE_PREVIEW&&e.target.closest('form[data-form]')){e.preventDefault();e.stopImmediatePropagation();tip('Die Rollenvorschau ist schreibgeschützt.',true);}},true);
+$('app').addEventListener('click',e=>{if(GA_ROLE_PREVIEW&&e.target.closest('[data-push-enable],[data-push-disable],[data-test-push],[data-qstart]')){e.preventDefault();e.stopImmediatePropagation();tip('Diese Aktion ist in der Rollenvorschau deaktiviert.',true);}},true);
 function role(){return STATE?.user?.Rolle}
 function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder',advanced=r==='Organisator Erweiterte Ausbildung';
@@ -294,7 +352,7 @@ function navs(){
  ['users','Zugänge'],['rights','Ausbilderrechte'],['reports','Mängel & Ideen'],
  ['reviews','Kursbewertungen'],['questionnaires','Bewertungsfragebögen'],['messages','Nachrichten'],['pushadmin','Push-Steuerung']
  ]:advanced?[
- ['advOverview','Erweiterte Übersicht'],['advMembers','Teilnehmer & Gäste'],['advInvite','Teilnehmer einladen'],
+ ['advOverview','Erweiterte Übersicht'],['advReady','GAB-Absolventen'],['advMembers','Teilnehmer & Gäste'],['advInvite','Teilnehmer einladen'],
  ['courses','Kurskatalog'],['projects','Kursprojekte'],['quizzes','Quizverwaltung'],
  ['terms','Termine'],['attendance','Durchführung'],['trainingReports','Tätigkeitsberichte'],['freeActivities','Freie Tätigkeiten'],
  ['turnus','Turnusse'],['advQual','Qualifikationen'],['questionnaires','Bewertungsfragebögen'],
@@ -314,7 +372,7 @@ function navs(){
  return personal.concat([['notifications','Benachrichtigungen']]);
 }
 function title(){return ({
- advOverview:'Erweiterte Übersicht',advMembers:'Teilnehmer & Gäste',advInvite:'Teilnehmer einladen',advQual:'Qualifikationen der erweiterten Ausbildung',overview:'Übersicht',trainerHome:'Meine Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
+ advOverview:'Erweiterte Übersicht',advReady:'GAB-Absolventen',advMembers:'Teilnehmer & Gäste',advInvite:'Teilnehmer einladen',advQual:'Qualifikationen der erweiterten Ausbildung',overview:'Übersicht',trainerHome:'Meine Übersicht',courses:'Kurse & Unterlagen',projects:'Kursprojekte',quizzes:'Quizverwaltung',myquiz:'Meine Wissenstests',
  terms:'Ausbildungstermine',turnus:'Turnusse',members:'Mitglieder',qualifications:'Qualifikationen',abschnitt:'Abschnittsmodule A/B',checks:'Checklisten',
  users:'Benutzerzugänge',rights:'Ausbilderberechtigungen',reports:'Mängel & Ideen',
  reviews:'Kursbewertungen',questionnaires:'Bewertungsfragebögen',ratings:'Meine Kursbewertungen',messages:'Nachrichten',
@@ -389,8 +447,8 @@ function gaTrainerOverview(now=Date.now()){
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
    (noticeHtml||'<p class="ga-trainer-empty">Du hast keine ungelesenen Benachrichtigungen.</p>')+'</section>'+projectPanel+'</div></div>';
 }
-function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;
- const root=$('content');root.innerHTML=VIEW==='trainerHome'?gaTrainerOverview():VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
+function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;gaUpdateViewControls();
+ const root=$('content');root.innerHTML=VIEW==='trainerHome'?gaTrainerOverview():VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advReady'?gaOrganizerReady():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
  const active=STATE.mitglieder.filter(m=>m.Aktiv==='JA');
@@ -1117,7 +1175,8 @@ $('loginForm').addEventListener('submit',async e=>{
 async function logout(){
  gaClearLogin();
  const oldToken=TOKEN;
- TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';
+ TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';GA_ADMIN_ADV_VIEW=false;GA_ROLE_PREVIEW='';GA_ADMIN_USERS=[];
+ $('gaViewChooser').classList.add('hidden');
  document.body.classList.remove('ga-nav-open');
  $('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();
  try{if(oldToken)await rpc('gaApi','logout',{},oldToken);}catch(e){tip('Lokal abgemeldet. Bei fehlender Verbindung kann die Sitzung serverseitig noch gültig sein.',true);}
@@ -1351,4 +1410,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=trainer-start-1"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=rollen-1"></script><script src="./admin-ui.js?v=rollen-1"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=rollen-1"></script></body></html>

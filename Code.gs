@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.2',
+  VERSION: '1.13.3',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -341,6 +341,13 @@ function gaAdvancedOrganizerState_(u){
   .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignments.find(a=>a.MitgliedID===m.ID).TurnusID,Aktiv:m.Aktiv,Ausbildungsweg:'GAB-Gast'}));
  const gabNamen=allMembers.filter(m=>gaFind_('Turnusse',m.TurnusID)?.Bereich==='Grundausbildung'&&gaBool_(m.Aktiv))
   .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname}));
+ // Nur der Abschlussstatus und der Name sind für die Übergabe erforderlich.
+ const gabQuals=gaOptionalRows_('QualifikationMitglieder'),gabProofs=gaOptionalRows_('AbschnittNachweise');
+ const gabAbgeschlossen=allMembers.filter(m=>gaBool_(m.Aktiv)&&
+   allTurns.some(t=>t.ID===m.TurnusID&&t.Bereich==='Grundausbildung')&&
+   gaGabCompletion_(m,gabQuals,gabProofs).complete)
+  .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,
+   ErweiterteTurnusIDs:assignments.filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)}));
  const attend=gaRows_('Teilnahmen').filter(a=>termIDs.has(a.TerminID));
  const cfg=gaOptionalRows_('QuizKurse').filter(x=>courseIDs.has(x.KursID));
  const attempts=gaOptionalRows_('QuizVersuche').filter(x=>courseIDs.has(x.KursID));
@@ -348,7 +355,7 @@ function gaAdvancedOrganizerState_(u){
   FrageboegenBearbeiten:true,BewertungenAnsehen:true,MeldungenBearbeiten:true};
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,
-  kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,
+  kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,gabAbgeschlossen,
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
    .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
@@ -449,14 +456,31 @@ function gaOrganizerGuard_(u,method,d){
 }
 
 function gaApi(method,data,token){
-  const u=gaSession_(token),d=data||{};
+  const actor=gaSession_(token),d=data||{};
+  if((d._gaAdvancedView||d._gaRolePreview)&&actor.Rolle!=='Administrator')
+    throw new Error('Nur Administratoren können Ansichten wechseln.');
+  if(d._gaAdvancedView&&d._gaRolePreview)throw new Error('Ungültige Ansicht.');
+  let u=actor;
+  if(d._gaRolePreview){
+    if(!['state','getQuizEdit','participantStatus'].includes(method))
+      throw new Error('Die Rollenvorschau ist schreibgeschützt.');
+    u=gaFind_('Benutzer',gaNeed_(d._gaRolePreview,'Benutzer',100));
+    if(!u||!gaBool_(u.Aktiv))throw new Error('Aktives Benutzerkonto nicht gefunden.');
+  }else if(d._gaAdvancedView){
+    // Keine Änderung am Benutzerkonto. Aktionen werden mit der echten Admin-ID protokolliert.
+    u={...actor,Rolle:GA_ADV_ROLE};
+  }
   gaOrganizerGuard_(u,method,d);
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
    'saveAdvancedEnrollment','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
-  if(method==='state')return gaState_(u);
+  if(method==='state'){
+    const state=gaState_(u);
+    return d._gaRolePreview?{...state,administratorRollenvorschau:true}:
+      d._gaAdvancedView?{...state,administratorErweitert:true}:state;
+  }
   if(method==='participantStatus')return gaParticipantStatus_(u);
   if(method==='logout')return gaLogoutSession_(token);
   if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
@@ -2358,6 +2382,33 @@ function gaSetValidity_(u,d){
  gaLog_(u.ID,'GUELTIGKEIT_SETZEN',kind,id,{Vorher:meta[kind][id]||'',Datum:value});
  return {ok:true,message:'Datum gespeichert.'};
 }
+// Ein gemeinsamer Abschlussbegriff für Qualifikation, Übergabeliste und Meldungen.
+function gaGabCompletion_(m,qs,abschnitt){
+ const q=(qs||[]).find(x=>x.MitgliedID===m.ID)||{};
+ const proof=id=>(abschnitt||[]).find(x=>x.MitgliedID===m.ID&&x.KursID===id);
+ const a=proof('GAB-ABSCHNITT-BLOCK-A'),b=proof('GAB-ABSCHNITT-BLOCK-B');
+ const blockA=!!a&&gaBool_(a.Absolviert),blockB=!!b&&gaBool_(b.Absolviert)&&gaBool_(b.PruefungBestanden);
+ const recognized=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung';
+ return {blockA,blockB,recognized,confirmed:gaBool_(q.GABFreigabe),
+  complete:gaBool_(m.Aktiv)&&(recognized||(gaBool_(q.GABFreigabe)&&blockA&&blockB))};
+}
+function gaNotifyGabCompleted_(m,before,after){
+ if(before||!after||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung')return '';
+ try{
+  const ref='GABREADY:'+m.ID,notices=gaRows_('Benachrichtigungen');
+  const recipients=gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&x.Rolle===GA_ADV_ROLE);
+  for(const user of recipients){
+   if(notices.some(n=>n.BenutzerID===user.ID&&n.BezugID===ref))continue;
+   const id=gaNotify_(user.ID,'Aufgabe','Grundausbildung abgeschlossen',
+    m.Vorname+' '+m.Nachname+' hat die Grundausbildung abgeschlossen und kann der erweiterten Ausbildung zugeordnet werden.',ref);
+   try{gaPushQueue_(1,id);}catch(e){console.warn('GAB-Abschluss-Push wartet:',String(e));}
+  }
+  return '';
+ }catch(e){
+  console.warn('GAB-Abschluss-Benachrichtigung fehlgeschlagen:',String(e));
+  return ' Der Abschluss wurde gespeichert, die Benachrichtigung konnte nicht vollständig erstellt werden. Bitte die erweiterte Ausbildungsleitung informieren.';
+ }
+}
 function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizCfg,quizAttempts,abschnitt,assignments,predecessors,validity){
  const q=qs.find(x=>x.MitgliedID===m.ID)||{},valid=x=>gaBool_(x);
  validity=validity||{turnus:{},kurs:{},quiz:{},projekt:{}};
@@ -2424,14 +2475,14 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
  const gabOpen=gab.filter(r=>!complete(r.KursID)),bswOpen=bsw.filter(r=>!complete(r.KursID));
  const birth=m.Geburtsdatum||q.Geburtsdatum||'',today=Utilities.formatDate(new Date(),'Europe/Vienna','yyyy-MM-dd');
  const age16=/^\d{4}-\d{2}-\d{2}$/.test(birth)&&today>=(Number(birth.slice(0,4))+16)+birth.slice(4);
- const advanced=q.GABAnerkannt==='JA'&&(m.Ausbildungsweg||'')==='Erweiterte Ausbildung';
+ const completion=gaGabCompletion_(m,qs,abschnitt),advanced=completion.recognized;
  // Die ausdrückliche Bestätigung des Administrators ist eine eigenständige Freigabe.
  // Fehlende Pflichtmodule bleiben sichtbar, werden aber nicht als unbeabsichtigte Sperre verwendet.
- const adminConfirmed=valid(q.GABFreigabe);
- const blockAOk=complete('GAB-ABSCHNITT-BLOCK-A'),blockBOk=complete('GAB-ABSCHNITT-BLOCK-B');
+ const adminConfirmed=completion.confirmed;
+ const blockAOk=completion.blockA,blockBOk=completion.blockB;
  // Beide externen Hauptmodule sind zwingend, selbst bei manuell bestätigter GAB.
  // Die explizite Anerkennung bereits absolvierter GAB für erweiterte Ausbildung bleibt als Sonderfall gültig.
- const gabDone=valid(m.Aktiv)&&(advanced||(adminConfirmed&&blockAOk&&blockBOk));
+ const gabDone=completion.complete;
  const gabDocsComplete=gab.length>0&&gabOpen.length===0;
  const gabNotice=(!blockAOk||!blockBOk)?'Abschnittsmodul Block A und/oder Block B mit Abschluss Truppmann noch ausständig.':
   !gab.length?'Noch keine GAB-Pflichtmodule definiert.':gabOpen.length?
@@ -2468,11 +2519,15 @@ function gaSaveAbschnittNachweis_(u,d){
   PruefungBestanden:passed?'JA':'NEIN',Pruefungsdatum:passed?examDate:'',
   Nachweis:gaText_(d.Nachweis,500),Notiz:gaText_(d.Notiz,700),
   BestaetigtVon:u.ID,BestaetigtAm:gaNow_()};
- const existing=gaOptionalRows_('AbschnittNachweise').find(x=>x.MitgliedID===id&&x.KursID===courseId);
+ const proofs=gaOptionalRows_('AbschnittNachweise'),quals=gaOptionalRows_('QualifikationMitglieder');
+ const before=gaGabCompletion_(m,quals,proofs).complete;
+ const existing=proofs.find(x=>x.MitgliedID===id&&x.KursID===courseId);
  if(existing)gaReplace_('AbschnittNachweise',existing.ID,values);
  else gaAppend_('AbschnittNachweise',{ID:gaId_(),MitgliedID:id,KursID:courseId,...values});
  gaLog_(u.ID,'ABSCHNITTSMODUL_NACHWEIS','Mitglied',id,{KursID:courseId,Absolviert:values.Absolviert,PruefungBestanden:values.PruefungBestanden});
- return {ok:true,message:'Abschnittsmodul dokumentiert. GAB-Pflichtfortschritt wurde neu berechnet.'};
+ const next=proofs.filter(x=>!(x.MitgliedID===id&&x.KursID===courseId)).concat([{MitgliedID:id,KursID:courseId,...values}]);
+ const warning=gaNotifyGabCompleted_(m,before,gaGabCompletion_(m,quals,next).complete);
+ return {ok:true,message:'Abschnittsmodul dokumentiert. GAB-Pflichtfortschritt wurde neu berechnet.'+warning};
 }
 function gaSaveQualification_(u,d){
  gaRequire_(u,['Administrator']);const m=gaFind_('Mitglieder',gaText_(d.MitgliedID,100));
@@ -2486,14 +2541,18 @@ function gaSaveQualification_(u,d){
   GeprueftVon:u.ID,GeprueftAm:gaNow_()};
  if(val.GABAnerkannt==='JA'&&m.Ausbildungsweg!=='Erweiterte Ausbildung')
   throw new Error('GAB-Anerkennung ist nur bei erweiterter Ausbildung zulässig.');
- const existing=gaOptionalRows_('QualifikationMitglieder').find(x=>x.MitgliedID===m.ID);
+ const quals=gaOptionalRows_('QualifikationMitglieder'),proofs=gaOptionalRows_('AbschnittNachweise');
+ const before=gaGabCompletion_(m,quals,proofs).complete;
+ const existing=quals.find(x=>x.MitgliedID===m.ID);
  if(existing)gaReplace_('QualifikationMitglieder',existing.ID,val);
  else gaAppend_('QualifikationMitglieder',{ID:gaId_(),MitgliedID:m.ID,...val});
  // Ein einziges maßgebliches Geburtsdatum im Mitgliedsstamm; sonst würde
  // eine Änderung im Qualifikationsformular den Altersstatus nicht aktualisieren.
  if(birth!==String(m.Geburtsdatum||''))gaReplace_('Mitglieder',m.ID,{Geburtsdatum:birth});
  gaLog_(u.ID,'QUALIFIKATION','Mitglied',m.ID,{GAB:val.GABFreigabe,GABAnerkannt:val.GABAnerkannt,ErsteHilfeStatus:status});
- return {ok:true,message:'Qualifikationsnachweise gespeichert.'};
+ const next=quals.filter(x=>x.MitgliedID!==m.ID).concat([{MitgliedID:m.ID,...val}]);
+ const warning=gaNotifyGabCompleted_(m,before,gaGabCompletion_(m,next,proofs).complete);
+ return {ok:true,message:'Qualifikationsnachweise gespeichert.'+warning};
 }
 function gaCoursePredecessors_(){
  const raw=PropertiesService.getScriptProperties().getProperty('GA_KURS_VORGAENGER');
@@ -2618,7 +2677,7 @@ function gaQuizPublicConfig_(c){
 function gaQuizQuestions_(data){
  if(!Array.isArray(data)||data.length<1||data.length>20)throw new Error('Bitte 1 bis 20 Quizfragen anlegen.');
  return data.map((raw,i)=>{
-   const type=gaChoice_(String(raw.typ||''),['single','multi','tf','match'],'Fragetyp');
+   const type=gaChoice_(String(raw.typ||''),['single','multi','tf','yn','match'],'Fragetyp');
    const text=gaNeed_(raw.text,'Frage '+(i+1),450);
    if(type==='match'){
      const pairs=raw.pairs;
@@ -2630,8 +2689,8 @@ function gaQuizQuestions_(data){
      if(new Set(valid.map(x=>x[1].toLowerCase())).size!==valid.length)throw new Error('Zuordnungsantworten müssen eindeutig sein.');
      return {typ:type,text,pairs:valid};
    }
-   const options=type==='tf'?['Richtig','Falsch']:(Array.isArray(raw.options)?raw.options:[]).map(s=>gaNeed_(s,'Antwortmöglichkeit',220));
-   if(options.length!==(type==='tf'?2:4)||new Set(options.map(x=>x.toLowerCase())).size!==options.length)
+   const options=type==='tf'?['Richtig','Falsch']:type==='yn'?['Ja','Nein']:(Array.isArray(raw.options)?raw.options:[]).map(s=>gaNeed_(s,'Antwortmöglichkeit',220));
+   if(options.length!==(['tf','yn'].includes(type)?2:4)||new Set(options.map(x=>x.toLowerCase())).size!==options.length)
      throw new Error('Bei Auswahlfragen sind vier verschiedene Antworten erforderlich.');
    const correct=Array.isArray(raw.correct)?raw.correct.map(Number):[];
    if(!correct.length||correct.some(x=>!Number.isInteger(x)||x<0||x>=options.length)||new Set(correct).size!==correct.length)

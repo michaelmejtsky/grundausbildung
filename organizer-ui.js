@@ -3,15 +3,35 @@
 const GA_ORG_ROLE='Organisator Erweiterte Ausbildung';
 function gaOrganizerOverview(){
  const members=STATE.mitglieder||[],terms=STATE.termine||[],courses=STATE.kurse||[];
+ const ready=Array.isArray(STATE.gabAbgeschlossen)?STATE.gabAbgeschlossen.filter(m=>!m.ErweiterteTurnusIDs?.length).length:null;
  return '<div class="ga-page-heading"><div><p class="ga-eyebrow">FEUERWEHR ST. PÖLTEN-STADT</p><h2>Erweiterte Ausbildung</h2>'+
  '<p>Deine organisatorische Übersicht – GAB-Daten bleiben beim GAB-Team.</p></div></div>'+
  '<div class="ga-kpis">'+gaMetric(members.length,'Zugeordnete Teilnehmer','Inklusive GAB-Gästen')+
  gaMetric(courses.length,'Erweiterte Module','Kurskatalog')+gaMetric(terms.length,'Ausbildungstermine','Geplant & durchgeführt')+'</div>'+
  '<div class="ga-organizer-cards">'+
+ '<button type="button" data-view="advReady" class="ga-organizer-tile"><strong>GAB-Absolventen'+(ready===null?'':' · '+ready+' offen')+'</strong><span>Abgeschlossene Grundausbildung und Zuordnung zur erweiterten Ausbildung</span></button>'+
  '<button type="button" data-view="advMembers" class="ga-organizer-tile"><strong>Teilnehmer & GAB-Gäste</strong><span>Personen für erweiterte Module zuordnen</span></button>'+
  '<button type="button" data-view="terms" class="ga-organizer-tile"><strong>Termine planen</strong><span>Nur Kurse und Turnusse der erweiterten Ausbildung</span></button>'+
  '<button type="button" data-view="messages" class="ga-organizer-tile"><strong>Nachrichten</strong><span>Einzeln, gesamter Turnus oder alle zugeordneten Mitglieder</span></button>'+
  '<button type="button" data-view="trainingReports" class="ga-organizer-tile"><strong>FDISK-Tätigkeitsberichte</strong><span>Stunden, Personen und Fahrzeuge</span></button></div>';
+}
+function gaOrganizerReady(){
+ if(!Array.isArray(STATE.gabAbgeschlossen))return '<section class="panel"><h2>GAB-Absolventen</h2><p>Für diese Übersicht bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
+ const turns=STATE.turnusse||[],active=turns.filter(t=>t.Aktiv==='JA');
+ const opts=active.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('');
+ const people=[...STATE.gabAbgeschlossen].sort((a,b)=>(a.Nachname+' '+a.Vorname).localeCompare(b.Nachname+' '+b.Vorname,'de'));
+ const cards=people.map(m=>{
+  const ids=m.ErweiterteTurnusIDs||[],assigned=ids.map(id=>turns.find(t=>t.ID===id)?.Bezeichnung||'Erweiterter Turnus');
+  return '<section class="panel"><div class="row between"><strong>'+h(m.Vorname+' '+m.Nachname)+'</strong><span class="tag '+(ids.length?'ok':'warn')+'">'+
+   (ids.length?'Bereits zugeordnet':'Noch nicht zugeordnet')+'</span></div>'+
+   (assigned.length?'<p class="small muted">'+h(assigned.join(', '))+'</p>':'')+
+   (active.length?'<form data-form="advEnroll"><input type="hidden" name="MitgliedID" value="'+h(m.ID)+'">'+
+    '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label>'+
+    '<button type="submit" class="primary">'+(ids.length?'Weiteren Turnus zuordnen':'Zur erweiterten Ausbildung zuordnen')+'</button></form>':
+    '<p class="small muted">Bitte zuerst einen aktiven erweiterten Turnus anlegen.</p>')+'</section>';
+ }).join('');
+ return '<div class="ga-page-heading"><div><h2>GAB-Absolventen</h2><p>Personen mit bestätigtem GAB-Abschluss. Eine zusätzliche Zuordnung erhält ihren ursprünglichen GAB-Turnus und alle Nachweise.</p></div></div>'+
+  (cards||'<section class="panel"><p class="muted">Derzeit sind keine abgeschlossenen GAB-Mitglieder vorhanden.</p></section>');
 }
 function gaOrganizerMembers(){
  const turnusse=(STATE.turnusse||[]).filter(x=>x.Aktiv==='JA');
@@ -19,7 +39,7 @@ function gaOrganizerMembers(){
  const opts=turnusse.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('');
  return '<div class="ga-page-heading"><div><h2>Teilnehmer & GAB-Gäste</h2><p>GAB-Mitglieder bleiben in ihrem bisherigen Turnus und können trotzdem erweiterte Module besuchen.</p></div></div>'+
  '<section class="panel"><h3>GAB-Mitglied zusätzlich aufnehmen</h3>'+
- '<p class="small muted">Hier werden von der GAB ausschließlich Namen angezeigt – keine Kontaktdaten, Nachweise oder Ausbildungsstände.</p>'+
+ '<p class="small muted">Hier werden von der GAB Namen angezeigt. Unter „GAB-Absolventen“ siehst du zusätzlich, wer die GAB abgeschlossen hat; Kontaktdaten und einzelne Nachweise bleiben verborgen.</p>'+
  '<form data-form="advEnroll"><div class="grid"><label>GAB-Mitglied<select name="MitgliedID" required><option value="">Mitglied auswählen</option>'+
  everyone.map(m=>'<option value="'+h(m.ID)+'">'+h(m.Nachname+', '+m.Vorname)+'</option>').join('')+'</select></label>'+
  '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label></div>'+
