@@ -65,4 +65,19 @@ assert(restoreBlock,'Session restoration must wait until the remaining scripts f
 let restored=0,readyHandler=null;const loading={document:{readyState:'loading',addEventListener:(event,cb)=>{assert.equal(event,'DOMContentLoaded');readyHandler=cb;}},gaRestoreLogin:()=>{restored++;}};
 vm.runInNewContext(restoreBlock[0],loading);assert.equal(restored,0);readyHandler();assert.equal(restored,1);
 restored=0;vm.runInNewContext(restoreBlock[0],{document:{readyState:'complete'},gaRestoreLogin:()=>{restored++;}});assert.equal(restored,1);
-console.log('Trainer start: role-specific entry, rights, dates, assignments, notices, empty states and escaping passed.');
+// Manual login cannot be overwritten by a late saved-session response.
+const restoreStart=html.indexOf('async function gaRestoreLogin()'),restoreEnd=html.indexOf('\nasync function initInvite(',restoreStart);
+assert(restoreStart>=0&&restoreEnd>restoreStart);
+let resolveState,calls=0,renders=0;
+const auth=vm.createContext({URLSearchParams,location:{hash:''},GA_MANUAL_LOGIN_PENDING:false,STATE:null,TOKEN:'',VIEW:'',NOTICE_FOCUS:'',
+ gaGetStoredLogin:()=>({token:'saved-token'}),api:()=>{calls++;return new Promise(resolve=>{resolveState=resolve;});},
+ $:()=>({classList:{add(){},remove(){}},textContent:''}),gaCountAppVisit:()=>{},render:()=>{renders++;},openPushNotification:()=>{},gaClearLogin:()=>{}});
+vm.runInContext(html.slice(restoreStart,restoreEnd),auth);
+(async()=>{
+ auth.GA_MANUAL_LOGIN_PENDING=true;await auth.gaRestoreLogin();assert.equal(calls,0);
+ auth.GA_MANUAL_LOGIN_PENDING=false;let request=auth.gaRestoreLogin();assert.equal(calls,1);
+ auth.GA_MANUAL_LOGIN_PENDING=true;resolveState({user:{ID:'old'}});await request;assert.equal(auth.STATE,null);assert.equal(renders,0);
+ auth.GA_MANUAL_LOGIN_PENDING=false;request=auth.gaRestoreLogin();resolveState({user:{ID:'correct'}});await request;
+ assert.equal(auth.STATE.user.ID,'correct');assert.equal(renders,1);assert.equal(auth.VIEW,'overview');
+ console.log('Trainer start: role-specific entry, rights, dates, assignments, notices, empty states, escaping and login race passed.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

@@ -75,6 +75,7 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
+let GA_MANUAL_LOGIN_PENDING=false;
 const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 let PUSH_FEEDBACK='',PUSH_FEEDBACK_ERROR=false;
@@ -175,16 +176,19 @@ function gaGetStoredLogin(){
 }
 async function gaRestoreLogin(){
  // Einladungslinks haben Vorrang und enthalten kein wiederverwendbares Login.
- if(new URLSearchParams(location.hash.slice(1)).has('invite'))return;
+ if(GA_MANUAL_LOGIN_PENDING||STATE||new URLSearchParams(location.hash.slice(1)).has('invite'))return;
  const saved=gaGetStoredLogin();if(!saved)return;
  TOKEN=saved.token;
  try{
-  STATE=await api('state');
+  const restoredState=await api('state');
+  if(GA_MANUAL_LOGIN_PENDING||TOKEN!==saved.token)return;
+  STATE=restoredState;
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
   VIEW=NOTICE_FOCUS?'notifications':'overview';
   gaCountAppVisit();render();
   if(NOTICE_FOCUS)openPushNotification(NOTICE_FOCUS);
  }catch(e){
+  if(GA_MANUAL_LOGIN_PENDING||TOKEN!==saved.token)return;
   TOKEN='';STATE=null;
   if(/Sitzung|anmelden|abgelaufen|Berechtigung/.test(String(e.message||''))){gaClearLogin();}
   else{$('loginError').textContent='Automatische Anmeldung derzeit nicht erreichbar. Bitte Verbindung prüfen oder erneut anmelden.';$('loginError').classList.remove('hidden');}
@@ -1088,6 +1092,8 @@ $('gaForgotForm').addEventListener('submit',async event=>{
 });
 $('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();
+ if(GA_MANUAL_LOGIN_PENDING)return;
+ GA_MANUAL_LOGIN_PENDING=true;
  $('loginError').classList.add('hidden');
  const fd=new FormData(e.target),b=e.target.querySelector('button[type=submit]');
  b.disabled=true;b.textContent='Anmelden …';
@@ -1096,6 +1102,7 @@ $('loginForm').addEventListener('submit',async e=>{
   const result=await rpc('gaLogin',fd.get('email'),fd.get('password'),wants30Days);
   TOKEN=result.token;
   STATE=await api('state');
+  if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
   if(wants30Days){
    if(!gaStoreLogin(result.token,result.rememberUntil))tip('30-Tage-Anmeldung noch nicht aktiv: Backend-Version und Browser-Speicher prüfen.',true);
   }else gaClearLogin();
@@ -1105,7 +1112,7 @@ $('loginForm').addEventListener('submit',async e=>{
  }catch(err){
   TOKEN='';STATE=null;
   $('loginError').textContent=err.message;$('loginError').classList.remove('hidden');
- }finally{b.disabled=false;b.textContent='Anmelden';}
+ }finally{GA_MANUAL_LOGIN_PENDING=false;b.disabled=false;b.textContent='Anmelden';}
 });
 async function logout(){
  gaClearLogin();
