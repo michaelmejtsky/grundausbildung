@@ -75,7 +75,10 @@ function overview(now=Date.now()){
  const checks=(STATE.checks||[]).filter(c=>ids.has(c.MitgliedID)&&c.Status==='Offen');
  const openMembers=new Set(checks.map(c=>c.MitgliedID));
  const pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
- const proofs=(STATE.ersteHilfeNachweise||[]).filter(p=>p.Status==='Eingereicht'&&ids.has(p.MitgliedID));
+ // Wie in der Nachweisansicht ist nur die jeweils letzte Einreichung prüfbar.
+ const latestProofs=new Map();
+ (STATE.ersteHilfeNachweise||[]).filter(p=>ids.has(p.MitgliedID)).forEach(p=>latestProofs.set(p.MitgliedID,p));
+ const proofs=[...latestProofs.values()].filter(p=>p.Status==='Eingereicht');
  const reports=(STATE.meldungen||[]).filter(m=>['Offen','In Bearbeitung'].includes(m.Status));
  const upcoming=gaHomeUpcoming(now),unread=(STATE.benachrichtigungen||[]).filter(n=>!n.GelesenAm);
  const good=qs.filter(q=>q.GABAbgeschlossen).length,qbad=qs.filter(q=>!q.GABAbgeschlossen).length;
@@ -114,7 +117,7 @@ function overview(now=Date.now()){
   '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">JETZT IM BLICK</p><h2>Offene Aufgaben</h2><p>Direkt zu den Bereichen, die Aufmerksamkeit brauchen.</p></div></div>'+
   '<div class="ga-home-tasks">'+gaHomeTask('checks',checks.length,'Checklistenpunkte',openMembers.size+' Mitglieder betroffen')+
   gaHomeTask('projects',pending.length,'Kursprojekte','Zur Prüfung eingereicht')+
-  gaHomeTask('qualifications',proofs.length,'Erste-Hilfe-Nachweise','Eingereicht und noch zu prüfen')+
+  gaHomeTask('qualifications',proofs.length,'Erste-Hilfe-Nachweise','Aktuelle Einreichungen aktiver Mitglieder')+
   gaHomeTask('reports',reports.length,'Mängel & Ideen','Offen oder in Bearbeitung')+'</div></section>'+
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2><p>'+h(unread.length)+' ungelesen · letzte 100 Mitteilungen</p></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
   gaHomeNoticeList(unread)+'</section></div>'+
