@@ -1051,7 +1051,9 @@ function notifications(){
  '<div class="btnline"><button class="smallbtn" type="button" data-push-check="1">Cloudflare-Verbindung prüfen</button></div>'+
  '<div id="pushCheckResult" class="notice" role="status">Status noch nicht geprüft.</div></section>';
  const list=STATE.benachrichtigungen.length?STATE.benachrichtigungen.map(n=>{
-   const footer=(!n.GelesenAm?'<div class="btnline"><button class="smallbtn" data-read="'+h(n.ID)+'">Als gelesen markieren</button></div>':'');
+   const handover=STATE.organisatorErweitert&&String(n.BezugID||'').startsWith('GABREADY:')?
+    '<button type="button" class="smallbtn" data-view="advReady">GAB-Absolventen öffnen</button>':'';
+   const footer=(!n.GelesenAm||handover?'<div class="btnline">'+handover+(!n.GelesenAm?'<button class="smallbtn" data-read="'+h(n.ID)+'">Als gelesen markieren</button>':'')+'</div>':'');
    const details=dt(n.ErstelltAm)+' · '+(n.GelesenAm?'Gelesen':'Neu')+
      (n.PushStatus?' · Push: '+h(n.PushStatus):'');
    return expandedMessage(n.Titel,details,n.Text,n.ID,n.ID===NOTICE_FOCUS,footer);

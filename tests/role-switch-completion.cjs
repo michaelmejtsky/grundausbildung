@@ -65,6 +65,7 @@ let notices=tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m1');
 assert.deepEqual(notices.map(x=>x.BenutzerID).sort(),['org1','org2']);
 assert.equal(notices.find(x=>x.BenutzerID==='org1').PushStatus,'Wartend');
 assert.equal(notices.find(x=>x.BenutzerID==='org2').PushStatus,'Kein Gerät registriert');
+assert(notices.every(x=>x.Text.includes('Zuordnung zur erweiterten Ausbildung besteht bereits')));
 assert.equal(push.length,2);
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'JA'},'token');
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'NEIN'},'token');
@@ -73,6 +74,7 @@ assert.equal(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m1').leng
 // Alternatively the final Block B proof may finish the GAB.
 ctx.gaApi('saveAbschnittNachweis',{MitgliedID:'m2',KursID:'GAB-ABSCHNITT-BLOCK-B',Absolviert:'JA',PruefungBestanden:'JA',Ausbildungsdatum:'2026-04-01',Pruefungsdatum:'2026-04-02'},'token');
 assert.equal(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m2').length,2);
+assert(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m2').every(x=>x.Text.includes('kann der erweiterten Ausbildung zugeordnet werden')));
 result=ctx.gaState_(users[1]);
 assert.deepEqual(Array.from(result.gabAbgeschlossen,x=>x.ID).sort(),['m1','m2','m4']);
 assert.equal(result.gabAbgeschlossen.find(x=>x.ID==='m1').ErweiterteTurnusIDs[0],'adv');

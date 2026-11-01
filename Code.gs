@@ -2393,14 +2393,17 @@ function gaGabCompletion_(m,qs,abschnitt){
   complete:gaBool_(m.Aktiv)&&(recognized||(gaBool_(q.GABFreigabe)&&blockA&&blockB))};
 }
 function gaNotifyGabCompleted_(m,before,after){
- if(before||!after||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung')return '';
+ if(before||!after)return '';
  try{
+  if(gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung')return '';
   const ref='GABREADY:'+m.ID,notices=gaRows_('Benachrichtigungen');
+  const assigned=gaAdvAssignments_().some(a=>a.MitgliedID===m.ID&&gaFind_('Turnusse',a.TurnusID)?.Bereich===GA_ADV_AREA);
   const recipients=gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&x.Rolle===GA_ADV_ROLE);
   for(const user of recipients){
    if(notices.some(n=>n.BenutzerID===user.ID&&n.BezugID===ref))continue;
    const id=gaNotify_(user.ID,'Aufgabe','Grundausbildung abgeschlossen',
-    m.Vorname+' '+m.Nachname+' hat die Grundausbildung abgeschlossen und kann der erweiterten Ausbildung zugeordnet werden.',ref);
+    m.Vorname+' '+m.Nachname+' hat die Grundausbildung abgeschlossen. '+(assigned?
+     'Eine Zuordnung zur erweiterten Ausbildung besteht bereits.':'Die Person kann der erweiterten Ausbildung zugeordnet werden.'),ref);
    try{gaPushQueue_(1,id);}catch(e){console.warn('GAB-Abschluss-Push wartet:',String(e));}
   }
   return '';
