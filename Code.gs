@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.1',
+  VERSION: '1.13.2',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -353,6 +353,7 @@ function gaAdvancedOrganizerState_(u){
   teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
    .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
   kursProjekte:projects,
+  kursPlanung:gaCoursePlanVisible_(courses,projects),
   gueltigkeit:gaValidityVisible_(validity,turnusse,courses,projects),
   quizKurse:cfg.map(gaQuizPublicConfig_),
   quizVersuche:attempts.map(x=>({ID:x.ID,KursID:x.KursID,MitgliedID:x.MitgliedID,TerminID:x.TerminID,
@@ -620,8 +621,9 @@ function gaState_(u){
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>['Ausbilder','Administrator'].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
+  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
   kursProjekte:visibleProjects,
+  ...(admin||trainer?{kursPlanung:gaCoursePlanVisible_(visibleCourses,visibleProjects)}:{}),
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
@@ -658,6 +660,51 @@ function gaState_(u){
 }
 function gaNeed_(value,name,max){let v=gaText_(value,max);if(!v)throw new Error(name+' ist erforderlich.');return v;}
 function gaChoice_(v,allowed,name){if(!allowed.includes(v))throw new Error('Ungültiger Wert für '+name+'.');return v;}
+// Optionale interne Kursplanung wird getrennt von Teilnehmer- und Nachweistabellen gespeichert.
+const GA_COURSE_PLAN_PREFIX='GA_KURS_PLAN_V1_';
+function gaCoursePlanKey_(kind,id){
+ if(!['kurs','projekt'].includes(kind)||!id)throw new Error('Ungültige Kursplanung.');
+ return GA_COURSE_PLAN_PREFIX+kind+'_'+encodeURIComponent(String(id));
+}
+function gaCoursePlanRead_(kind,id,all){
+ const key=gaCoursePlanKey_(kind,id),raw=all?all[key]:PropertiesService.getScriptProperties().getProperty(key);
+ if(raw===null||raw===undefined)return null;
+ let value;try{value=JSON.parse(raw);}catch(e){throw new Error('Gespeicherte Kursplanung ist beschädigt. Bitte Administrator kontaktieren.');}
+ if(!value||typeof value.MaterialNotiz!=='string'||!Array.isArray(value.VerantwortlicheIDs)||
+  value.VerantwortlicheIDs.some(x=>typeof x!=='string'||!x))
+  throw new Error('Gespeicherte Kursplanung ist unvollständig. Bitte Administrator kontaktieren.');
+ return {MaterialNotiz:value.MaterialNotiz,VerantwortlicheIDs:value.VerantwortlicheIDs};
+}
+function gaCoursePlanVisible_(courses,projects){
+ const all=PropertiesService.getScriptProperties().getProperties(),out={kurse:Object.create(null),projekte:Object.create(null)};
+ for(const [kind,rows,target] of [['kurs',courses,out.kurse],['projekt',projects,out.projekte]])
+  for(const row of rows||[])try{const value=gaCoursePlanRead_(kind,row.ID,all);if(value)target[row.ID]=value;}
+   catch(e){target[row.ID]={Fehler:'Die gespeicherte Kursplanung muss geprüft werden.'};}
+ return out;
+}
+function gaCoursePlanInput_(d,kind,id,area){
+ const hasMaterial=Object.prototype.hasOwnProperty.call(d,'MaterialNotiz');
+ const hasTrainers=Object.prototype.hasOwnProperty.call(d,'VerantwortlicheIDs');
+ if(!hasMaterial&&!hasTrainers)return null; // Ältere App-Versionen ändern die Planung nicht.
+ const old=id?gaCoursePlanRead_(kind,id):null;
+ const material=hasMaterial?String(d.MaterialNotiz||'').trim():(old?.MaterialNotiz||'');
+ if(material.length>2000)throw new Error('Arbeitsmaterial darf höchstens 2000 Zeichen enthalten.');
+ if(hasTrainers&&!Array.isArray(d.VerantwortlicheIDs))throw new Error('Bitte gültige zuständige Ausbilder auswählen.');
+ const ids=hasTrainers?[...new Set(d.VerantwortlicheIDs.map(x=>String(x||'').trim()).filter(Boolean))]:(old?.VerantwortlicheIDs||[]);
+ if(ids.length>30||ids.some(x=>x.length>100))throw new Error('Bitte höchstens 30 gültige Ausbilder auswählen.');
+ const previous=new Set(old?.VerantwortlicheIDs||[]),users=gaRows_('Benutzer');
+ if(ids.some(id=>!previous.has(id)&&!users.some(u=>u.ID===id&&
+  (['Administrator','Ausbilder'].includes(u.Rolle)||(u.Rolle===GA_ADV_ROLE&&area===GA_ADV_AREA)))))
+  throw new Error('Mindestens eine zuständige Person ist für diesen Ausbildungsbereich nicht auswählbar.');
+ const value={MaterialNotiz:material,VerantwortlicheIDs:ids};
+ if(Utilities.newBlob(JSON.stringify(value)).getBytes().length>8500)throw new Error('Arbeitsmaterial oder Ausbilderliste ist zu umfangreich.');
+ return value;
+}
+function gaCoursePlanWithRollback_(kind,id,value,write){
+ const props=PropertiesService.getScriptProperties(),key=gaCoursePlanKey_(kind,id),old=props.getProperty(key);
+ props.setProperty(key,JSON.stringify(value));
+ try{return write();}catch(error){if(old===null)props.deleteProperty(key);else props.setProperty(key,old);throw error;}
+}
 function gaSaveTurnus_(u,d){
  gaRequire_(u,['Administrator',GA_ADV_ROLE]);
  const val={Bezeichnung:gaNeed_(d.Bezeichnung,'Bezeichnung',130),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),Aktiv:'JA'};
@@ -683,15 +730,16 @@ function gaSaveCourse_(u,d){
  const val={Titel:gaNeed_(d.Titel,'Kurstitel',160),Bereich:gaChoice_(d.Bereich,GA.AREAS,'Bereich'),
  Inhalt:gaNeed_(d.Inhalt,'Ausbildungsinhalt',8000),Lernziele:gaText_(d.Lernziele,3000),
  Links:gaLinks_(d.Links),Aktiv:'JA'};
- if(gaIsAdvOrg_(u)&&val.Bereich!==GA_ADV_AREA)throw new Error('Kursteil gehört nicht zur erweiterten Ausbildung.');
+ if(gaIsAdvOrg_(u)&&(old.Bereich!==GA_ADV_AREA||val.Bereich!==GA_ADV_AREA))throw new Error('Kursteil gehört nicht zur erweiterten Ausbildung.');
  const meta=gaValidityConfig_(),hasDate=Object.prototype.hasOwnProperty.call(d,'GueltigAb');
  const date=hasDate?String(d.GueltigAb||'').trim():(meta.kurs[id]||'');
  if(date&&!gaValidityValidDate_(date))throw new Error('Bitte ein gültiges Gültigkeitsdatum auswählen.');
  if(hasDate&&date!==(meta.kurs[id]||''))gaRequire_(u,['Administrator',GA_ADV_ROLE]);
  if(old.Bereich!==val.Bereich&&(meta.kurs[id]||meta.quiz[id]||date))throw new Error('Der Ausbildungsbereich eines datierten Kurses kann nicht geändert werden.');
  if(hasDate&&date)gaValidityRequireTurnDates_(val.Bereich,meta);
- if(hasDate)gaValidityWithRollback_('kurs',id,date,()=>gaReplace_('Kurse',id,val));
- else gaReplace_('Kurse',id,val);
+ const plan=gaCoursePlanInput_(d,'kurs',id,val.Bereich),write=()=>gaReplace_('Kurse',id,val);
+ const save=()=>plan?gaCoursePlanWithRollback_('kurs',id,plan,write):write();
+ if(hasDate)gaValidityWithRollback_('kurs',id,date,save);else save();
  gaLog_(u.ID,'KURS_NACH_VEROEFFENTLICHUNG_BEARBEITEN','Kurs',id,{Vorher:old,Nachher:val});
  return {ok:true,message:'Veröffentlichter Kurs aktualisiert. Änderung protokolliert.'};
 }
@@ -1814,12 +1862,15 @@ function gaSaveProject_(u,d){
  const hasDate=Object.prototype.hasOwnProperty.call(d,'GueltigAb'),date=hasDate?String(d.GueltigAb||'').trim():'';
  if(date&&!gaValidityValidDate_(date))throw new Error('Bitte ein gültiges Gültigkeitsdatum auswählen.');
  if(d.ID&&!existing)throw new Error('Kursprojekt nicht gefunden.');
+ if(gaIsAdvOrg_(u)&&existing&&existing.Bereich!==GA_ADV_AREA)throw new Error('Fremdes Kursprojekt.');
+ const plan=gaCoursePlanInput_(d,'projekt',existing?.ID||'',input.Bereich);
  if(existing){
   if(existing.Status==='Veröffentlicht'||existing.Status==='Zur Prüfung')throw new Error('Dieses Projekt ist zur Prüfung eingereicht oder bereits veröffentlicht.');
   // Alle Ausbilder mit Gestaltungsrecht dürfen gemeinsam an noch offenen Projekten arbeiten.
   const status=gaChoice_(d.Status||existing.Status,['Neu','In Ausarbeitung','Zurück zur Bearbeitung'],'Projektstatus');
   const update=()=>gaReplace_('KursProjekte',existing.ID,{...input,Status:status,GeaendertVon:u.ID,GeaendertAm:gaNow_()});
-  if(hasDate)gaValidityWithRollback_('projekt',existing.ID,date,update);else update();
+  const save=()=>plan?gaCoursePlanWithRollback_('projekt',existing.ID,plan,update):update();
+  if(hasDate)gaValidityWithRollback_('projekt',existing.ID,date,save);else save();
   gaLog_(u.ID,'PROJEKT_BEARBEITEN','Kursprojekt',existing.ID,{Titel:input.Titel,Status:status});
   return {ok:true,message:'Kursprojekt aktualisiert.'};
  }
@@ -1827,8 +1878,9 @@ function gaSaveProject_(u,d){
  const project={ID:gaId_(),KursID:'',...input,Status:status,ErstelltVon:u.ID,
   ErstelltAm:gaNow_(),GeaendertVon:u.ID,GeaendertAm:gaNow_(),
   GeprueftVon:'',GeprueftAm:'',Rueckmeldung:''};
- if(hasDate)gaValidityWithRollback_('projekt',project.ID,date,()=>gaAppend_('KursProjekte',project));
- else gaAppend_('KursProjekte',project);
+ const create=()=>gaAppend_('KursProjekte',project);
+ const save=()=>plan?gaCoursePlanWithRollback_('projekt',project.ID,plan,create):create();
+ if(hasDate)gaValidityWithRollback_('projekt',project.ID,date,save);else save();
  gaLog_(u.ID,'PROJEKT_ANLEGEN','Kursprojekt',project.ID,{Titel:input.Titel});
  return {ok:true,message:'Neues Kursprojekt angelegt.'};
 }
@@ -1863,6 +1915,7 @@ function gaReviewProject_(u,d){
   const meta=gaValidityConfig_(),date=meta.projekt[project.ID]||'';
   if(date)gaValidityRequireTurnDates_(project.Bereich,meta);
   const links=[project.PraesentationURL,project.WeitereLinks].filter(Boolean).join('\n');
+  const plan=gaCoursePlanRead_('projekt',project.ID);
   let courseId=project.KursID;
   const changes={Titel:project.Titel,Bereich:project.Bereich,Inhalt:project.Inhalt,
     Lernziele:project.Lernziele,Links:links,Aktiv:'JA'};
@@ -1871,12 +1924,15 @@ function gaReviewProject_(u,d){
    if(date&&date!==(meta.kurs[courseId]||''))gaRequire_(u,['Administrator',GA_ADV_ROLE]);
    if(c.Bereich!==project.Bereich&&(meta.kurs[courseId]||meta.quiz[courseId]||date))
     throw new Error('Der Ausbildungsbereich eines datierten Kurses kann nicht geändert werden.');
-   if(date)gaValidityWithRollback_('kurs',courseId,date,()=>gaReplace_('Kurse',courseId,changes));
-   else gaReplace_('Kurse',courseId,changes);
+   if(plan)gaCoursePlanRead_('kurs',courseId); // Fehlerhafte bestehende Planung nie überschreiben.
+   const write=()=>gaReplace_('Kurse',courseId,changes);
+   const save=()=>plan?gaCoursePlanWithRollback_('kurs',courseId,plan,write):write();
+   if(date)gaValidityWithRollback_('kurs',courseId,date,save);else save();
   }else{
    courseId=gaId_();
    const create=()=>gaAppend_('Kurse',{ID:courseId,...changes,ErstelltAm:gaNow_()});
-   if(date)gaValidityWithRollback_('kurs',courseId,date,create);else create();
+   const save=()=>plan?gaCoursePlanWithRollback_('kurs',courseId,plan,create):create();
+   if(date)gaValidityWithRollback_('kurs',courseId,date,save);else save();
   }
   gaReplace_('KursProjekte',project.ID,{KursID:courseId,Status:'Veröffentlicht',Rueckmeldung:notes,
    GeprueftVon:u.ID,GeprueftAm:gaNow_()});

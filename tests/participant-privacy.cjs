@@ -82,7 +82,7 @@ const front=vm.createContext({STATE:{...person,kurse:person.kurse.map(c=>({...c,
  h:x=>String(x??''),by:(rows,id)=>(rows||[]).find(x=>x.ID===id),role:()=> 'Teilnehmer',
  dt:x=>String(x||''),gaTrainingUpcoming:t=>t.ID==='t1',gaTrainingTimestamp:x=>Date.parse(x)||0,
  qCourseBadge:()=>'<span>Bestätigt</span>',safeLinks:x=>'<a href="'+x+'">Unterlagen</a>'});
-vm.runInContext(['navs','gaCoursePrivacyBanner','gaParticipantCourseText','courseCard','myterms'].map(functionText).join('\n'),front);
+vm.runInContext(['navs','gaCoursePrivacyBanner','gaParticipantCourseText','gaCoursePlanInfo','courseCard','myterms'].map(functionText).join('\n'),front);
 assert(!front.navs().some(x=>x[0]==='courses'));
 const participantHtml=front.myterms();
 assert(participantHtml.includes('Eigener GAB-Kurs'));

@@ -280,6 +280,7 @@ function functionText(name){
  return html.slice(start,end);
 }
 front.areaOptions=()=>'<option>Grundausbildung</option>';front.courseCard=()=>'';
+front.gaCoursePlanFields=()=>'';front.gaCoursePlanInfo=()=>'';
 front.role=()=> 'Administrator';
 front.by=(rows,id)=>(rows||[]).find(x=>x.ID===id);
 front.STATE={turnusse:turns,mitglieder:tables.Mitglieder,kurse:courses,

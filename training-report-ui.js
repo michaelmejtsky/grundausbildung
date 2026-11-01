@@ -77,7 +77,7 @@ function gaAttendancePage(){
  '<div class="ga-course-top"><span class="tag '+(completed?'ok':'blue')+'">'+(completed?'Abschluss dokumentiert':'Ausbildung offen')+'</span>'+
  '<span>1. Unterlagen öffnen & ausbilden</span><span>2. Ausbildung abschließen</span></div>'+
  '<details class="ga-course-section" open><summary><span class="ga-course-section-icon">1</span><span><strong>Kursinhalt & Präsentation</strong><small>Direkt beim Öffnen verfügbar</small></span></summary>'+
- '<div class="ga-course-section-body">'+linkBlock+
+ '<div class="ga-course-section-body">'+linkBlock+(typeof gaCoursePlanInfo==='function'?gaCoursePlanInfo('kurse',c?.ID):'')+
  '<details class="ga-subsection" open><summary>Ausbildungsinhalt anzeigen</summary><div class="ga-course-text">'+h(c?.Inhalt||'Kein Inhalt hinterlegt')+'</div></details>'+
  (c?.Lernziele?'<details class="ga-subsection"><summary>Lernziele</summary><div class="ga-course-text">'+h(c.Lernziele)+'</div></details>':'')+
  '<div class="ga-training-continue"><button class="primary" type="button" data-training-finish-open>Ausbildung abschließen & Anwesenheit erfassen</button></div></div></details>'+

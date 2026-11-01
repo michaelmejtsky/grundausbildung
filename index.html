@@ -342,7 +342,36 @@ function overview(){
  '</section>';
 }
 function gaParticipantCourseText(value){return String(value||'').replace(/(?:https?:\/\/|www\.|(?:drive|docs)\.google\.com\/)[^\s<>"']+/gi,'[Link nur für das Ausbildungsteam]');}
-function courseCard(c){const allowed=['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()),links=allowed?safeLinks(c.Links):'';return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(allowed?c.Inhalt:gaParticipantCourseText(c.Inhalt))+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(allowed?c.Lernziele:gaParticipantCourseText(c.Lernziele))+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':allowed?'<p class="muted small">Noch keine Präsentation verlinkt</p>':'')+''+'</div>'}
+function gaCoursePlanInfo(group,id){
+ if(!['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const plan=STATE.kursPlanung?.[group]?.[id];if(!plan)return '';
+ if(plan.Fehler)return '<p class="notice">'+h(plan.Fehler)+'</p>';
+ const names=(plan.VerantwortlicheIDs||[]).map(id=>(STATE.benutzer||[]).find(u=>u.ID===id)?.Name||'Ehemals zugeordnete Person');
+ if(!plan.MaterialNotiz&&!names.length)return '';
+ return '<div class="ga-course-planning">'+(plan.MaterialNotiz?'<h3>Arbeitsmaterial</h3><div class="msg ga-readable">'+h(plan.MaterialNotiz)+'</div>':'')+
+  (names.length?'<h3>Zuständige Ausbilder</h3><p>'+names.map(h).join(', ')+'</p>':'')+'</div>';
+}
+function gaCoursePlanFields(group,id,area){
+ if(!STATE.kursPlanung)return '<div class="wide notice">Für Arbeitsmaterial und Zuständigkeiten bitte Code.gs 1.13.2 bereitstellen.</div>';
+ const plan=STATE.kursPlanung[group]?.[id]||{},selected=new Set(plan.VerantwortlicheIDs||[]);
+ if(plan.Fehler)return '<div class="wide notice">'+h(plan.Fehler)+'</div>';
+ const staff=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(u.Rolle));
+ const known=new Set(staff.map(u=>u.ID)),missing=[...selected].filter(id=>!known.has(id));
+ const choices=staff.map(u=>{const advancedOnly=u.Rolle==='Organisator Erweiterte Ausbildung',hidden=advancedOnly&&area!=='Erweiterte Ausbildung';
+  return '<label class="inline-check" '+(advancedOnly?'data-ga-advanced-trainer ':'')+(hidden?'hidden style="display:none" ':'')+'><input type="checkbox" name="VerantwortlicheIDs" value="'+h(u.ID)+'" '+(selected.has(u.ID)?'checked ':'')+(hidden?'disabled ':'')+'>'+h(u.Name||'Ausbilder')+(u.Aktiv!=='JA'?' · derzeit nicht aktiv':'')+'</label>';
+ }).join('')+missing.map(id=>'<label class="inline-check"><input type="checkbox" name="VerantwortlicheIDs" value="'+h(id)+'" checked> Ehemals zugeordnete Person</label>').join('');
+ return '<div class="wide" data-course-planning><label>Arbeitsmaterial und Vorbereitung</label><textarea name="MaterialNotiz" rows="4" maxlength="2000" placeholder="z. B. Beamer, Funkgeräte und Übungsmaterial vorbereiten">'+h(plan.MaterialNotiz||'')+'</textarea>'+
+  '<p class="small muted">Nur für das Ausbildungsteam sichtbar.</p><label>Zuständige Ausbilder für dieses Modul</label><div class="ga-attendance-list">'+(choices||'<p class="muted small">Noch keine Ausbilderzugänge vorhanden.</p>')+'</div>'+
+  '<p class="small muted">Die Auswahl ist eine Übersicht. Jeder berechtigte Ausbilder kann den Kurs durchführen; die tatsächlichen Ausbilder werden beim Abschluss erfasst.</p></div>';
+}
+function gaCourseFormData(form,fd,data){
+ const result={...data},links=[String(result.Links||'').trim(),String(result.DokumenteHinzu||'').trim()].filter(Boolean).join('\n');
+ if(links.length>5000)throw new Error('Die Unterlagenlinks dürfen zusammen höchstens 5000 Zeichen lang sein.');
+ result.Links=links;delete result.DokumenteHinzu;
+ if(form.querySelector('[data-course-planning]'))result.VerantwortlicheIDs=fd.getAll('VerantwortlicheIDs');
+ return result;
+}
+function courseCard(c){const allowed=['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(role()),links=allowed?safeLinks(c.Links):'';return '<div class="item"><div class="row between"><b>'+h(c.Titel)+'</b><span class="tag blue">'+h(c.Bereich)+'</span></div>'+(c.Inhalt?'<h3>Inhalt</h3><p class="msg">'+h(allowed?c.Inhalt:gaParticipantCourseText(c.Inhalt))+'</p>':'')+(c.Lernziele?'<h3>Lernziele</h3><p class="msg">'+h(allowed?c.Lernziele:gaParticipantCourseText(c.Lernziele))+'</p>':'')+(links?'<h3>Unterlagen & Präsentationen</h3><ul class="url-list">'+links+'</ul>':allowed?'<p class="muted small">Noch keine Präsentation verlinkt</p>':'')+(allowed?gaCoursePlanInfo('kurse',c.ID):'')+'</div>'}
 function courses(){
  const cards=STATE.kurse.filter(c=>c.Aktiv==='JA');
  const edit=FORM==='course'&&EDIT?by(cards,EDIT):null;
@@ -353,7 +382,9 @@ function courses(){
  (STATE.gueltigkeit&&['Administrator','Organisator Erweiterte Ausbildung'].includes(role())?'<div><label>Für Turnusse gültig ab</label><input type="date" name="GueltigAb" value="'+h(STATE.gueltigkeit.kurs?.[edit.ID]||'')+'"><p class="small muted">Leer: Pflichtstatus gilt für alle Turnusse. Mit Datum: Pflicht für Turnusse mit Start ab diesem Tag. Eine Änderung wirkt sich auch auf die Einordnung bestehender Turnusse aus; Nachweise bleiben erhalten.</p></div>':'')+
  '<div class="wide"><label>Ausbildungsinhalt (Pflicht)</label><textarea name="Inhalt" required>'+h(edit.Inhalt||'')+'</textarea></div>'+
  '<div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit.Lernziele||'')+'</textarea></div>'+
- '<div class="wide"><label>Präsentation und Unterlagen (HTTPS-Links, je Zeile)</label><textarea name="Links">'+h(edit.Links||'')+'</textarea></div>'+
+ '<div class="wide"><label>Präsentation und vorhandene Unterlagen (HTTPS-Links, je Zeile)</label><textarea name="Links">'+h(edit.Links||'')+'</textarea></div>'+
+ '<div class="wide"><label>Weitere Dokumente verlinken (z. B. Google Drive, je Zeile)</label><textarea name="DokumenteHinzu" placeholder="https://drive.google.com/..."></textarea><p class="small muted">Neue Links werden zur vorhandenen Unterlagenliste hinzugefügt.</p></div>'+
+ gaCoursePlanFields('kurse',edit.ID,edit.Bereich)+
  '</div><p class="small muted">Die Änderung wird sofort veröffentlicht und protokolliert. Bestehende Teilnahmen bleiben erhalten.</p>'+
  '<div class="btnline"><button class="primary">Änderungen veröffentlichen</button><button type="button" class="secondary" data-cancel="1">Abbrechen</button></div></form></section>':'';
  return form+'<section class="panel"><h2>Veröffentlichter Kurskatalog ('+cards.length+')</h2>'+
@@ -377,7 +408,7 @@ function gaProjectReviewDetail(p){
    '<div class="ga-review-block"><h3>Lernziele</h3><div class="msg ga-readable">'+h(p.Lernziele||'Keine Lernziele eingetragen')+'</div></div>'+
    '<div class="ga-review-block ga-review-wide"><h3>Präsentation & weitere Unterlagen</h3>'+
    (links?'<p class="muted small">Öffne die Unterlagen in einem neuen Tab und prüfe sie vor der Entscheidung.</p><ul class="url-list ga-document-list">'+links+'</ul>':'<p class="muted">Bei diesem Modul wurden keine zusätzlichen Links hinterlegt.</p>')+'</div>'+
-  '</div>'+
+  '</div>'+gaCoursePlanInfo('projekte',p.ID)+
   '<form data-form="projectReview" data-id="'+h(p.ID)+'" class="ga-review-form">'+
    '<h3>Prüfergebnis festhalten</h3>'+
    '<label>Deine Entscheidung</label><select name="Entscheidung" data-project-decision required>'+
@@ -409,7 +440,8 @@ function projects(){
  '<div class="wide"><label>Ausbildungsinhalt (bei Einreichung Pflicht)</label><textarea name="Inhalt" maxlength="8000">'+h(project?.Inhalt||'')+'</textarea></div>'+
  '<div class="wide"><label>Lernziele</label><textarea name="Lernziele" maxlength="4000">'+h(project?.Lernziele||'')+'</textarea></div>'+
  '<div class="wide"><label>Präsentation (HTTPS-Link, bei Theorie Pflicht)</label><input name="PraesentationURL" type="url" placeholder="https://docs.google.com/presentation/..." value="'+h(project?.PraesentationURL||'')+'"></div>'+
- '<div class="wide"><label>Weitere Unterlagen (HTTPS-Links, jeweils neue Zeile)</label><textarea name="WeitereLinks">'+h(project?.WeitereLinks||'')+'</textarea></div>'+
+ '<div class="wide"><label>Dokumente und weitere Unterlagen (HTTPS-Links, jeweils neue Zeile)</label><textarea name="WeitereLinks" placeholder="https://drive.google.com/...">'+h(project?.WeitereLinks||'')+'</textarea></div>'+
+ gaCoursePlanFields('projekte',project?.ID||'',project?.Bereich||(role()==='Organisator Erweiterte Ausbildung'?'Erweiterte Ausbildung':'Grundausbildung'))+
  '</div><div class="notice">Unfertige Projekte kannst du speichern. Bei „Zur Prüfung senden“ werden der Ausbildungsinhalt und bei Theorie eine Präsentation verlangt. Der Prüfer kann den gesamten Inhalt ansehen und Rückmeldungen hinterlassen.</div>'+
  '<div class="btnline"><button type="submit" class="primary">'+(project?'Änderungen speichern':'Projekt anlegen')+'</button>'+
  (project?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+
@@ -433,6 +465,7 @@ function projects(){
      '<h4>Inhalte</h4><div class="msg">'+h(p.Inhalt||'Noch nicht hinterlegt')+'</div>'+
      '<h4>Lernziele</h4><div class="msg">'+h(p.Lernziele||'Noch nicht hinterlegt')+'</div>'+
      (gaProjectDocumentLinks(p)?'<h4>Unterlagen</h4><ul class="url-list">'+gaProjectDocumentLinks(p)+'</ul>':'')+
+     gaCoursePlanInfo('projekte',p.ID)+
    '</details>':'')+'</article>';
  };
  return (canApprove?'<div class="ga-review-banner"><div><span class="ga-eyebrow">FREIGABECENTER</span><h2>Module zur Kontrolle</h2><p>Alle Inhalte und Präsentationen vor der Entscheidung ansehen.</p></div><strong>'+pending.length+' offen</strong></div>':'')+
@@ -1140,6 +1173,10 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-self
  if(x.dataset.read){await doSave('readNotification',{ID:x.dataset.read});return}
 });
 $('app').addEventListener('change',e=>{
+ if(e.target.matches('select[name="Bereich"]')){
+  const form=e.target.closest('form[data-form="course"],form[data-form="project"]');
+  if(form){const advanced=e.target.value==='Erweiterte Ausbildung';form.querySelectorAll('[data-ga-advanced-trainer]').forEach(label=>{label.hidden=!advanced;label.style.display=advanced?'':'none';const input=label.querySelector('input');if(input)input.disabled=!advanced;});}
+ }
  if(e.target.matches('[data-project-decision]')){const form=e.target.closest('form'),memo=form?.querySelector('[name="Rueckmeldung"]');if(memo){memo.required=e.target.value==='Zurückgeben';memo.placeholder=e.target.value==='Zurückgeben'?'Bitte konkrete Änderungswünsche nennen (z. B. Thema, Folie, Lernziel).':'Optionaler Prüfvermerk zur Freigabe';}return;}
  if(e.target.matches('[data-report-category]')){REPORT_FILTER.category=e.target.value;render();return;}
  if(e.target.matches('[data-report-status]')){REPORT_FILTER.status=e.target.value;render();return;}
@@ -1158,8 +1195,8 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
   const result=await api('reviewProject',{ID:form.dataset.id,Entscheidung:data.Entscheidung,Rueckmeldung:String(data.Rueckmeldung||'').trim()});
   PROJECT_REVIEW_ID='';tip(result.message||'Prüfung gespeichert.');await reload();
  }
- else if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',data)}
- else if(type==='project'){if(EDIT)data.ID=EDIT;await doSave('saveProject',data);}
+ else if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',gaCourseFormData(form,fd,data))}
+ else if(type==='project'){if(EDIT)data.ID=EDIT;if(form.querySelector('[data-course-planning]'))data.VerantwortlicheIDs=fd.getAll('VerantwortlicheIDs');await doSave('saveProject',data);}
  else if(type==='permissions')await doSave('setPermission',data);
  else if(type==='roleChange'){
   const old=by(STATE.benutzer,data.BenutzerID);
@@ -1233,4 +1270,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=privatsphaere-1"></script><script src="./admin-ui.js?v=gueltigkeit-1"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=gueltigkeit-1"></script></body></html>
