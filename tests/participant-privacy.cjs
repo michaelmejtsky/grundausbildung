@@ -61,11 +61,13 @@ assert.equal(person.kursProjekte.length,0);
 const noProfile=ctx.gaState_({ID:'orphan',Name:'Niemals zugeordnet',Email:'nobody@example.test',Rolle:'Teilnehmer',Aktiv:'JA'});
 assert.equal(noProfile.kurse.length,0);assert.equal(noProfile.quizKurse.length,0);assert.equal(noProfile.frageboegen.length,0);
 assert.throws(()=>ctx.gaGetQuizEdit_(user('p1'),{KursID:'c1'}),/Recht/);
-for(const staffId of ['admin','trainer']){
+for(const staffId of ['admin']){
  const staff=ctx.gaState_(user(staffId));
  assert.equal(staff.kurse.length,tables.Kurse.length);
  assert.equal(staff.kurse.find(c=>c.ID==='c1').Links,'https://private.example/c1');
 }
+const trainerChoice=ctx.gaState_(user('trainer'));assert.equal(trainerChoice.ausbilderBereichAuswahlNoetig,true);assert(!trainerChoice.kurse);
+const trainerGab=ctx.gaState_({...user('trainer'),_gaTrainerArea:'Grundausbildung'});assert.deepEqual(ids(trainerGab.kurse),['c1','c2','old','unplanned']);assert(trainerGab.kurse.every(c=>c.Links));
 const org=ctx.gaState_(user('organizer'));
 assert.deepEqual(ids(org.kurse),['ce1','ce2']);
 assert.equal(org.kurse[0].Links.startsWith('https://private.example/'),true);

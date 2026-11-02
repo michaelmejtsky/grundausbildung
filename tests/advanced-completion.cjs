@@ -60,7 +60,7 @@ assert.throws(()=>ctx.gaApi('startQuiz',{KursID:'required'},'token'),/bereits er
 assert(tables.Benachrichtigungen.some(n=>n.BenutzerID===org.ID&&n.Titel==='Kursquiz abgegeben'));
 // An instructor also sees and can confirm additional GAB guests in an expanded cohort.
 tables.Termine.push({ID:'term3',KursID:'required',TurnusID:'e',Status:'Geplant',Beginn:'2026-11-05T08:00'});
-actor=trainer;ctx.gaApi('saveAttendance',{TerminID:'term3',Anwesend:[{MitgliedID:'native',Anwesend:true},
+actor=trainer;ctx.gaApi('saveAttendance',{_gaTrainerArea:'Erweiterte Ausbildung',TerminID:'term3',Anwesend:[{MitgliedID:'native',Anwesend:true},
  {MitgliedID:'guest',Anwesend:true},{MitgliedID:'noaccount',Anwesend:false}],AusbilderIDs:['trainer']},'token');
 assert(tables.Teilnahmen.some(a=>a.TerminID==='term3'&&a.MitgliedID==='guest'&&a.Anwesend==='JA'));
 assert(tables.Benachrichtigungen.some(n=>n.BenutzerID===guest.ID&&n.BezugID==='term3'&&n.Titel==='Kurs abgeschlossen'));
@@ -104,3 +104,19 @@ assert.throws(()=>ctx.gaApi('completeAdvancedTraining',{MitgliedID:'native'},'to
 assert.equal(values.get(ctx.gaAdvCompletionKey_('native')),'not-json');
 assert(ctx.gaState_(org).erweiterteAbschluesse.find(x=>x.MitgliedID==='native').Fehler);
 console.log('Advanced education: guest attendance, course/quiz notices, pass, access isolation, completion, retries and preservation passed.');
+
+// Quiz-result staff notifications respect both course and cohort permissions for legacy mixed terms.
+const advancedOnly=user('advanced-trainer','Ausbilder'),gabOnly=user('gab-trainer','Ausbilder');
+tables.Benutzer.push(advancedOnly,gabOnly);
+tables.Berechtigungen=[{BenutzerID:trainer.ID,KurseGestalten:'JA'},{BenutzerID:advancedOnly.ID,KurseGestalten:'JA'},{BenutzerID:gabOnly.ID,KurseGestalten:'JA'}];
+values.set('GA_TRAINER_AREAS_V1_'+advancedOnly.ID,JSON.stringify(['Erweiterte Ausbildung']));
+values.set('GA_TRAINER_AREAS_V1_'+gabOnly.ID,JSON.stringify(['Grundausbildung']));
+tables.Kurse.push({ID:'mixed-quiz-course',Titel:'Zusatzmodul in GAB',Bereich:'Erweiterte Ausbildung',Aktiv:'JA'});
+tables.Termine.push({ID:'mixed-quiz-term',KursID:'mixed-quiz-course',TurnusID:'g',Status:'Durchgeführt',Beginn:'2026-11-01T08:00'});
+tables.Teilnahmen.push({ID:'mixed-attendance',TerminID:'mixed-quiz-term',MitgliedID:'outsider',Anwesend:'JA'});
+tables.QuizKurse.push({...tables.QuizKurse[0],ID:'mixed-quiz-config',KursID:'mixed-quiz-course'});
+actor=outsider;const mixedQuiz=ctx.gaApi('startQuiz',{KursID:'mixed-quiz-course'},'token');
+ctx.gaApi('submitQuiz',{VersuchID:mixedQuiz.VersuchID,Antworten:[0]},'token');
+assert(tables.Benachrichtigungen.some(n=>n.BenutzerID===trainer.ID&&n.BezugID==='mixed-quiz-course'&&n.Titel==='Kursquiz abgegeben'));
+assert(!tables.Benachrichtigungen.some(n=>[advancedOnly.ID,gabOnly.ID,org.ID].includes(n.BenutzerID)&&n.BezugID==='mixed-quiz-course'&&n.Titel==='Kursquiz abgegeben'));
+console.log('Mixed-cohort quiz notifications respect staff course and cohort permissions.');

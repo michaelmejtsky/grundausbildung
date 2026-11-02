@@ -52,7 +52,7 @@ assert(!JSON.stringify(participantState).includes('VerantwortlicheIDs'));assert(
 
 // Ein anderer Ausbilder kann den Kurs dennoch dokumentieren; seine tatsächliche Teilnahme wird gespeichert.
 actor=trainer2;
-ctx.gaApi('saveAttendance',{TerminID:'t1',Anwesend:[{MitgliedID:'m1',Anwesend:true}],AusbilderIDs:['trainer2']},'token');
+ctx.gaApi('saveAttendance',{_gaTrainerArea:'Grundausbildung',TerminID:'t1',Anwesend:[{MitgliedID:'m1',Anwesend:true}],AusbilderIDs:['trainer2']},'token');
 assert.equal(tables.Ausbildungsberichte.find(x=>x.TerminID==='t1').AusbilderIDs,'trainer2');
 assert.equal(tables.Teilnahmen.find(x=>x.TerminID==='t1').AusbilderIDs,'trainer2');
 assert.deepEqual(Array.from(ctx.gaCoursePlanRead_('kurs','gab').VerantwortlicheIDs),['trainer1','admin']);
@@ -132,7 +132,7 @@ assert.deepEqual(Array.from(built.VerantwortlicheIDs),['trainer1','trainer2']);a
 assert.throws(()=>front.gaCourseFormData({querySelector:()=>false},{getAll:()=>[]},{Links:'x'.repeat(5001)}),/5000/);
 assert(front.courses().includes('Neues Material'));assert(front.courses().includes('jeder berechtigte Ausbilder')||front.courses().includes('Jeder berechtigte Ausbilder'));
 assert(front.gaCoursePlanFields('kurse','adv','Erweiterte Ausbildung').includes('value="org" checked'));
-assert(front.gaCoursePlanFields('kurse','gab','Grundausbildung').includes('data-ga-advanced-trainer hidden'));
+assert(front.gaCoursePlanFields('kurse','gab','Grundausbildung').match(/data-ga-trainer-areas="[^"]+" hidden/));
 front.role=()=> 'Teilnehmer';assert.equal(front.gaCoursePlanInfo('kurse','gab'),'');assert(!front.courseCard(course('gab')).includes('Neues Material'));
 front.role=()=> 'Ausbilder';front.STATE.user=trainer2;front.STATE.rechte={};
 vm.runInContext(fs.readFileSync(path.join(root,'training-report-ui.js'),'utf8'),front,{filename:'training-report-ui.js'});

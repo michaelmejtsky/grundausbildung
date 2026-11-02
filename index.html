@@ -75,12 +75,13 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.13.4</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="gaViewButton" type="button" class="secondary hidden">👁 Ansicht wechseln</button><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><section id="gaViewChooser" class="panel hidden"><h2>Ansicht wechseln</h2><p>Sieh dir die App eines aktiven Kontos an. Diese Vorschau ist schreibgeschützt.</p><label>Konto und Rolle<select id="gaViewAccount"><option value="">Konto auswählen</option></select></label><div class="btnline"><button id="gaViewPreview" type="button" class="primary">Vorschau öffnen</button><button id="gaViewAdvanced" type="button" class="secondary">Erweiterte Ausbildung verwalten</button><button id="gaViewCancel" type="button" class="secondary">Schließen</button></div><p class="small muted">In der Verwaltung der erweiterten Ausbildung arbeitest du weiterhin als Administrator; Änderungen werden gespeichert.</p></section><div id="gaViewBanner" class="notice hidden"></div><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.13.5</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="gaTrainerButton" type="button" class="secondary hidden">Ausbildungsbereich wechseln</button><button id="gaViewButton" type="button" class="secondary hidden">👁 Ansicht wechseln</button><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><section id="gaViewChooser" class="panel hidden"><h2>Ansicht wechseln</h2><p>Sieh dir die App eines aktiven Kontos an. Diese Vorschau ist schreibgeschützt.</p><label>Konto und Rolle<select id="gaViewAccount"><option value="">Konto auswählen</option></select></label><div class="btnline"><button id="gaViewPreview" type="button" class="primary">Vorschau öffnen</button><button id="gaViewAdvanced" type="button" class="secondary">Erweiterte Ausbildung verwalten</button><button id="gaViewCancel" type="button" class="secondary">Schließen</button></div><p class="small muted">In der Verwaltung der erweiterten Ausbildung arbeitest du weiterhin als Administrator; Änderungen werden gespeichert.</p></section><div id="gaViewBanner" class="notice hidden"></div><div id="content"></div></main></div><section id="gaTrainerChooser" class="hidden" role="dialog" aria-modal="true" aria-labelledby="gaTrainerTitle" style="position:fixed;inset:0;z-index:1000;background:rgba(16,40,59,.72);display:grid;place-items:center;padding:20px;overflow:auto"><div class="panel" style="width:min(560px,100%);max-height:90vh;overflow:auto"><p class="ga-trainer-kicker">DEIN AUSBILDUNGSBEREICH</p><h2 id="gaTrainerTitle">Wo möchtest du ausbilden?</h2><p>Wähle den Bereich für deine heutige Ausbildung. Du kannst später jederzeit wechseln.</p><div id="gaTrainerChoices" class="ga-trainer-shortcuts"></div><div class="btnline"><button id="gaTrainerCancel" type="button" class="secondary hidden">Abbrechen</button><button type="button" class="secondary" onclick="logout()">Abmelden</button></div></div></section><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
 let GA_MANUAL_LOGIN_PENDING=false;
+let GA_TRAINER_AREA='';
 let GA_ADMIN_ADV_VIEW=false,GA_ROLE_PREVIEW='',GA_ADMIN_USERS=[],GA_VIEW_BUSY=false;
 let GA_GAB_NOTICE_PREVIEW=null,GA_GAB_NOTICE_BUSY=false;
 const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
@@ -291,21 +292,25 @@ if('serviceWorker' in navigator){
 }
 function tip(msg,error=false){let e=$('toast');e.textContent=msg;e.className='toast'+(error?' err':'');clearTimeout(tip.timer);tip.timer=setTimeout(()=>e.classList.add('hidden'),5000);}
 async function api(action,payload={}){
- const preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW;
+ const preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW,trainerArea=GA_TRAINER_AREA;
  if(preview&&!['state','getQuizEdit','participantStatus'].includes(action))throw new Error('Die Rollenvorschau ist schreibgeschützt.');
- const scoped=preview?{...payload,_gaRolePreview:preview}:advanced?{...payload,_gaAdvancedView:true}:payload;
+ const scoped={...payload,...(trainerArea?{_gaTrainerArea:trainerArea}:{}),...(preview?{_gaRolePreview:preview}:advanced?{_gaAdvancedView:true}:{})};
  const result=await rpc('gaApi',action,scoped,TOKEN);
  if(action==='state'&&((preview&&(!result.administratorRollenvorschau||result.user?.ID!==preview))||
   (advanced&&(!result.administratorErweitert||!result.organisatorErweitert))))
   throw new Error('Bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
+ if(action==='state'&&result.user?.Rolle==='Ausbilder'&&(!Array.isArray(result.ausbilderBereiche)||(trainerArea&&result.ausbilderBereich!==trainerArea&&!result.ausbilderBereichNeuWaehlen)))
+  throw new Error('Bitte zuerst Code.gs 1.13.5 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
  return result;
 }
 async function reload(){
- const token=TOKEN,preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW,next=await api('state');
- if(token!==TOKEN||preview!==GA_ROLE_PREVIEW||advanced!==GA_ADMIN_ADV_VIEW)return;
+ const token=TOKEN,preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW,area=GA_TRAINER_AREA,next=await api('state');
+ if(token!==TOKEN||preview!==GA_ROLE_PREVIEW||advanced!==GA_ADMIN_ADV_VIEW||area!==GA_TRAINER_AREA||GA_VIEW_BUSY)return;
  STATE=next;GA_GAB_NOTICE_PREVIEW=null;render();
 }
 function gaUpdateViewControls(){
+ $('gaTrainerButton').classList.toggle('hidden',role()!=='Ausbilder'||(STATE.ausbilderBereiche||[]).length<2);
+ $('gaTrainerButton').textContent=(STATE.ausbilderBereich||'Bereich')+' · Wechseln';
  const allowed=role()==='Administrator'||GA_ADMIN_ADV_VIEW||!!GA_ROLE_PREVIEW;
  if(role()==='Administrator'&&!GA_ADMIN_ADV_VIEW&&!GA_ROLE_PREVIEW)GA_ADMIN_USERS=STATE.benutzer||[];
  $('gaViewButton').classList.toggle('hidden',!allowed);
@@ -328,7 +333,7 @@ async function gaSwitchView(mode,id=''){
    mode==='admin'&&next.user?.Rolle!=='Administrator')
    throw new Error('Bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
   if(typeof Q_EDIT!=='undefined'&&Q_EDIT){try{qAutoDraft();}catch(_){} Q_EDIT='';Q_SESSION=null;Q_META=null;Q_ITEMS=[];}
-  GA_ROLE_PREVIEW=mode==='preview'?id:'';GA_ADMIN_ADV_VIEW=mode==='advanced';STATE=next;GA_GAB_NOTICE_PREVIEW=null;
+  GA_ROLE_PREVIEW=mode==='preview'?id:'';GA_ADMIN_ADV_VIEW=mode==='advanced';GA_TRAINER_AREA='';STATE=next;GA_GAB_NOTICE_PREVIEW=null;
   VIEW=GA_ADMIN_ADV_VIEW?'advOverview':'overview';FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';
   $('gaViewChooser').classList.add('hidden');document.body.classList.remove('ga-nav-open');render();
  }catch(e){tip(e.message||'Ansicht konnte nicht geladen werden.',true);}
@@ -349,6 +354,37 @@ $('gaViewAdvanced').addEventListener('click',()=>gaSwitchView('advanced'));
 $('gaViewCancel').addEventListener('click',()=>$('gaViewChooser').classList.add('hidden'));
 $('app').addEventListener('submit',e=>{if(GA_ROLE_PREVIEW&&e.target.closest('form[data-form]')){e.preventDefault();e.stopImmediatePropagation();tip('Die Rollenvorschau ist schreibgeschützt.',true);}},true);
 $('app').addEventListener('click',e=>{if(GA_ROLE_PREVIEW&&e.target.closest('[data-push-enable],[data-push-disable],[data-test-push],[data-qstart]')){e.preventDefault();e.stopImmediatePropagation();tip('Diese Aktion ist in der Rollenvorschau deaktiviert.',true);}},true);
+function gaOpenTrainerChooser(required=false){
+ if(role()!=='Ausbilder')return;
+ const areas=STATE.ausbilderBereiche||[];
+ $('gaTrainerChoices').innerHTML=areas.map(a=>'<button type="button" class="ga-trainer-shortcut" data-trainer-area="'+h(a)+'"><span class="ga-trainer-shortcut-icon" aria-hidden="true">'+(a==='Grundausbildung'?'🚒':'🎓')+'</span><span><strong>'+h(a)+'</strong><small>Termine, Kurse und Unterlagen öffnen</small></span><span aria-hidden="true">›</span></button>').join('');
+ $('gaTrainerCancel').classList.toggle('hidden',required||!STATE.ausbilderBereich);
+ $('gaTrainerChooser').classList.remove('hidden');$('app').inert=true;
+ $('gaTrainerChoices').querySelector('button')?.focus();
+}
+async function gaChooseTrainerArea(area){
+ if(GA_VIEW_BUSY||role()!=='Ausbilder'||!(STATE.ausbilderBereiche||[]).includes(area))return;
+ const token=TOKEN,preview=GA_ROLE_PREVIEW,oldArea=GA_TRAINER_AREA;
+ GA_VIEW_BUSY=true;
+ $('gaTrainerChoices').querySelectorAll('button').forEach(b=>b.disabled=true);
+ try{
+  const payload={_gaTrainerArea:area,...(preview?{_gaRolePreview:preview}:{})};
+  const next=await rpc('gaApi','state',payload,token);
+  if(token!==TOKEN||preview!==GA_ROLE_PREVIEW||oldArea!==GA_TRAINER_AREA)return;
+  if(next.user?.Rolle!=='Ausbilder'||next.user.ID!==STATE.user.ID||next.ausbilderBereich!==area||
+   !next.ausbilderBereiche?.includes(area)||(preview&&!next.administratorRollenvorschau))
+   throw new Error('Bitte zuerst Code.gs 1.13.5 in der bestehenden Bereitstellung aktualisieren.');
+  if(typeof Q_EDIT!=='undefined'&&Q_EDIT){try{qAutoDraft();}catch(_){}Q_EDIT='';Q_SESSION=null;Q_META=null;Q_ITEMS=[];}
+  GA_TRAINER_AREA=area;STATE=next;VIEW='trainerHome';FORM='';EDIT=null;TERM=null;ATT={};PROJECT_REVIEW_ID='';
+  if(typeof GA_FREE_EDIT!=='undefined')GA_FREE_EDIT='';
+  $('gaTrainerChooser').classList.add('hidden');$('app').inert=false;document.body.classList.remove('ga-nav-open');render();
+ }catch(e){tip(e.message||'Ausbildungsbereich konnte nicht geladen werden.',true);}
+ finally{GA_VIEW_BUSY=false;$('gaTrainerChoices').querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+$('gaTrainerChoices').addEventListener('click',e=>{const b=e.target.closest('[data-trainer-area]');if(b)gaChooseTrainerArea(b.dataset.trainerArea);});
+$('gaTrainerButton').addEventListener('click',()=>gaOpenTrainerChooser());
+$('gaTrainerCancel').addEventListener('click',()=>{if(STATE?.ausbilderBereich){$('gaTrainerChooser').classList.add('hidden');$('app').inert=false;$('gaTrainerButton').focus();}});
+$('gaTrainerChooser').addEventListener('keydown',e=>{if(e.key==='Escape'&&STATE?.ausbilderBereich){e.preventDefault();$('gaTrainerChooser').classList.add('hidden');$('app').inert=false;$('gaTrainerButton').focus();}});
 function role(){return STATE?.user?.Rolle}
 function navs(){
  const r=role(),can=STATE.rechte||{},admin=r==='Administrator',trainer=r==='Ausbilder',advanced=r==='Organisator Erweiterte Ausbildung';
@@ -439,7 +475,7 @@ function gaTrainerOverview(now=Date.now()){
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">KURSE ENTWICKELN</p><h2>Kursprojekte</h2></div><button type="button" class="smallbtn" data-view="projects">Öffnen</button></div>'+
   (review.length?'<p class="ga-trainer-review">'+h(review.length)+' '+(review.length===1?'Modul wartet':'Module warten')+' auf Prüfung.</p>':'')+
   (projectHtml||'<p class="ga-trainer-empty">Keine eigenen offenen Kursprojekte.</p>')+'</section>':'';
- return '<div class="ga-trainer-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · AUSBILDER</p><h2>Servus, '+h(first)+'!</h2><p>Hier findest du Termine, deine Module und alles für die nächste Ausbildung.</p><button type="button" class="ga-trainer-hero-button" data-view="attendance">Ausbildung öffnen <span aria-hidden="true">→</span></button></div><div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
+ return '<div class="ga-trainer-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · AUSBILDER</p><h2>Servus, '+h(first)+'!</h2><p>Hier findest du Termine, deine Module und alles für die nächste Ausbildung.</p><p><strong>'+h(STATE.ausbilderBereich||'')+'</strong></p><button type="button" class="ga-trainer-hero-button" data-view="attendance">Ausbildung öffnen <span aria-hidden="true">→</span></button></div><div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
   '<div class="ga-trainer-stats">'+stat(upcoming.length,'Kommende Termine','Alle geplanten Ausbildungen')+
    stat(!planAvailable||planIncomplete?'–':assigned.length,'Meine Modulzuständigkeiten',!planAvailable?'Noch nicht verfügbar':planIncomplete?'Prüfung erforderlich':'Aktive Module mit Zuordnung')+
    stat(unread.length,'Ungelesene Mitteilungen','Unter deinen letzten 100')+'</div>'+
@@ -453,7 +489,13 @@ function gaTrainerOverview(now=Date.now()){
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
    (noticeHtml||'<p class="ga-trainer-empty">Du hast keine ungelesenen Benachrichtigungen.</p>')+'</section>'+projectPanel+'</div></div>';
 }
-function render(){if(!STATE)return;const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle;gaUpdateViewControls();
+function render(){if(!STATE)return;
+ if(role()==='Ausbilder'){
+  GA_TRAINER_AREA=STATE.ausbilderBereich||'';
+  if(STATE.ausbilderBereichAuswahlNoetig){$('nav').innerHTML='';$('content').innerHTML='';$('pageTitle').textContent='Ausbildungsbereich auswählen';$('userName').textContent=STATE.user.Name;$('userRole').textContent='Ausbilder';gaUpdateViewControls();gaOpenTrainerChooser(true);return;}
+ }
+ $('gaTrainerChooser').classList.add('hidden');$('app').inert=false;
+ const tabs=navs();if(!tabs.some(a=>a[0]===VIEW))VIEW=tabs[0][0];$('nav').innerHTML=gaMenuHtml(tabs);$('userName').textContent=STATE.user.Name;$('userRole').textContent=STATE.user.Rolle+(STATE.user.Bereich?' · '+STATE.user.Bereich:'');$('pageTitle').textContent=title();$('pageSubtitle').textContent='FF St. Pölten Stadt · '+STATE.user.Rolle+(STATE.ausbilderBereich?' · '+STATE.ausbilderBereich:'');gaUpdateViewControls();
  const root=$('content');root.innerHTML=VIEW==='trainerHome'?gaTrainerOverview():VIEW==='advOverview'?gaOrganizerOverview():VIEW==='advReady'?gaOrganizerReady():VIEW==='advMembers'?gaOrganizerMembers():VIEW==='advInvite'?gaOrganizerInvite():VIEW==='advQual'?gaOrganizerQualifications():VIEW==='overview'?overview():VIEW==='courses'?courses():VIEW==='terms'?terms():VIEW==='turnus'?turnusse():VIEW==='members'?members():VIEW==='qualifications'?qualifications():VIEW==='abschnitt'?gaAbschnittOverview():VIEW==='checks'?checks():VIEW==='users'?users():VIEW==='messages'?(STATE.organisatorErweitert?gaOrganizerMessages():messages()):VIEW==='attendance'?gaAttendancePage():VIEW==='trainingReports'?gaTrainingReportsPage():VIEW==='freeActivities'?gaFreeActivityPage():VIEW==='mine'?mine():VIEW==='myterms'?myterms():VIEW==='tasks'?tasks():VIEW==='projects'?projects():VIEW==='quizzes'||VIEW==='myquiz'?quizPage():VIEW==='rights'?rights():VIEW==='reports'?reports():VIEW==='reviews'?reviews():VIEW==='questionnaires'?(STATE.organisatorErweitert?gaOrganizerQuestionnaires():questionnaires()):VIEW==='ratings'?ratings():VIEW==='pushadmin'?pushAdmin():notifications();root.insertAdjacentHTML('afterbegin',gaCoursePrivacyBanner()+gaPushOnboardingBanner());}
 function metric(n,text){return '<div class="metric"><div class="n">'+h(n)+'</div><div class="k">'+h(text)+'</div></div>'}
 function overview(){
@@ -499,8 +541,8 @@ function gaCoursePlanFields(group,id,area){
  if(plan.Fehler)return '<div class="wide notice">'+h(plan.Fehler)+'</div>';
  const staff=(STATE.benutzer||[]).filter(u=>['Administrator','Ausbilder','Organisator Erweiterte Ausbildung'].includes(u.Rolle));
  const known=new Set(staff.map(u=>u.ID)),missing=[...selected].filter(id=>!known.has(id));
- const choices=staff.map(u=>{const advancedOnly=u.Rolle==='Organisator Erweiterte Ausbildung',hidden=advancedOnly&&area!=='Erweiterte Ausbildung';
-  return '<label class="inline-check" '+(advancedOnly?'data-ga-advanced-trainer ':'')+(hidden?'hidden style="display:none" ':'')+'><input type="checkbox" name="VerantwortlicheIDs" value="'+h(u.ID)+'" '+(selected.has(u.ID)?'checked ':'')+(hidden?'disabled ':'')+'>'+h(u.Name||'Ausbilder')+(u.Aktiv!=='JA'?' · derzeit nicht aktiv':'')+'</label>';
+ const choices=staff.map(u=>{const advancedOnly=u.Rolle==='Organisator Erweiterte Ausbildung',hidden=(advancedOnly&&area!=='Erweiterte Ausbildung')||(u.Rolle==='Ausbilder'&&Array.isArray(u.Ausbildungsbereiche)&&!u.Ausbildungsbereiche.includes(area));
+  return '<label class="inline-check" '+('data-ga-trainer-areas="'+h(JSON.stringify(u.Rolle==='Administrator'?['Grundausbildung','Erweiterte Ausbildung']:advancedOnly?['Erweiterte Ausbildung']:u.Ausbildungsbereiche||['Grundausbildung','Erweiterte Ausbildung']))+'" ')+(hidden?'hidden style="display:none" ':'')+'><input type="checkbox" name="VerantwortlicheIDs" value="'+h(u.ID)+'" '+(selected.has(u.ID)?'checked ':'')+(hidden&&!selected.has(u.ID)?'disabled ':'')+'>'+h(u.Name||'Ausbilder')+(u.Aktiv!=='JA'?' · derzeit nicht aktiv':'')+'</label>';
  }).join('')+missing.map(id=>'<label class="inline-check"><input type="checkbox" name="VerantwortlicheIDs" value="'+h(id)+'" checked> Ehemals zugeordnete Person</label>').join('');
  return '<div class="wide" data-course-planning><label>Arbeitsmaterial und Vorbereitung</label><textarea name="MaterialNotiz" rows="4" maxlength="2000" placeholder="z. B. Beamer, Funkgeräte und Übungsmaterial vorbereiten">'+h(plan.MaterialNotiz||'')+'</textarea>'+
   '<p class="small muted">Nur für das Ausbildungsteam sichtbar.</p><label>Zuständige Ausbilder für dieses Modul</label><div class="ga-attendance-list">'+(choices||'<p class="muted small">Noch keine Ausbilderzugänge vorhanden.</p>')+'</div>'+
@@ -526,7 +568,7 @@ function courses(){
  '<div class="wide"><label>Lernziele</label><textarea name="Lernziele">'+h(edit.Lernziele||'')+'</textarea></div>'+
  '<div class="wide"><label>Präsentation und vorhandene Unterlagen (HTTPS-Links, je Zeile)</label><textarea name="Links">'+h(edit.Links||'')+'</textarea></div>'+
  '<div class="wide"><label>Weitere Dokumente verlinken (z. B. Google Drive, je Zeile)</label><textarea name="DokumenteHinzu" placeholder="https://drive.google.com/..."></textarea><p class="small muted">Neue Links werden zur vorhandenen Unterlagenliste hinzugefügt.</p></div>'+
- gaCoursePlanFields('kurse',edit.ID,edit.Bereich)+
+ gaCoursePlanFields('kurse',edit.ID,edit.Bereich||STATE.ausbilderBereich||'Grundausbildung')+
  '</div><p class="small muted">Die Änderung wird sofort veröffentlicht und protokolliert. Bestehende Teilnahmen bleiben erhalten.</p>'+
  '<div class="btnline"><button class="primary">Änderungen veröffentlichen</button><button type="button" class="secondary" data-cancel="1">Abbrechen</button></div></form></section>':'';
  return form+'<section class="panel"><h2>Veröffentlichter Kurskatalog ('+cards.length+')</h2>'+
@@ -583,7 +625,7 @@ function projects(){
  '<div class="wide"><label>Lernziele</label><textarea name="Lernziele" maxlength="4000">'+h(project?.Lernziele||'')+'</textarea></div>'+
  '<div class="wide"><label>Präsentation (HTTPS-Link, bei Theorie Pflicht)</label><input name="PraesentationURL" type="url" placeholder="https://docs.google.com/presentation/..." value="'+h(project?.PraesentationURL||'')+'"></div>'+
  '<div class="wide"><label>Dokumente und weitere Unterlagen (HTTPS-Links, jeweils neue Zeile)</label><textarea name="WeitereLinks" placeholder="https://drive.google.com/...">'+h(project?.WeitereLinks||'')+'</textarea></div>'+
- gaCoursePlanFields('projekte',project?.ID||'',project?.Bereich||(role()==='Organisator Erweiterte Ausbildung'?'Erweiterte Ausbildung':'Grundausbildung'))+
+ gaCoursePlanFields('projekte',project?.ID||'',project?.Bereich||STATE.ausbilderBereich||(role()==='Organisator Erweiterte Ausbildung'?'Erweiterte Ausbildung':'Grundausbildung'))+
  '</div><div class="notice">Unfertige Projekte kannst du speichern. Bei „Zur Prüfung senden“ werden der Ausbildungsinhalt und bei Theorie eine Präsentation verlangt. Der Prüfer kann den gesamten Inhalt ansehen und Rückmeldungen hinterlassen.</div>'+
  '<div class="btnline"><button type="submit" class="primary">'+(project?'Änderungen speichern':'Projekt anlegen')+'</button>'+
  (project?'<button type="button" class="secondary" data-cancel="1">Abbrechen</button>':'')+
@@ -644,6 +686,7 @@ function rights(){
  const list=sorted.map(u=>{
   const rights=byPermissionId.get(u.ID)||{};
   const active=u.Aktiv==='JA';
+  const areas=rights.Ausbildungsbereiche||u.Ausbildungsbereiche||['Grundausbildung','Erweiterte Ausbildung'];
   const checked=k=>rights[k]===true||String(rights[k]||'').toUpperCase()==='JA';
   return '<details class="ga-member-fold ga-rights-account" '+(u.ID===selected?'open':'')+'>'+
    '<summary><span>'+h(u.Name||u.Email||'Ausbilder')+'<small class="ga-rights-sub">'+h(u.Email||'')+'</small></span>'+
@@ -652,6 +695,7 @@ function rights(){
     'Die ausgewählten Berechtigungen gelten für diesen Ausbilder.':
     'Das Konto ist noch nicht aktiviert. Die Rechte kannst du bereits vorbereiten; nutzbar werden sie erst nach Abschluss der Einladung.')+'</p>'+
    '<form data-form="permissions"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'">'+
+   '<fieldset data-trainer-areas><legend>Ausbildungsbereiche</legend><p class="small muted">Bei beiden Bereichen erscheint nach der Anmeldung eine Auswahl. Bestehende Ausbilder behalten bis zur gezielten Änderung ihre bisherigen Bereiche.</p>'+['Grundausbildung','Erweiterte Ausbildung'].map(a=>'<label class="inline-check"><input type="checkbox" name="Ausbildungsbereiche" value="'+h(a)+'" '+(areas.includes(a)?'checked':'')+'> '+h(a)+'</label>').join('')+'</fieldset>'+
    '<div class="ga-rights-grid">'+fields.map(([key,label])=>
     '<label class="inline-check"><input type="checkbox" name="'+key+'" value="JA" '+(checked(key)?'checked':'')+'> '+h(label)+'</label>').join('')+'</div>'+
    '<div class="btnline"><button class="primary" type="submit">Berechtigungen speichern</button></div></form></div></details>';
@@ -730,7 +774,7 @@ function ratings(){
 function questionnaires(){
  if(!STATE.rechte?.FrageboegenBearbeiten)return '<section class="panel">Keine Berechtigung.</section>';
  const forms=STATE.frageboegen||[];
- const courseOpts=role()==='Organisator Erweiterte Ausbildung'?STATE.kurse:[{ID:'ALLGEMEIN',Titel:'Allgemeine Vorlage – gilt für alle Kurse'}].concat(STATE.kurse);
+ const courseOpts=(role()==='Organisator Erweiterte Ausbildung'||role()==='Ausbilder')?STATE.kurse:[{ID:'ALLGEMEIN',Titel:'Allgemeine Vorlage – gilt für alle Kurse'}].concat(STATE.kurse);
  const blocks=courseOpts.map(c=>{
  const configured=forms.find(x=>x.KursID===c.ID);
  const fallback=gaQuestions(c.ID);
@@ -762,7 +806,7 @@ function reviews(){
  '<p class="msg">'+h(x.Kommentar||'Ohne Kommentar')+'</p></div>').join(''):'Noch keine Bewertungen zu dieser Auswahl.')+
  '</div></section>';
 }
-function areaOptions(sel){return (role()==='Organisator Erweiterte Ausbildung'?['Erweiterte Ausbildung']:['Grundausbildung','Erweiterte Ausbildung']).map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
+function areaOptions(sel){return (STATE.ausbilderBereich?[STATE.ausbilderBereich]:role()==='Organisator Erweiterte Ausbildung'?['Erweiterte Ausbildung']:['Grundausbildung','Erweiterte Ausbildung']).map(v=>'<option '+(v===sel?'selected':'')+' value="'+h(v)+'">'+h(v)+'</option>').join('')}
 function termCards(ts){return '<div class="items">'+(ts.length?ts.map(t=>{let c=by(STATE.kurse,t.KursID),tu=by(STATE.turnusse,t.TurnusID);return '<div class="item"><div class="row between"><b>'+h(c?.Titel||'Kurs')+'</b>'+status(t.Status)+'</div><div class="detail">📅 '+dt(t.Beginn)+' – '+dt(t.Ende)+'<br>📍 '+h(t.Ort||'Ort offen')+' · '+h(tu?.Bezeichnung||'')+'</div>'+'<div class="btnline"><button type="button" class="primary" data-training-open="'+h(t.ID)+'">Kurs öffnen & Präsentation</button></div>'+'</div>'}).join(''):'Noch keine Termine.')+'</div>'}
 function terms(){
  const courses=STATE.kurse.filter(c=>c.Aktiv==='JA'),turnus=STATE.turnusse.filter(x=>x.Aktiv==='JA');
@@ -1221,6 +1265,7 @@ $('loginForm').addEventListener('submit',async e=>{
  try{
   const wants30Days=fd.has('remember');
   const result=await rpc('gaLogin',fd.get('email'),fd.get('password'),wants30Days);
+  GA_TRAINER_AREA='';
   TOKEN=result.token;
   STATE=await api('state');
   if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));
@@ -1238,7 +1283,7 @@ $('loginForm').addEventListener('submit',async e=>{
 async function logout(){
  gaClearLogin();
  const oldToken=TOKEN;
- TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';GA_ADMIN_ADV_VIEW=false;GA_ROLE_PREVIEW='';GA_ADMIN_USERS=[];GA_GAB_NOTICE_PREVIEW=null;
+ TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';GA_TRAINER_AREA='';GA_VIEW_BUSY=false;$('gaTrainerChooser').classList.add('hidden');$('app').inert=false;GA_ADMIN_ADV_VIEW=false;GA_ROLE_PREVIEW='';GA_ADMIN_USERS=[];GA_GAB_NOTICE_PREVIEW=null;
  $('gaViewChooser').classList.add('hidden');
  document.body.classList.remove('ga-nav-open');
  $('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();
@@ -1380,7 +1425,7 @@ $('app').addEventListener('click',async e=>{const x=e.target.closest('[data-gab-
 $('app').addEventListener('change',e=>{
  if(e.target.matches('select[name="Bereich"]')){
   const form=e.target.closest('form[data-form="course"],form[data-form="project"]');
-  if(form){const advanced=e.target.value==='Erweiterte Ausbildung';form.querySelectorAll('[data-ga-advanced-trainer]').forEach(label=>{label.hidden=!advanced;label.style.display=advanced?'':'none';const input=label.querySelector('input');if(input)input.disabled=!advanced;});}
+  if(form){form.querySelectorAll('[data-ga-trainer-areas]').forEach(label=>{const allowed=JSON.parse(label.dataset.gaTrainerAreas||'[]').includes(e.target.value);label.hidden=!allowed;label.style.display=allowed?'':'none';const input=label.querySelector('input');if(input)input.disabled=!allowed&&!input.checked;});}
  }
  if(e.target.matches('[data-project-decision]')){const form=e.target.closest('form'),memo=form?.querySelector('[name="Rueckmeldung"]');if(memo){memo.required=e.target.value==='Zurückgeben';memo.placeholder=e.target.value==='Zurückgeben'?'Bitte konkrete Änderungswünsche nennen (z. B. Thema, Folie, Lernziel).':'Optionaler Prüfvermerk zur Freigabe';}return;}
  if(e.target.matches('[data-report-category]')){REPORT_FILTER.category=e.target.value;render();return;}
@@ -1402,7 +1447,7 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  }
  else if(type==='course'){if(EDIT)data.ID=EDIT;await doSave('saveCourse',gaCourseFormData(form,fd,data))}
  else if(type==='project'){if(EDIT)data.ID=EDIT;if(form.querySelector('[data-course-planning]'))data.VerantwortlicheIDs=fd.getAll('VerantwortlicheIDs');await doSave('saveProject',data);}
- else if(type==='permissions')await doSave('setPermission',data);
+ else if(type==='permissions'){if(form.querySelector('[data-trainer-areas]')){data.Ausbildungsbereiche=fd.getAll('Ausbildungsbereiche');if(!data.Ausbildungsbereiche.length)throw new Error('Bitte mindestens einen Ausbildungsbereich auswählen.');if(!STATE.berechtigungen?.some(p=>Array.isArray(p.Ausbildungsbereiche)))throw new Error('Bitte zuerst Code.gs 1.13.5 aktualisieren.');}await doSave('setPermission',data);}
  else if(type==='roleChange'){
   const old=by(STATE.benutzer,data.BenutzerID);
   if(!old)throw new Error('Zugang nicht gefunden.');

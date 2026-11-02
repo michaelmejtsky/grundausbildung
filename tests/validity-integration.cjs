@@ -23,7 +23,7 @@ const tables={
  ErweiterteZuordnungen:[{MitgliedID:'guest',TurnusID:'adv-new'}],
  Kurse:[
   {ID:'old-course',Titel:'Alt',Bereich:'Grundausbildung',Aktiv:'JA'},
-  {ID:'new-course',Titel:'Neu',Bereich:'Grundausbildung',Aktiv:'JA'},
+  {_gaTrainerArea:'Grundausbildung',ID:'new-course',Titel:'Neu',Bereich:'Grundausbildung',Aktiv:'JA'},
   {ID:'existing-course',Titel:'Vorhanden',Bereich:'Grundausbildung',Aktiv:'JA'},
   {ID:'adv-course',Titel:'Erweitert',Bereich:'Erweiterte Ausbildung',Aktiv:'JA'}],
  Termine:[
@@ -194,9 +194,9 @@ const trainer={ID:'trainer',Rolle:'Ausbilder',Aktiv:'JA'};
 tables.Berechtigungen.push({BenutzerID:'trainer',KurseBearbeiten:'JA'});
 ctx.gaSession_=()=>trainer;
 const courseBefore=JSON.stringify(tables.Kurse.find(c=>c.ID==='new-course'));
-assert.throws(()=>ctx.gaApi('saveCourse',{ID:'new-course',Titel:'Neu',Bereich:'Grundausbildung',Inhalt:'Inhalt',Lernziele:'',Links:'',GueltigAb:'2028-01-01'},'token'),/Berechtigung/);
+assert.throws(()=>ctx.gaApi('saveCourse',{_gaTrainerArea:'Grundausbildung',ID:'new-course',Titel:'Neu',Bereich:'Grundausbildung',Inhalt:'Inhalt',Lernziele:'',Links:'',GueltigAb:'2028-01-01'},'token'),/Berechtigung/);
 assert.equal(JSON.stringify(tables.Kurse.find(c=>c.ID==='new-course')),courseBefore);
-assert.throws(()=>ctx.gaApi('setValidity',{Art:'turnus',ID:'gab-old',Datum:'2025-09-01'},'token'),/Berechtigung/);
+assert.throws(()=>ctx.gaApi('setValidity',{_gaTrainerArea:'Grundausbildung',Art:'turnus',ID:'gab-old',Datum:'2025-09-01'},'token'),/Berechtigung/);
 
 // Actual state responses must keep cohorts and personal records separate.
 const beforeStates=JSON.stringify(tables);

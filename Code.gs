@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.4',
+  VERSION: '1.13.5',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -505,6 +505,133 @@ function gaOrganizerGuard_(u,method,d){
  }
 }
 
+/** Ausbilder bleiben Ausbilder; Ausbildungsbereiche ergänzen ihre Funktionsrechte. */
+const GA_TRAINER_AREAS_PREFIX='GA_TRAINER_AREAS_V1_';
+function gaTrainerAreas_(u){
+ if(u.Rolle!=='Ausbilder')return [];
+ const raw=PropertiesService.getScriptProperties().getProperty(GA_TRAINER_AREAS_PREFIX+encodeURIComponent(u.ID));
+ // Bestehende Ausbilder hatten Zugriff auf beide Bereiche. Bis zur expliziten Vergabe bleibt dieser erhalten.
+ if(raw===null)return GA.AREAS.includes(u.Bereich)?[u.Bereich]:GA.AREAS.slice();
+ let list;try{list=JSON.parse(raw);}catch(e){throw new Error('Ausbildungsbereiche beschädigt. Bitte Administrator kontaktieren.');}
+ if(!Array.isArray(list)||!list.length||list.some(a=>!GA.AREAS.includes(a)))
+  throw new Error('Ausbildungsbereiche ungültig. Bitte Administrator kontaktieren.');
+ return [...new Set(list)];
+}
+function gaStaffAreaAllowed_(u,area){
+ return u.Rolle==='Administrator'||u.Rolle==='Ausbilder'&&gaTrainerAreas_(u).includes(area)||gaIsAdvOrg_(u)&&area===GA_ADV_AREA;
+}
+function gaTrainerContext_(u,requested){
+ if(u.Rolle!=='Ausbilder')return u;
+ const areas=gaTrainerAreas_(u);
+ if(requested&&!areas.includes(requested))throw new Error('Keine Berechtigung für diesen Ausbildungsbereich. Bitte Bereich erneut auswählen.');
+ return {...u,_gaTrainerArea:requested||(areas.length===1?areas[0]:'')};
+}
+function gaTrainerMixedAllowed_(u){return u._gaTrainerArea===GA_ADV_AREA&&gaTrainerAreas_(u).includes('Grundausbildung');}
+function gaTrainerMembers_(area,u){
+ const turns=gaRows_('Turnusse'),assignments=gaAdvAssignments_(),turnIds=new Set(turns.filter(t=>t.Bereich===area).map(t=>t.ID));
+ if(u&&gaTrainerMixedAllowed_(u)){const courseIds=new Set(gaRows_('Kurse').filter(c=>c.Bereich===area).map(c=>c.ID));gaRows_('Termine').filter(t=>courseIds.has(t.KursID)&&turns.some(g=>g.ID===t.TurnusID&&g.Bereich==='Grundausbildung')).forEach(t=>turnIds.add(t.TurnusID));}
+ return gaRows_('Mitglieder').filter(m=>turnIds.has(m.TurnusID)||area===GA_ADV_AREA&&assignments.some(a=>a.MitgliedID===m.ID&&turnIds.has(a.TurnusID)));
+}
+function gaTrainerGuard_(u,method,d){
+ if(u.Rolle!=='Ausbilder')return;
+ const area=u._gaTrainerArea;
+ if(['state','logout'].includes(method))return;
+ if(!area)throw new Error('Bitte zuerst den Ausbildungsbereich auswählen.');
+ const neutral=['readDirect','readNotification','registerPush','removePush','setPushRule','testPush','submitAidProof','readAidPdf','pdfTemplateInfo'];
+ if(neutral.includes(method))return; // Diese Funktionen prüfen zusätzlich das eigene Konto / den eigenen Nachweis.
+ const supported=['saveCourse','saveQuiz','getQuizEdit','unlockQuiz','saveQuestionnaire','saveTermin','saveAttendance',
+  'saveProject','submitProject','reviewProject','submitReport','setReportStatus','exportTrainingPdf','saveFreeActivity','exportFreeActivityPdf','sendDirect','startQuiz','submitQuiz','saveRating'];
+ if(!supported.includes(method))throw new Error('Keine Berechtigung als Ausbilder für diese Aktion.');
+ const check=(table,id)=>{const row=id?gaFind_(table,id):null;if(!row||row.Bereich!==area)throw new Error('Kein Zugriff außerhalb des gewählten Ausbildungsbereichs.');return row;};
+ const turn=id=>{const t=gaFind_('Turnusse',id);if(!t||!(t.Bereich===area||gaTrainerMixedAllowed_(u)&&t.Bereich==='Grundausbildung'))throw new Error('Kein Zugriff auf diesen Turnus.');return t;};
+ const term=id=>{const t=gaFind_('Termine',id);if(!t)throw new Error('Termin nicht gefunden.');check('Kurse',t.KursID);turn(t.TurnusID);return t;};
+ if(method==='saveCourse'){
+  if(d.ID)check('Kurse',d.ID);
+  if(d.Bereich!==area)throw new Error('Kurs muss im gewählten Ausbildungsbereich bleiben.');
+ }
+ if(['saveQuiz','getQuizEdit','unlockQuiz','saveQuestionnaire'].includes(method))check('Kurse',d.KursID);
+ if(method==='unlockQuiz'&&!gaTrainerMembers_(area,u).some(m=>m.ID===d.MitgliedID))throw new Error('Teilnehmer gehört nicht zu diesem Ausbildungsbereich.');
+ if(method==='saveTermin'){
+  if(d.ID)term(d.ID);check('Kurse',d.KursID);turn(d.TurnusID);
+ }
+ if(['saveAttendance','saveRating'].includes(method))term(d.TerminID);
+ if(method==='startQuiz')check('Kurse',d.KursID);
+ if(method==='submitQuiz'){const attempt=gaFind_('QuizVersuche',d.VersuchID);if(!attempt)throw new Error('Quizversuch nicht gefunden.');check('Kurse',attempt.KursID);}
+ if(['saveAttendance','saveFreeActivity'].includes(method)&&Array.isArray(d.AusbilderIDs)){
+  const users=gaRows_('Benutzer');
+  if(d.AusbilderIDs.some(id=>!users.some(x=>x.ID===id&&gaStaffAreaAllowed_(x,area))))
+   throw new Error('Ein ausgewählter Ausbilder ist nicht für diesen Bereich freigegeben.');
+ }
+ if(['saveProject','submitProject','reviewProject'].includes(method)){
+  if(d.ID)check('KursProjekte',d.ID);
+  if(method!=='saveProject'&&!d.ID)throw new Error('Kursprojekt fehlt.');
+  if(method==='saveProject'&&d.Bereich!==area)throw new Error('Kursprojekt muss im gewählten Bereich bleiben.');
+ }
+ if(method==='submitReport'&&d.KursID)check('Kurse',d.KursID);
+ if(method==='setReportStatus'){
+  const r=gaFind_('Meldungen',d.ID);if(!r)throw new Error('Meldung nicht gefunden.');
+  if(r.KursID)check('Kurse',r.KursID);else if(r.ErstelltVon!==u.ID)throw new Error('Allgemeine fremde Meldungen bearbeitet die Administration.');
+ }
+ if(method==='exportTrainingPdf'){
+  if(d.TerminID)term(d.TerminID);if(d.KursID)check('Kurse',d.KursID);
+ }
+ const free=id=>{const r=gaFind_('FreieTaetigkeiten',id);if(!r||!(r.Bereich===area||!r.Bereich&&r.ErfasstVon===u.ID))throw new Error('Kein Zugriff auf diesen Tätigkeitsbericht.');};
+ if(method==='exportFreeActivityPdf')free(d.ID);
+ if(method==='saveFreeActivity'){
+  if(d.ID)free(d.ID);
+  if(d.Bereich&&d.Bereich!==area)throw new Error('Tätigkeit gehört zu einem anderen Ausbildungsbereich.');
+  d.Bereich=area;
+  const ids=new Set(gaTrainerMembers_(area,u).map(m=>m.ID));
+  if(Array.isArray(d.TeilnehmerIDs)&&d.TeilnehmerIDs.some(id=>!ids.has(id)))throw new Error('Teilnehmer gehört nicht zu diesem Ausbildungsbereich.');
+ }
+ if(method==='sendDirect'){
+  const recipient=gaFind_('Benutzer',d.AnBenutzerID);
+  if(recipient?.Rolle==='Teilnehmer'){
+   const member=gaOwnMember_(recipient);
+   if(!member||!gaTrainerMembers_(area,u).some(m=>m.ID===member.ID))throw new Error('Teilnehmer gehört nicht zu diesem Ausbildungsbereich.');
+  }
+ }
+}
+function gaTrainerState_(u){
+ const areas=gaTrainerAreas_(u),area=u._gaTrainerArea;
+ if(!area)return {version:GA.VERSION,user:gaPublicUser_(u),rechte:gaPermissions_(u),ausbilderBereiche:areas,ausbilderBereich:'',ausbilderBereichAuswahlNoetig:true};
+ const s=gaBaseState_(u),courseIds=new Set(s.kurse.filter(c=>c.Bereich===area).map(c=>c.ID)),
+  turnIds=new Set(s.turnusse.filter(t=>t.Bereich===area||gaTrainerMixedAllowed_(u)&&t.Bereich==='Grundausbildung').map(t=>t.ID));
+ s.kurse=s.kurse.filter(c=>courseIds.has(c.ID));s.turnusse=s.turnusse.filter(t=>turnIds.has(t.ID));
+ s.termine=s.termine.filter(t=>courseIds.has(t.KursID)&&turnIds.has(t.TurnusID));
+ const termIds=new Set(s.termine.map(t=>t.ID)),members=gaTrainerMembers_(area,u),memberIds=new Set(members.map(m=>m.ID));
+ // Historische Namen für eigene Bereichsberichte erhalten, ohne fremde Stammdaten mitzuliefern.
+ const historyIds=new Set(s.teilnahmen.filter(a=>termIds.has(a.TerminID)).map(a=>a.MitgliedID));
+ s.mitglieder=s.mitglieder.filter(m=>memberIds.has(m.ID)||historyIds.has(m.ID)).map(m=>{
+  if(s.turnusse.some(t=>t.ID===m.TurnusID&&t.Bereich===area))return m;
+  const assignment=s.erweiterteZuordnungen.find(a=>a.MitgliedID===m.ID&&turnIds.has(a.TurnusID));
+  return {ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignment?.TurnusID||(turnIds.has(m.TurnusID)?m.TurnusID:''),Aktiv:m.Aktiv,Ausbildungsweg:assignment||memberIds.has(m.ID)?'GAB-Gast':'Historischer Teilnehmer'};
+ });
+ s.teilnahmen=s.teilnahmen.filter(a=>termIds.has(a.TerminID));
+ s.kursProjekte=s.kursProjekte.filter(p=>p.Bereich===area);
+ s.ausbildungsberichte=s.ausbildungsberichte.filter(r=>termIds.has(r.TerminID));
+ s.freieTaetigkeiten=s.freieTaetigkeiten.filter(r=>r.Bereich===area||!r.Bereich&&r.ErfasstVon===u.ID);
+ s.meldungen=s.meldungen.filter(r=>r.KursID?courseIds.has(r.KursID):r.ErstelltVon===u.ID);
+ s.bewertungen=s.bewertungen.filter(r=>courseIds.has(r.KursID)&&(!r.TerminID||termIds.has(r.TerminID)));
+ s.eigeneBewertungen=s.eigeneBewertungen.filter(r=>courseIds.has(r.KursID));
+ s.frageboegen=s.frageboegen.filter(r=>courseIds.has(r.KursID));
+ s.quizKurse=s.quizKurse.filter(r=>courseIds.has(r.KursID));
+ for(const key of ['quizFreigaben','quizVersuche'])s[key]=s[key].filter(r=>courseIds.has(r.KursID)&&(memberIds.has(r.MitgliedID)||historyIds.has(r.MitgliedID))&&(!r.TerminID||termIds.has(r.TerminID)));
+ s.erweiterteZuordnungen=s.erweiterteZuordnungen.filter(a=>area===GA_ADV_AREA&&turnIds.has(a.TurnusID)&&memberIds.has(a.MitgliedID));
+ // Ausbilder verwalten keine persönlichen GAB-Qualifikationen ihrer erweiterten Gäste.
+ s.qualifikationen=s.qualifikationen.filter(q=>s.meMember&&q.MitgliedID===s.meMember.ID);s.erweiterteAbschluesse=s.erweiterteAbschluesse.filter(q=>s.meMember&&q.MitgliedID===s.meMember.ID);
+ const users=gaRows_('Benutzer');
+ s.benutzer=users.filter(x=>gaStaffAreaAllowed_(x,area)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Ausbildungsbereiche:x.Rolle==='Ausbilder'?gaTrainerAreas_(x):[]}));
+ s.nachrichtenEmpfaenger=s.nachrichtenEmpfaenger.filter(x=>x.Rolle!=='Teilnehmer'||(()=>{const m=gaOwnMember_(x);return !!m&&memberIds.has(m.ID);})()).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv}));
+ s.kursPlanung=gaCoursePlanVisible_(s.kurse,s.kursProjekte);
+ s.gueltigkeit=gaValidityVisible_(gaValidityConfig_(),s.turnusse,s.kurse,s.kursProjekte);
+ return {...s,ausbilderBereiche:areas,ausbilderBereich:area,ausbilderBereichAuswahlNoetig:false};
+}
+function gaState_(u){
+ if(u.Rolle==='Ausbilder')return gaTrainerState_(gaTrainerContext_(u,u._gaTrainerArea));
+ return gaBaseState_(u);
+}
+
 function gaApi(method,data,token){
   const actor=gaSession_(token),d=data||{};
   if((d._gaAdvancedView||d._gaRolePreview)&&actor.Rolle!=='Administrator')
@@ -520,71 +647,75 @@ function gaApi(method,data,token){
     // Keine Änderung am Benutzerkonto. Aktionen werden mit der echten Admin-ID protokolliert.
     u={...actor,Rolle:GA_ADV_ROLE};
   }
+  const trainerReset=method==='state'&&u.Rolle==='Ausbilder'&&d._gaTrainerArea&&!gaTrainerAreas_(u).includes(d._gaTrainerArea);
+  u=gaTrainerContext_(u,trainerReset?'':d._gaTrainerArea);
+  gaTrainerGuard_(u,method,d);
   gaOrganizerGuard_(u,method,d);
+  const locked=fn=>gaLock_(()=>{if(u.Rolle==='Ausbilder'){u=gaTrainerContext_(u,u._gaTrainerArea);gaTrainerGuard_(u,method,d);}return fn();});
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
    'saveAdvancedEnrollment','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
   if(method==='state'){
-    const state=gaState_(u);
+    const state={...gaState_(u),...(trainerReset?{ausbilderBereichNeuWaehlen:true}:{})};
     return d._gaRolePreview?{...state,administratorRollenvorschau:true}:
       d._gaAdvancedView?{...state,administratorErweitert:true}:state;
   }
   if(method==='participantStatus')return gaParticipantStatus_(u);
   if(method==='gabCompletionNoticePreview')return gaGabCompletionNoticePreview_(u);
-  if(method==='sendGabCompletionNotices')return gaLock_(()=>gaSendGabCompletionNotices_(u,d));
+  if(method==='sendGabCompletionNotices')return locked(()=>gaSendGabCompletionNotices_(u,d));
   if(method==='logout')return gaLogoutSession_(token);
-  if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
-  if(method==='completeAdvancedTraining')return gaLock_(()=>gaCompleteAdvancedTraining_(u,d));
-  if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
-  if(method==='setValidity')return gaLock_(()=>gaSetValidity_(u,d));
-  if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
-  if(method==='saveQuiz')return gaLock_(()=>gaSaveQuiz_(u,d));
+  if(method==='saveAdvancedEnrollment')return locked(()=>gaSaveAdvancedEnrollment_(u,d));
+  if(method==='completeAdvancedTraining')return locked(()=>gaCompleteAdvancedTraining_(u,d));
+  if(method==='saveTurnus')return locked(()=>gaSaveTurnus_(u,d));
+  if(method==='setValidity')return locked(()=>gaSetValidity_(u,d));
+  if(method==='saveCourse')return locked(()=>gaSaveCourse_(u,d));
+  if(method==='saveQuiz')return locked(()=>gaSaveQuiz_(u,d));
   if(method==='getQuizEdit')return gaGetQuizEdit_(u,d);
-  if(method==='startQuiz')return gaLock_(()=>gaStartQuiz_(u,d));
-  if(method==='submitQuiz')return gaLock_(()=>gaSubmitQuiz_(u,d));
-  if(method==='unlockQuiz')return gaLock_(()=>gaUnlockQuiz_(u,d));
-  if(method==='saveQuestionnaire')return gaLock_(()=>gaSaveQuestionnaire_(u,d));
-  if(method==='saveTermin')return gaLock_(()=>gaSaveTermin_(u,d));
-  if(method==='saveMember')return gaLock_(()=>gaSaveMember_(u,d));
-  if(method==='removeMember')return gaLock_(()=>gaRemoveMember_(u,d));
-  if(method==='saveQualification')return gaLock_(()=>gaSaveQualification_(u,d));
-  if(method==='saveAbschnittNachweis')return gaLock_(()=>gaSaveAbschnittNachweis_(u,d));
-  if(method==='setCourseRequirement')return gaLock_(()=>gaSetCourseRequirement_(u,d));
-  if(method==='setAttendanceMember')return gaLock_(()=>gaSetAttendanceMember_(u,d));
-  if(method==='sendDirect')return gaLock_(()=>gaSendDirect_(u,d));
-  if(method==='readDirect')return gaLock_(()=>gaReadDirect_(u,d));
-  if(method==='setPermission')return gaLock_(()=>gaSetPermission_(u,d));
-  if(method==='saveProject')return gaLock_(()=>gaSaveProject_(u,d));
-  if(method==='submitProject')return gaLock_(()=>gaSubmitProject_(u,d));
-  if(method==='reviewProject')return gaLock_(()=>gaReviewProject_(u,d));
-  if(method==='submitReport')return gaLock_(()=>gaSubmitReport_(u,d));
-  if(method==='setReportStatus')return gaLock_(()=>gaSetReportStatus_(u,d));
-  if(method==='saveRating')return gaLock_(()=>gaSaveRating_(u,d));
-  if(method==='saveChecklistItem')return gaLock_(()=>gaSaveChecklistItem_(u,d));
-  if(method==='setCheck')return gaLock_(()=>gaSetCheck_(u,d));
-  if(method==='saveAttendance')return gaLock_(()=>gaSaveAttendance_(u,d));
+  if(method==='startQuiz')return locked(()=>gaStartQuiz_(u,d));
+  if(method==='submitQuiz')return locked(()=>gaSubmitQuiz_(u,d));
+  if(method==='unlockQuiz')return locked(()=>gaUnlockQuiz_(u,d));
+  if(method==='saveQuestionnaire')return locked(()=>gaSaveQuestionnaire_(u,d));
+  if(method==='saveTermin')return locked(()=>gaSaveTermin_(u,d));
+  if(method==='saveMember')return locked(()=>gaSaveMember_(u,d));
+  if(method==='removeMember')return locked(()=>gaRemoveMember_(u,d));
+  if(method==='saveQualification')return locked(()=>gaSaveQualification_(u,d));
+  if(method==='saveAbschnittNachweis')return locked(()=>gaSaveAbschnittNachweis_(u,d));
+  if(method==='setCourseRequirement')return locked(()=>gaSetCourseRequirement_(u,d));
+  if(method==='setAttendanceMember')return locked(()=>gaSetAttendanceMember_(u,d));
+  if(method==='sendDirect')return locked(()=>gaSendDirect_(u,d));
+  if(method==='readDirect')return locked(()=>gaReadDirect_(u,d));
+  if(method==='setPermission')return locked(()=>gaSetPermission_(u,d));
+  if(method==='saveProject')return locked(()=>gaSaveProject_(u,d));
+  if(method==='submitProject')return locked(()=>gaSubmitProject_(u,d));
+  if(method==='reviewProject')return locked(()=>gaReviewProject_(u,d));
+  if(method==='submitReport')return locked(()=>gaSubmitReport_(u,d));
+  if(method==='setReportStatus')return locked(()=>gaSetReportStatus_(u,d));
+  if(method==='saveRating')return locked(()=>gaSaveRating_(u,d));
+  if(method==='saveChecklistItem')return locked(()=>gaSaveChecklistItem_(u,d));
+  if(method==='setCheck')return locked(()=>gaSetCheck_(u,d));
+  if(method==='saveAttendance')return locked(()=>gaSaveAttendance_(u,d));
   if(method==='pdfTemplateInfo'){
     gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
     return {ok:true,backendVersion:GA.VERSION,template:'FDISK-DESIGN-2',message:'Aktuelle PDF-Vorlage mit dunkelblauem Kopf und Kennzahlen.'};
   }
   if(method==='exportTrainingPdf')return gaExportTrainingPdf_(u,d);
-  if(method==='saveFreeActivity')return gaLock_(()=>gaSaveFreeActivity_(u,d));
+  if(method==='saveFreeActivity')return locked(()=>gaSaveFreeActivity_(u,d));
   if(method==='exportFreeActivityPdf')return gaExportFreeActivityPdf_(u,d);
-  if(method==='inviteUser')return gaLock_(()=>gaInviteUser_(u,d));
-  if(method==='resetPassword')return gaLock_(()=>gaResetPassword_(u,d));
-  if(method==='changeUserRole')return gaLock_(()=>gaChangeUserRole_(u,d));
-  if(method==='sendMessage')return gaLock_(()=>gaSendMessage_(u,d));
-  if(method==='readNotification')return gaLock_(()=>gaReadNotification_(u,d));
-  if(method==='registerPush')return gaLock_(()=>gaRegisterPush_(u,d));
-  if(method==='removePush')return gaLock_(()=>gaRemovePush_(u,d));
-  if(method==='setPushRule')return gaLock_(()=>gaSetPushRule_(u,d));
-  if(method==='testPush')return gaLock_(()=>gaTestPush_(u));
+  if(method==='inviteUser')return locked(()=>gaInviteUser_(u,d));
+  if(method==='resetPassword')return locked(()=>gaResetPassword_(u,d));
+  if(method==='changeUserRole')return locked(()=>gaChangeUserRole_(u,d));
+  if(method==='sendMessage')return locked(()=>gaSendMessage_(u,d));
+  if(method==='readNotification')return locked(()=>gaReadNotification_(u,d));
+  if(method==='registerPush')return locked(()=>gaRegisterPush_(u,d));
+  if(method==='removePush')return locked(()=>gaRemovePush_(u,d));
+  if(method==='setPushRule')return locked(()=>gaSetPushRule_(u,d));
+  if(method==='testPush')return locked(()=>gaTestPush_(u));
   if(method==='saveAidSettings')return gaSaveAidSettings_(u,d);
-  if(method==='submitAidProof')return gaLock_(()=>gaSubmitAidProof_(u,d));
-  if(method==='reviewAidProof')return gaLock_(()=>gaReviewAidProof_(u,d));
-  if(method==='resendAidEmail')return gaLock_(()=>gaResendAidEmail_(u,d));
+  if(method==='submitAidProof')return locked(()=>gaSubmitAidProof_(u,d));
+  if(method==='reviewAidProof')return locked(()=>gaReviewAidProof_(u,d));
+  if(method==='resendAidEmail')return locked(()=>gaResendAidEmail_(u,d));
   if(method==='readAidPdf')return gaReadAidPdf_(u,d);
   throw new Error('Unbekannte Aktion.');
 }
@@ -634,7 +765,7 @@ function gaParticipantStatus_(u){
   hinweis:'Aktuelle Datensätze in der verbundenen Ausbildungsdatenbank.'};
 }
 
-function gaState_(u){
+function gaBaseState_(u){
  if(gaIsAdvOrg_(u))return gaAdvancedOrganizerState_(u);
  const admin=u.Rolle==='Administrator',trainer=u.Rolle==='Ausbilder',
   special=u.Rolle==='Fachverwaltung',participant=u.Rolle==='Teilnehmer';
@@ -698,10 +829,10 @@ function gaState_(u){
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-  benutzer:admin?users.map(gaPublicUser_):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
+  benutzer:admin?users.map(x=>({...gaPublicUser_(x),...(x.Rolle==='Ausbilder'?{Ausbildungsbereiche:gaTrainerAreas_(x)}:{})})):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
   kursProjekte:visibleProjects,
   ...(admin||trainer?{kursPlanung:gaCoursePlanVisible_(visibleCourses,visibleProjects)}:{}),
-  berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows)})):[],
+  berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows),Ausbildungsbereiche:gaTrainerAreas_(x)})):[],
   meldungen:admin||rights.MeldungenBearbeiten?reports:trainer?reports.filter(x=>x.ErstelltVon===u.ID):[],
   bewertungen:rights.BewertungenAnsehen?ratings:[],
   eigeneBewertungen:ownRatings,
@@ -772,7 +903,7 @@ function gaCoursePlanInput_(d,kind,id,area){
  if(ids.length>30||ids.some(x=>x.length>100))throw new Error('Bitte höchstens 30 gültige Ausbilder auswählen.');
  const previous=new Set(old?.VerantwortlicheIDs||[]),users=gaRows_('Benutzer');
  if(ids.some(id=>!previous.has(id)&&!users.some(u=>u.ID===id&&
-  (['Administrator','Ausbilder'].includes(u.Rolle)||(u.Rolle===GA_ADV_ROLE&&area===GA_ADV_AREA)))))
+  gaStaffAreaAllowed_(u,area))))
   throw new Error('Mindestens eine zuständige Person ist für diesen Ausbildungsbereich nicht auswählbar.');
  const value={MaterialNotiz:material,VerantwortlicheIDs:ids};
  if(Utilities.newBlob(JSON.stringify(value)).getBytes().length>8500)throw new Error('Arbeitsmaterial oder Ausbilderliste ist zu umfangreich.');
@@ -1066,7 +1197,7 @@ function gaTrainingPdfData_(d,u){
  const matching=termId?allTerms.filter(t=>t.ID===termId):allTerms.filter(t=>t.KursID===courseId);
  // Erweiterte Kurse können auch in GAB-Turnussen stattfinden. Ein Organisator
  // darf deren personenbezogene GAB-Daten nicht im Modulgesamtbericht sehen.
- const selected=gaIsAdvOrg_(u)?matching.filter(t=>gaFind_('Turnusse',t.TurnusID)?.Bereich===GA_ADV_AREA):matching;
+ const selected=(gaIsAdvOrg_(u)||u._gaTrainerArea)?matching.filter(t=>{const a=gaFind_('Turnusse',t.TurnusID)?.Bereich;return a===(u._gaTrainerArea||GA_ADV_AREA)||u.Rolle==='Ausbilder'&&gaTrainerMixedAllowed_(u)&&a==='Grundausbildung';}):matching;
  if(!selected.length)throw new Error('Keine berechtigten Termine für diese Auswahl gefunden.');
  const reportRows=gaOptionalRows_('Ausbildungsberichte'),att=gaRows_('Teilnahmen');
  const members=gaRows_('Mitglieder'),accounts=gaRows_('Benutzer');
@@ -1951,11 +2082,20 @@ function gaSetPermission_(actor,d){
  if(!user)throw new Error('Bitte einen Benutzer mit der Rolle Ausbilder wählen.');
  // Rechte für noch nicht aktivierte Einladungen dürfen vorbereitet werden;
  // die Anmeldung und damit die Ausübung dieser Rechte bleiben bis zur Aktivierung gesperrt.
+ const hasAreas=Object.prototype.hasOwnProperty.call(d,'Ausbildungsbereiche');
+ if(hasAreas&&(!Array.isArray(d.Ausbildungsbereiche)||!d.Ausbildungsbereiche.length||d.Ausbildungsbereiche.some(a=>!GA.AREAS.includes(a))))
+  throw new Error('Bitte mindestens einen gültigen Ausbildungsbereich auswählen.');
+ const areas=hasAreas?[...new Set(d.Ausbildungsbereiche)]:null;
+ const props=PropertiesService.getScriptProperties(),key=GA_TRAINER_AREAS_PREFIX+encodeURIComponent(user.ID),oldArea=props.getProperty(key);
  const values={};GA_RIGHTS.forEach(k=>values[k]=d[k]===true||d[k]==='JA'?'JA':'NEIN');
  values.AktualisiertAm=gaNow_();
  const old=gaOptionalRows_('Berechtigungen').find(x=>x.BenutzerID===user.ID);
- if(old)gaReplace_('Berechtigungen',old.ID,values);
- else gaAppend_('Berechtigungen',{ID:gaId_(),BenutzerID:user.ID,...values});
+ if(hasAreas)props.setProperty(key,JSON.stringify(areas));
+ try{
+  if(old)gaReplace_('Berechtigungen',old.ID,values);
+  else gaAppend_('Berechtigungen',{ID:gaId_(),BenutzerID:user.ID,...values});
+ }catch(e){if(hasAreas){if(oldArea===null)props.deleteProperty(key);else props.setProperty(key,oldArea);}throw e;}
+ if(hasAreas)values.Ausbildungsbereiche=areas;
  gaLog_(actor.ID,'BERECHTIGUNG','Benutzer',user.ID,values);
  return {ok:true,message:'Ausbilderberechtigungen gespeichert.'};
 }
@@ -2016,7 +2156,7 @@ function gaSubmitProject_(u,d){
  const meta=gaValidityConfig_();
  if(meta.projekt[project.ID])gaValidityRequireTurnDates_(project.Bereich,meta);
  gaReplace_('KursProjekte',project.ID,{Status:'Zur Prüfung',GeaendertVon:u.ID,GeaendertAm:gaNow_(),Rueckmeldung:''});
- gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID&&(!gaIsAdvOrg_(x)||project.Bereich===GA_ADV_AREA))
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'KurseFreigeben')&&x.ID!==u.ID&&gaStaffAreaAllowed_(x,project.Bereich))
    .forEach(x=>gaNotify_(x.ID,'Aufgabe','Kurs wartet auf Freigabe',project.Titel,project.ID));
  gaLog_(u.ID,'PROJEKT_EINREICHEN','Kursprojekt',project.ID,{Titel:project.Titel});
  return {ok:true,message:'Projekt zur Prüfung eingereicht.'};
@@ -2074,7 +2214,7 @@ function gaSubmitReport_(u,d){
  if(val.KursID&&!gaFind_('Kurse',val.KursID))throw new Error('Ausgewählter Kurs nicht vorhanden.');
  val.ID=gaId_();gaAppend_('Meldungen',val);
  gaLog_(u.ID,'MELDUNG_ANLEGEN','Meldung',val.ID,{Kategorie:val.Kategorie,Titel:val.Titel});
- gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'MeldungenBearbeiten')&&x.ID!==u.ID)
+ gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&gaCan_(x,'MeldungenBearbeiten')&&x.ID!==u.ID&&(!val.KursID?x.Rolle==='Administrator':gaStaffAreaAllowed_(x,gaFind_('Kurse',val.KursID)?.Bereich)))
    .forEach(x=>gaNotify_(x.ID,'Aufgabe','Neue '+val.Kategorie,val.Titel,val.ID));
  return {ok:true,message:'Meldung erfasst.'};
 }
@@ -3073,12 +3213,11 @@ function gaSubmitQuiz_(u,d){
   Bestanden:passed?'JA':'NEIN',AntwortenJSON:JSON.stringify(d.Antworten)});
  let noticeWarning='';
  const warn=()=>{noticeWarning='Dein Ergebnis ist gespeichert. Eine zusätzliche Benachrichtigung konnte nicht erstellt werden.';};
- const owner=gaRows_('Benutzer');
- owner.filter(x=>gaBool_(x.Aktiv)&&(x.Rolle==='Administrator'||(x.Rolle==='Ausbilder'&&gaCan_(x,'KurseGestalten'))))
+ const owner=gaRows_('Benutzer'),quizCourse=gaFind_('Kurse',attempt.KursID),quizTerm=gaFind_('Termine',attempt.TerminID);
+ owner.filter(x=>gaBool_(x.Aktiv)&&(x.Rolle==='Administrator'||(x.Rolle==='Ausbilder'&&gaCan_(x,'KurseGestalten')&&gaStaffAreaAllowed_(x,quizCourse?.Bereich)&&(!quizTerm||gaStaffAreaAllowed_(x,gaFind_('Turnusse',quizTerm.TurnusID)?.Bereich)))))
   .filter(x=>x.ID!==u.ID).forEach(x=>{try{gaNotify_(x.ID,'Aufgabe','Kursquiz abgegeben',
    m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);}
    catch(e){warn();console.warn('Quizbenachrichtigung fehlgeschlagen:',String(e));}});
- const quizCourse=gaFind_('Kurse',attempt.KursID),quizTerm=gaFind_('Termine',attempt.TerminID);
  if(quizCourse?.Bereich===GA_ADV_AREA&&quizTerm&&gaFind_('Turnusse',quizTerm.TurnusID)?.Bereich===GA_ADV_AREA&&gaAdvAllowedMembers_(quizTerm.TurnusID).some(member=>member.ID===m.ID))
   try{gaNotifyAdvancedOrganizers_('Aufgabe','Kursquiz abgegeben',m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);}
   catch(e){warn();console.warn('Quizbenachrichtigung an Organisation fehlgeschlagen:',String(e));}
