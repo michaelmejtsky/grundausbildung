@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.3',
+  VERSION: '1.13.4',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -295,6 +295,55 @@ function gaAdvMemberAllowed_(m){
  return gaFind_('Turnusse',m.TurnusID)?.Bereich===GA_ADV_AREA||
   gaAdvAssignments_().some(x=>x.MitgliedID===m.ID&&gaFind_('Turnusse',x.TurnusID)?.Bereich===GA_ADV_AREA);
 }
+// Der persönliche Abschluss ist eine zusätzliche Bestätigung; bestehende Turnusse und Nachweise bleiben unverändert.
+const GA_ADV_COMPLETION_PREFIX='GA_ADV_ABSCHLUSS_V1_';
+function gaAdvCompletionKey_(id){return GA_ADV_COMPLETION_PREFIX+encodeURIComponent(gaNeed_(id,'Mitglied',100));}
+function gaAdvCompletionRead_(id,all){
+ const key=gaAdvCompletionKey_(id),raw=all?all[key]:PropertiesService.getScriptProperties().getProperty(key);
+ if(raw===null||raw===undefined)return null;
+ let v;try{v=JSON.parse(raw);}catch(e){throw new Error('Gespeicherter Abschluss ist beschädigt und muss geprüft werden.');}
+ if(!v||v.Version!==1||typeof v.AbgeschlossenAm!=='string'||!v.AbgeschlossenAm||typeof v.BestaetigtVon!=='string'||!v.BestaetigtVon)
+  throw new Error('Gespeicherter Abschluss ist unvollständig und muss geprüft werden.');
+ return {MitgliedID:id,AbgeschlossenAm:v.AbgeschlossenAm,BestaetigtVon:v.BestaetigtVon};
+}
+function gaAdvCompletionVisible_(members){
+ const all=PropertiesService.getScriptProperties().getProperties(),records=[];
+ for(const m of members||[])try{const r=gaAdvCompletionRead_(m.ID,all);if(r)records.push(r);}
+  catch(e){records.push({MitgliedID:m.ID,Fehler:'Gespeicherter Abschluss muss geprüft werden.'});}
+ if(!records.some(r=>!r.Fehler))return records;
+ const notices=gaRows_('Benachrichtigungen');
+ return records.map(r=>r.Fehler?r:{...r,Benachrichtigt:notices.some(n=>n.BezugID==='ADVCOMPLETE:'+r.MitgliedID)});
+}
+function gaCompleteAdvancedTraining_(u,d){
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ const member=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100));
+ if(!member||!gaBool_(member.Aktiv)||!gaAdvMemberAllowed_(member))
+  throw new Error('Nur aktive, der erweiterten Ausbildung zugeordnete Teilnehmer können abgeschlossen werden.');
+ const props=PropertiesService.getScriptProperties(),key=gaAdvCompletionKey_(member.ID);
+ let record=gaAdvCompletionRead_(member.ID),created=false;
+ if(!record){
+  const value={Version:1,AbgeschlossenAm:gaNow_(),BestaetigtVon:u.ID};
+  props.setProperty(key,JSON.stringify(value));record={MitgliedID:member.ID,...value};created=true;
+  try{gaLog_(u.ID,'ERWEITERTE_AUSBILDUNG_ABSCHLIESSEN','Mitglied',member.ID,{AbgeschlossenAm:value.AbgeschlossenAm});}
+  catch(e){console.warn('Abschlussprotokoll fehlgeschlagen:',String(e));}
+ }
+ const ref='ADVCOMPLETE:'+member.ID;
+ try{
+  if(gaRows_('Benachrichtigungen').some(n=>n.BezugID===ref))
+   return {ok:true,bereitsAbgeschlossen:!created,benachrichtigt:true,message:created?'Erweiterte Ausbildung abgeschlossen.':'Abschluss und Glückwunsch sind bereits erfasst.'};
+  const allMembers=gaRows_('Mitglieder'),email=String(member.Email||'').trim().toLowerCase();
+  const accounts=email?gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv)&&String(x.Email||'').trim().toLowerCase()===email):[];
+  if(accounts.length!==1||gaOwnMember_(accounts[0],allMembers)?.ID!==member.ID)
+   return {ok:true,bereitsAbgeschlossen:!created,benachrichtigt:false,message:'Abschluss gespeichert. Kein eindeutig zugeordneter aktiver Teilnehmerzugang – Glückwunsch konnte noch nicht zugestellt werden.'};
+  const notification=gaNotify_(accounts[0].ID,'Aufgabe','Erweiterte Ausbildung abgeschlossen – Gratulation!',
+   'Hallo '+member.Vorname+'! Deine erweiterte Ausbildung wurde offiziell abgeschlossen. Herzlichen Glückwunsch zu deinem Erfolg!',ref);
+  try{gaPushQueue_(1,notification);}catch(e){console.warn('Abschluss-Push wartet:',String(e));}
+  return {ok:true,bereitsAbgeschlossen:!created,benachrichtigt:true,message:'Abschluss gespeichert und Glückwunsch als App-Benachrichtigung erstellt.'};
+ }catch(e){
+  console.warn('Glückwunsch zur erweiterten Ausbildung fehlgeschlagen:',String(e));
+  return {ok:true,bereitsAbgeschlossen:!created,benachrichtigt:false,message:'Abschluss gespeichert. Die Benachrichtigung konnte nicht erstellt werden; bitte erneut prüfen.'};
+ }
+}
 function gaSaveAdvancedEnrollment_(u,d){
  gaRequire_(u,['Administrator',GA_ADV_ROLE]);
  const m=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100));
@@ -356,6 +405,7 @@ function gaAdvancedOrganizerState_(u){
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,
   kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,gabAbgeschlossen,
+  erweiterteAbschluesse:gaAdvCompletionVisible_(native.concat(guests)),
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
    .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
@@ -472,7 +522,7 @@ function gaApi(method,data,token){
   }
   gaOrganizerGuard_(u,method,d);
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
-   'saveAdvancedEnrollment','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
+   'saveAdvancedEnrollment','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
@@ -482,8 +532,11 @@ function gaApi(method,data,token){
       d._gaAdvancedView?{...state,administratorErweitert:true}:state;
   }
   if(method==='participantStatus')return gaParticipantStatus_(u);
+  if(method==='gabCompletionNoticePreview')return gaGabCompletionNoticePreview_(u);
+  if(method==='sendGabCompletionNotices')return gaLock_(()=>gaSendGabCompletionNotices_(u,d));
   if(method==='logout')return gaLogoutSession_(token);
   if(method==='saveAdvancedEnrollment')return gaLock_(()=>gaSaveAdvancedEnrollment_(u,d));
+  if(method==='completeAdvancedTraining')return gaLock_(()=>gaCompleteAdvancedTraining_(u,d));
   if(method==='saveTurnus')return gaLock_(()=>gaSaveTurnus_(u,d));
   if(method==='setValidity')return gaLock_(()=>gaSetValidity_(u,d));
   if(method==='saveCourse')return gaLock_(()=>gaSaveCourse_(u,d));
@@ -657,6 +710,7 @@ function gaState_(u){
     term&&term.Status==='Durchgeführt'&&allKurse.some(c=>c.ID===term.KursID&&gaBool_(c.Aktiv))&&
     !ownRatings.some(r=>r.TerminID===term.ID)):[],
   meMember:own,
+  erweiterteAbschluesse:gaAdvCompletionVisible_(admin?allMembers:own?[own]:[]),
   qualifikationen,
   abschnittNachweise:(admin?abschnitt:own?abschnitt.filter(a=>a.MitgliedID===own.ID):[]),
   erweiterteZuordnungen:(admin||trainer?assignments:own?assignments.filter(x=>x.MitgliedID===own.ID):[]).map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
@@ -1372,7 +1426,11 @@ function gaExportFreeActivityPdf_(u,d){
 function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
   if(!gaSheet_().getSheetByName('Ausbildungsberichte'))throw new Error('Tabelle Ausbildungsberichte fehlt. Im Google Sheet Grundausbildung → 7 · Tätigkeitsberichte einrichten ausführen.');
   const details=gaTrainingDetails_(d);
-  const members=gaIsAdvOrg_(u)?gaAdvAllowedMembers_(term.TurnusID):gaRows_('Mitglieder').filter(m=>m.TurnusID===term.TurnusID&&gaBool_(m.Aktiv));
+  const turnus=gaFind_('Turnusse',term.TurnusID);
+  const allMembers=gaRows_('Mitglieder');
+  // Auch GAB-Gäste gehören bei Administrator und Ausbilder zur erweiterten Anwesenheitsliste.
+  const members=turnus?.Bereich===GA_ADV_AREA?gaAdvAllowedMembers_(term.TurnusID):
+   allMembers.filter(m=>m.TurnusID===term.TurnusID&&gaBool_(m.Aktiv));
   if(!Array.isArray(d.Anwesend)||d.Anwesend.length!==members.length)throw new Error('Die Anwesenheitsliste ist unvollständig.');
   const answers=new Map(d.Anwesend.map(x=>[String(x.MitgliedID),x.Anwesend===true]));
   if(members.some(m=>!answers.has(m.ID)))throw new Error('Anwesenheit für jedes Mitglied erforderlich.');
@@ -1395,29 +1453,55 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
   const course=gaFind_('Kurse',term.KursID);
   const completed=gaOptionalRows_('Bewertungen');
   const users=gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaBool_(x.Aktiv));
+  const accountFor=m=>{
+   const email=String(m.Email||'').trim().toLowerCase();
+   const matches=email?users.filter(x=>String(x.Email||'').trim().toLowerCase()===email):[];
+   return matches.length===1&&gaOwnMember_(matches[0],allMembers)?.ID===m.ID?matches[0]:null;
+  };
   const firstTime=members.filter(m=>answers.get(m.ID)&&!previous.some(t=>
     t.TerminID===term.ID&&t.MitgliedID===m.ID&&gaBool_(t.Anwesend)));
+  const known=gaRows_('Benachrichtigungen');
+  let noticeFailures=0;
+  const addNotice=(user,type,title,text,ref)=>{
+   try{gaNotify_(user,type,title,text,ref);known.push({BenutzerID:user,BezugID:ref,Titel:title});return true;}
+   catch(e){noticeFailures++;console.warn('Kursbenachrichtigung konnte nicht erstellt werden:',String(e));return false;}
+  };
   firstTime.filter(m=>!completed.some(b=>b.TerminID===term.ID&&b.MitgliedID===m.ID)).forEach(m=>{
-    const user=users.find(x=>x.Email.toLowerCase()===String(m.Email||'').toLowerCase());
-    if(user)gaNotify_(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
+    const user=accountFor(m);
+    if(user&&!known.some(n=>n.BenutzerID===user.ID&&n.BezugID===term.ID&&n.Titel==='Bewerte deinen letzten Kurs')){
+     addNotice(user.ID,'Bewertung','Bewerte deinen letzten Kurs',
       'Du hast an „'+(course?course.Titel:'Ausbildung')+'“ teilgenommen. Du kannst den Kurs jetzt in der App bewerten.',term.ID);
+    }
   });
-  if(course?.Bereich===GA_ADV_AREA&&firstTime.length)gaNotifyAdvancedOrganizers_('Aufgabe','Ausbildung abgeschlossen',course.Titel,term.ID);
+  if(course?.Bereich===GA_ADV_AREA&&firstTime.length)gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&x.Rolle===GA_ADV_ROLE).forEach(x=>{
+   if(known.some(n=>n.BenutzerID===x.ID&&n.BezugID===term.ID&&['Ausbildung abgeschlossen','Kursteilnahmen bestätigt'].includes(n.Titel)))return;
+   addNotice(x.ID,'Aufgabe','Kursteilnahmen bestätigt',course.Titel,term.ID);
+  });
+  const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
+  const quizContext=quiz&&course?gaQuizNoticeContext_():null;
   firstTime.forEach(m=>{
-   const account=users.find(x=>String(x.Email||'').trim().toLowerCase()===String(m.Email||'').trim().toLowerCase());
-   if(account)gaNotify_(account.ID,'Aufgabe','Kurs abgeschlossen','Deine Teilnahme an „'+(course?.Titel||'Ausbildung')+'“ wurde bestätigt.',term.ID);
+   const account=accountFor(m);if(!account)return;
+   // Bereits verschickte Teilnahmemeldungen bleiben auch bei späteren Korrekturen einmalig.
+   if(known.some(n=>n.BenutzerID===account.ID&&n.BezugID===term.ID&&['Kurs abgeschlossen','Kursteilnahme bestätigt'].includes(n.Titel)))return;
+   const decision=quizContext&&gaBool_(quiz.Pflicht)?gaValidityForTerm_(course,term,quizContext.meta,quizContext.turns,'quiz'):'exempt';
+   const passed=quizContext&&quizContext.attempts.some(a=>a.MitgliedID===m.ID&&a.KursID===term.KursID&&gaBool_(a.Bestanden));
+   const waiting=quizContext&&gaBool_(quiz.Pflicht)&&!passed&&decision!=='exempt';
+   const title=waiting?'Kursteilnahme bestätigt':'Kurs abgeschlossen';
+   const text=waiting?'Deine Teilnahme an „'+(course?.Titel||'Ausbildung')+'“ wurde bestätigt. '+
+     (decision==='applies'?'Für den Kursabschluss ist noch das Pflichtquiz zu absolvieren.':'Die Quizpflicht wird noch geprüft.'):
+     'Dein Kurs „'+(course?.Titel||'Ausbildung')+'“ wurde abgeschlossen.';
+   addNotice(account.ID,'Aufgabe',title,text,term.ID);
   });
   // Both GAB and advanced course participants receive the correct quiz type.
-  const quiz=gaOptionalRows_('QuizKurse').find(q=>q.KursID===term.KursID&&gaBool_(q.Aktiv));
   if(quiz&&course){
-   const known=gaRows_('Benachrichtigungen'),quizContext=gaQuizNoticeContext_();
    firstTime.forEach(m=>{
-    const account=users.find(x=>String(x.Email||'').toLowerCase()===String(m.Email||'').toLowerCase());
-    if(account)gaNotifyQuizAvailable_(account,course,quiz,known,quizContext);
+    const account=accountFor(m);
+    if(account)try{gaNotifyQuizAvailable_(account,course,quiz,known,quizContext);}
+     catch(e){noticeFailures++;console.warn('Quizbenachrichtigung konnte nicht erstellt werden:',String(e));}
    });
   }
-  gaPushQueue_(5);
-  return {ok:true,message:'Anwesenheit bestätigt. '+firstTime.length+' neue Bewertungsbenachrichtigungen vorbereitet.'};
+  try{gaPushQueue_(5);}catch(e){console.warn('Kurs-Push wartet:',String(e));}
+  return {ok:true,message:'Anwesenheit bestätigt.'+(noticeFailures?' '+noticeFailures+' Benachrichtigung(en) konnten nicht erstellt werden. Bitte die betroffenen Personen informieren.':'')};
 }
 function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.Name,'Name',140),email=gaText_(d.Email,240).toLowerCase(),pwd=String(d.Passwort||'');
   if(!gaEmail_(email)||pwd.length<12)throw new Error('Gültige E-Mail und Passwort mit mindestens 12 Zeichen erforderlich.');
@@ -1778,13 +1862,14 @@ function gaPushQueue_(limit,onlyNotificationId){
   const pending=gaRows_('Benachrichtigungen').filter(n=>
     n.PushStatus==='Wartend'&&(!onlyNotificationId||n.ID===onlyNotificationId))
     .slice(0,Math.max(1,Math.min(10,limit||5)));
-  let quizContext=null,quizUsers=[];
+  let quizContext=null,quizUsers=[],gabContext=null;
   if(pending.some(n=>String(n.BezugID||'').startsWith('QUIZREADY:'))){
     try{quizContext=gaQuizNoticeContext_();quizUsers=gaRows_('Benutzer');}
     catch(error){console.warn('Quiz-Push wartet auf erneute Gültigkeitsprüfung:',String(error));}
   }
   for(const n of pending){
     const ref=String(n.BezugID||'');
+    let pushTitle=n.Titel,pushText=n.Text;
     if(ref.startsWith('QUIZREADY:')){
       if(!quizContext)continue;
       const parts=ref.split(':'),course=quizContext.courses.find(c=>c.ID===parts[1]);
@@ -1796,6 +1881,18 @@ function gaPushQueue_(limit,onlyNotificationId){
         continue;
       }
     }
+    // Bei verzögertem Push den aktuellen GAB- und BSW-Stand erneut berücksichtigen.
+    if(ref.startsWith('GABCOMPLETE:')){
+      try{
+        if(!gabContext)gabContext=gaGabNoticeContext_();
+        const member=gabContext.members.find(m=>m.ID===ref.slice('GABCOMPLETE:'.length));
+        const current=member?gaGabNoticeCandidate_(member,{...gabContext,notices:[]}):null;
+        if(!current||current.Status!=='Bereit'||current.BenutzerID!==n.BenutzerID){
+          gaReplace_('Benachrichtigungen',n.ID,{PushStatus:'Nicht mehr erforderlich'});continue;
+        }
+        pushTitle=gaGabNoticeTitle_(current);pushText=current.Text;
+      }catch(error){console.warn('GAB-Abschluss-Push wartet auf erneute Prüfung:',String(error));continue;}
+    }
     const allowed=gaPushRule_(n.BenutzerID)[n.Typ==='Nachricht'?'Nachrichten':n.Typ==='Termin'?'Termine':n.Typ==='Bewertung'?'Bewertungen':'Aufgaben'];
     const selected=devices.filter(x=>x.BenutzerID===n.BenutzerID);
     if(!allowed||!selected.length){
@@ -1803,7 +1900,7 @@ function gaPushQueue_(limit,onlyNotificationId){
       continue;
     }
     const data={devices:selected.slice(0,6).map(d=>({id:d.ID,subscription:{endpoint:d.Endpoint,p256dh:d.P256DH,auth:d.Auth}})),
-      notification:{title:gaText_(n.Titel,90),body:gaText_(n.Text,180),id:n.ID,url:'/grundausbildung/',kind:n.Typ}};
+      notification:{title:gaText_(pushTitle,90),body:gaText_(pushText,180),id:n.ID,url:'/grundausbildung/',kind:n.Typ}};
     const ts=Math.floor(Date.now()/1000),nonce=(gaId_().replace(/-/g,'')),payload=JSON.stringify(data);
     const signature=Utilities.computeHmacSha256Signature(ts+'.'+nonce+'.'+payload,key,Utilities.Charset.UTF_8)
       .map(b=>('0'+(b&255).toString(16)).slice(-2)).join('');
@@ -2508,6 +2605,117 @@ function gaQualificationStatus_(m,qs,rs,courses,terms,attendances,turnusse,quizC
   OffeneGABKurse:advanced?[]:gabOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs'),
   OffeneBSWKurse:bswOpen.map(r=>courses.find(c=>c.ID===r.KursID)?.Titel||'Pflichtkurs')};
 }
+// Abschlussnachrichten nur aus bestätigten Daten und eindeutig zugeordneten Teilnehmerkonten.
+function gaGabNoticeContext_(){
+ return {members:gaRows_('Mitglieder'),users:gaRows_('Benutzer'),turns:gaRows_('Turnusse'),
+  courses:gaRows_('Kurse'),terms:gaRows_('Termine'),attendance:gaRows_('Teilnahmen'),
+  qualifications:gaOptionalRows_('QualifikationMitglieder'),requirements:gaOptionalRows_('KursAnforderungen'),
+  proofs:gaOptionalRows_('AbschnittNachweise'),quizzes:gaOptionalRows_('QuizKurse'),
+  attempts:gaOptionalRows_('QuizVersuche'),unlocks:gaOptionalRows_('QuizFreigaben'),
+  assignments:gaAdvAssignments_(),predecessors:gaCoursePredecessors_(),meta:gaValidityConfig_(),
+  notices:gaRows_('Benachrichtigungen')};
+}
+function gaGabNoticeQuizReady_(m,account,course,quiz,ctx){
+ if(!course||!gaBool_(course.Aktiv)||!quiz||!gaBool_(quiz.Aktiv)||!gaBool_(quiz.Pflicht))return false;
+ if(!gaQuizNoticeEligible_(account,course,quiz,ctx))return false;
+ if(gaValidityQuizAttendance_(course,m,ctx.meta,ctx.turns,ctx.assignments,ctx.terms,ctx.attendance)!=='applies')return false;
+ try{const qs=JSON.parse(quiz.FragenJSON||'[]');if(!Array.isArray(qs)||!qs.length)return false;}catch(_){return false;}
+ const all=ctx.attempts.filter(a=>a.MitgliedID===m.ID&&a.KursID===course.ID);
+ if(all.some(a=>gaBool_(a.Bestanden)))return false;
+ const current=all.filter(a=>String(a.QuizVersion)===String(quiz.Version));
+ if(current.some(a=>a.Status==='In Bearbeitung'&&!gaQuizDue_(a,Number(quiz.ZeitlimitMinuten))))return true;
+ const extra=ctx.unlocks.filter(x=>x.MitgliedID===m.ID&&x.KursID===course.ID&&String(x.QuizVersion)===String(quiz.Version))
+  .reduce((sum,x)=>sum+Math.max(0,Number(x.ZusatzVersuche)||0),0);
+ const max=Number(quiz.MaxVersuche);
+ return Number.isFinite(max)&&max>0&&current.length<max+extra;
+}
+function gaGabNoticeCandidate_(m,ctx){
+ if(!gaBool_(m.Aktiv)||!ctx.turns.some(t=>t.ID===m.TurnusID&&t.Bereich==='Grundausbildung')||
+  !gaGabCompletion_(m,ctx.qualifications,ctx.proofs).complete)return null;
+ const ref='GABCOMPLETE:'+m.ID,name=(m.Vorname+' '+m.Nachname).trim();
+ if(ctx.notices.some(n=>n.BezugID===ref))return {MitgliedID:m.ID,Name:name,Status:'Bereits benachrichtigt'};
+ const email=String(m.Email||'').trim().toLowerCase();
+ const matches=email?ctx.users.filter(u=>u.Rolle==='Teilnehmer'&&gaBool_(u.Aktiv)&&String(u.Email||'').trim().toLowerCase()===email):[];
+ if(matches.length!==1||gaOwnMember_(matches[0],ctx.members)?.ID!==m.ID)
+  return {MitgliedID:m.ID,Name:name,Status:matches.length>1?'Zugang nicht eindeutig':'Kein eindeutig zugeordneter aktiver Zugang'};
+ const account=matches[0],q=gaQualificationStatus_(m,ctx.qualifications,ctx.requirements,ctx.courses,ctx.terms,
+  ctx.attendance,ctx.turns,ctx.quizzes,ctx.attempts,ctx.proofs,ctx.assignments,ctx.predecessors,ctx.meta);
+ let bsw=q.BSWModulAbgeschlossen?'BSW-Modul abgeschlossen':'BSW-Status prüfen',extra='';
+ const relevant=new Set(),bswRequirements=ctx.requirements.filter(r=>gaBool_(r.PflichtBSW));
+ bswRequirements.forEach(r=>{
+  let id=r.KursID;const seen=new Set();while(id&&!seen.has(id)){seen.add(id);relevant.add(id);id=ctx.predecessors[id]?.id||'';}
+ });
+ const uncertain=(q.GueltigkeitUnklar||[]).some(id=>relevant.has(id));
+ if((q.OffeneBSWKurse||[]).length&&!uncertain){
+  const openNames=new Set(q.OffeneBSWKurse),relatedCourses=ctx.courses.filter(c=>relevant.has(c.ID));
+  // Bei doppelt vergebenen Titeln keine bestimmte Quizpflicht raten.
+  const openCourses=relatedCourses.filter(c=>openNames.has(c.Titel)&&relatedCourses.filter(x=>x.Titel===c.Titel).length===1);
+  const candidates=openCourses.map(c=>({course:c,quiz:ctx.quizzes.find(z=>z.KursID===c.ID&&gaBool_(z.Aktiv)&&gaBool_(z.Pflicht))}))
+   .filter(x=>x.quiz&&!ctx.attempts.some(a=>a.MitgliedID===m.ID&&a.KursID===x.course.ID&&gaBool_(a.Bestanden)));
+  if(candidates.some(x=>gaGabNoticeQuizReady_(m,account,x.course,x.quiz,ctx))){
+   bsw='BSW-Quiz offen und freigeschaltet';
+   extra='\n\nDein Modul Brandsicherheitswache (BSW) ist noch offen. Bitte absolviere das freigeschaltete BSW-Quiz in der App unter Menü → Wissenstests.';
+  }else if(candidates.some(x=>gaValidityQuizAttendance_(x.course,m,ctx.meta,ctx.turns,ctx.assignments,ctx.terms,ctx.attendance)==='applies')){
+   bsw='BSW offen; Quizzugang prüfen';
+   extra='\n\nDein Modul Brandsicherheitswache (BSW) ist noch offen. Bitte melde dich bei der Ausbildungsleitung, falls du für das Quiz einen weiteren Versuch benötigst.';
+  }else if(candidates.length){
+   bsw='BSW offen; Quiz noch nicht freigeschaltet';
+   extra='\n\nDein Modul Brandsicherheitswache (BSW) ist noch offen. Nach bestätigter Kursteilnahme und Freigabe findest du das Quiz in der App unter Menü → Wissenstests.';
+  }else{
+   bsw='BSW-Modul offen';
+   extra='\n\nDein Modul Brandsicherheitswache (BSW) ist noch offen. Bitte prüfe deinen Ausbildungsstand in der App oder wende dich an die Ausbildungsleitung.';
+  }
+ }else if(uncertain){bsw='BSW-Gültigkeit unklar – bitte prüfen';}
+ else if(!bswRequirements.length){bsw='BSW-Status nicht bestimmbar – keine BSW-Pflichtmodule festgelegt';}
+ const message='Hallo '+m.Vorname+'! Dein Abschluss der Grundausbildung wurde offiziell bestätigt. Herzlichen Glückwunsch zu deinem Erfolg! '+
+  'Du wechselst nun in die erweiterte Ausbildung. Über die nächsten Schritte informieren wir dich in den nächsten Wochen.'+extra;
+ return {MitgliedID:m.ID,Name:name,Status:'Bereit',BSW:bsw,Text:message,BenutzerID:account.ID,BezugID:ref};
+}
+function gaGabCompletionNoticePreview_(u){
+ gaRequire_(u,['Administrator']);
+ const ctx=gaGabNoticeContext_(),items=ctx.members.map(m=>gaGabNoticeCandidate_(m,ctx)).filter(Boolean)
+  .sort((a,b)=>a.Name.localeCompare(b.Name,'de'));
+ return {ok:true,backendVersion:GA.VERSION,Teilnehmer:items.map(({BenutzerID,BezugID,...item})=>item)};
+}
+function gaGabCreateParticipantNotice_(candidate,ctx){
+ if(!candidate||candidate.Status!=='Bereit')return false;
+ if(ctx.notices.some(n=>n.BezugID===candidate.BezugID))return false;
+ const title=gaGabNoticeTitle_(candidate);
+ const id=gaNotify_(candidate.BenutzerID,'Aufgabe',title,candidate.Text,candidate.BezugID);
+ ctx.notices.push({BezugID:candidate.BezugID,BenutzerID:candidate.BenutzerID});
+ try{gaPushQueue_(1,id);}catch(e){console.warn('GAB-Teilnehmer-Push wartet:',String(e));}
+ return true;
+}
+function gaGabNoticeTitle_(candidate){return candidate.BSW==='BSW-Quiz offen und freigeschaltet'?
+ 'GAB abgeschlossen – BSW-Quiz offen':'Grundausbildung abgeschlossen – Gratulation!';}
+function gaSendGabCompletionNotices_(u,d){
+ gaRequire_(u,['Administrator']);
+ if(!Array.isArray(d.MitgliedIDs)||!d.MitgliedIDs.length||d.MitgliedIDs.length>8)throw new Error('Bitte bis zu acht Teilnehmer auswählen.');
+ const ids=[...new Set(d.MitgliedIDs.map(id=>gaNeed_(id,'Mitglied',100)))];
+ const ctx=gaGabNoticeContext_();let created=0,skipped=0,failed=0;
+ for(const id of ids){
+  const member=ctx.members.find(m=>m.ID===id);
+  try{const candidate=member?gaGabNoticeCandidate_(member,ctx):null;
+   if(gaGabCreateParticipantNotice_(candidate,ctx))created++;else skipped++;
+  }catch(e){failed++;console.warn('GAB-Nachricht nicht erstellt:',String(e));}
+ }
+ try{gaLog_(u.ID,'GAB_ABSCHLUSSNACHRICHT','Mitglieder','',{MitgliedIDs:ids,Erstellt:created,Uebersprungen:skipped,Fehler:failed});}
+ catch(e){console.warn('GAB-Nachrichtenprotokoll fehlgeschlagen:',String(e));}
+ return {ok:failed===0,erstellt:created,uebersprungen:skipped,fehler:failed};
+}
+function gaNotifyGabParticipantCompleted_(m,before,after){
+ if(before||!after)return '';
+ try{
+  const ctx=gaGabNoticeContext_(),candidate=gaGabNoticeCandidate_(m,ctx);
+  if(!candidate)return '';
+  if(candidate.Status==='Bereits benachrichtigt')return '';
+  if(candidate.Status!=='Bereit')return ' Für dieses Mitglied konnte keine Abschlussnachricht erstellt werden: '+candidate.Status+'.';
+  gaGabCreateParticipantNotice_(candidate,ctx);return '';
+ }catch(e){
+  console.warn('GAB-Teilnehmernachricht fehlgeschlagen:',String(e));
+  return ' Der Abschluss wurde gespeichert, aber die Teilnehmernachricht konnte nicht erstellt werden. Bitte über Benachrichtigungen erneut prüfen.';
+ }
+}
 function gaSaveAbschnittNachweis_(u,d){
  gaRequire_(u,['Administrator']);
  const id=gaNeed_(d.MitgliedID,'Mitglied',100),m=gaFind_('Mitglieder',id);
@@ -2529,7 +2737,8 @@ function gaSaveAbschnittNachweis_(u,d){
  else gaAppend_('AbschnittNachweise',{ID:gaId_(),MitgliedID:id,KursID:courseId,...values});
  gaLog_(u.ID,'ABSCHNITTSMODUL_NACHWEIS','Mitglied',id,{KursID:courseId,Absolviert:values.Absolviert,PruefungBestanden:values.PruefungBestanden});
  const next=proofs.filter(x=>!(x.MitgliedID===id&&x.KursID===courseId)).concat([{MitgliedID:id,KursID:courseId,...values}]);
- const warning=gaNotifyGabCompleted_(m,before,gaGabCompletion_(m,quals,next).complete);
+ const after=gaGabCompletion_(m,quals,next).complete;
+ const warning=gaNotifyGabCompleted_(m,before,after)+gaNotifyGabParticipantCompleted_(m,before,after);
  return {ok:true,message:'Abschnittsmodul dokumentiert. GAB-Pflichtfortschritt wurde neu berechnet.'+warning};
 }
 function gaSaveQualification_(u,d){
@@ -2554,7 +2763,8 @@ function gaSaveQualification_(u,d){
  if(birth!==String(m.Geburtsdatum||''))gaReplace_('Mitglieder',m.ID,{Geburtsdatum:birth});
  gaLog_(u.ID,'QUALIFIKATION','Mitglied',m.ID,{GAB:val.GABFreigabe,GABAnerkannt:val.GABAnerkannt,ErsteHilfeStatus:status});
  const next=quals.filter(x=>x.MitgliedID!==m.ID).concat([{MitgliedID:m.ID,...val}]);
- const warning=gaNotifyGabCompleted_(m,before,gaGabCompletion_(m,next,proofs).complete);
+ const after=gaGabCompletion_(m,next,proofs).complete;
+ const warning=gaNotifyGabCompleted_(m,before,after)+gaNotifyGabParticipantCompleted_(m,before,after);
  return {ok:true,message:'Qualifikationsnachweise gespeichert.'+warning};
 }
 function gaCoursePredecessors_(){
@@ -2861,22 +3071,37 @@ function gaSubmitQuiz_(u,d){
  gaReplace_('QuizVersuche',attempt.ID,{Status:'Abgegeben',AbgegebenAm:time,
   Punkte:String(correct),MaxPunkte:String(qs.length),Prozent:String(percent),
   Bestanden:passed?'JA':'NEIN',AntwortenJSON:JSON.stringify(d.Antworten)});
+ let noticeWarning='';
+ const warn=()=>{noticeWarning='Dein Ergebnis ist gespeichert. Eine zusätzliche Benachrichtigung konnte nicht erstellt werden.';};
  const owner=gaRows_('Benutzer');
  owner.filter(x=>gaBool_(x.Aktiv)&&(x.Rolle==='Administrator'||(x.Rolle==='Ausbilder'&&gaCan_(x,'KurseGestalten'))))
-  .filter(x=>x.ID!==u.ID).forEach(x=>gaNotify_(x.ID,'Aufgabe','Kursquiz abgegeben',
-   m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID));
+  .filter(x=>x.ID!==u.ID).forEach(x=>{try{gaNotify_(x.ID,'Aufgabe','Kursquiz abgegeben',
+   m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);}
+   catch(e){warn();console.warn('Quizbenachrichtigung fehlgeschlagen:',String(e));}});
  const quizCourse=gaFind_('Kurse',attempt.KursID),quizTerm=gaFind_('Termine',attempt.TerminID);
  if(quizCourse?.Bereich===GA_ADV_AREA&&quizTerm&&gaFind_('Turnusse',quizTerm.TurnusID)?.Bereich===GA_ADV_AREA&&gaAdvAllowedMembers_(quizTerm.TurnusID).some(member=>member.ID===m.ID))
-  gaNotifyAdvancedOrganizers_('Aufgabe','Kursquiz abgegeben',m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);
+  try{gaNotifyAdvancedOrganizers_('Aufgabe','Kursquiz abgegeben',m.Vorname+' '+m.Nachname+': '+percent+' % ('+(passed?'bestanden':'nicht bestanden')+').',attempt.KursID);}
+  catch(e){warn();console.warn('Quizbenachrichtigung an Organisation fehlgeschlagen:',String(e));}
  gaLog_(u.ID,'QUIZ_ABGEBEN','Kurs',attempt.KursID,{MitgliedID:m.ID,QuizVersion:attempt.QuizVersion,Prozent:percent,Bestanden:passed});
  const attempts=gaRows_('QuizVersuche').filter(x=>x.MitgliedID===m.ID&&x.KursID===attempt.KursID&&x.QuizVersion===config.Version).length;
  const submittedCourse=gaFind_('Kurse',attempt.KursID),submittedTerm=gaFind_('Termine',attempt.TerminID);
  const submittedMeta=gaValidityConfig_();
  const submittedStatus=gaValidityQuizDate_(submittedMeta,attempt.KursID)?
   gaValidityForTerm_(submittedCourse,submittedTerm,submittedMeta,gaRows_('Turnusse'),'quiz'):'applies';
+ if(passed&&gaBool_(config.Pflicht)&&submittedStatus==='applies'){
+  try{
+   const ref='COURSEPASS:'+attempt.KursID+':'+m.ID;
+   if(!gaRows_('Benachrichtigungen').some(n=>n.BenutzerID===u.ID&&n.BezugID===ref)){
+    const id=gaNotify_(u.ID,'Aufgabe','Kurs bestanden – Gratulation!',
+     'Du hast das Pflichtquiz bestanden und den Kurs „'+(submittedCourse?.Titel||'Ausbildung')+'“ erfolgreich abgeschlossen. Herzlichen Glückwunsch!',ref);
+    try{gaPushQueue_(1,id);}catch(e){console.warn('Kursabschluss-Push wartet:',String(e));}
+   }
+  }catch(e){warn();console.warn('Kursabschlussbenachrichtigung fehlgeschlagen:',String(e));}
+ }
+ try{gaPushQueue_(5);}catch(e){console.warn('Quiz-Benachrichtigung wartet:',String(e));}
  return {ok:true,Bestanden:passed,Punkte:correct,MaxPunkte:qs.length,Prozent:percent,
    Bestehensgrenze:Number(config.Bestehensgrenze),VersucheVerbleibend:Math.max(0,Number(config.MaxVersuche)+gaQuizExtra_(m.ID,attempt.KursID,config.Version)-attempts),
-   Pflicht:gaBool_(config.Pflicht)&&submittedStatus==='applies'};
+   Pflicht:gaBool_(config.Pflicht)&&submittedStatus==='applies',MitteilungsHinweis:noticeWarning};
 }
 
 function gaUnlockQuiz_(u,d){

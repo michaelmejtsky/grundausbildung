@@ -59,18 +59,21 @@ assert(tables.ErweiterteZuordnungen.some(x=>x.MitgliedID==='m1'&&x.TurnusID==='a
 // Release alone is insufficient for m3 because the Block B exam is not passed.
 ctx.gaApi('saveQualification',{MitgliedID:'m3',GABFreigabe:'JA'},'token');
 assert.equal(tables.Benachrichtigungen.length,0);
-// Final release creates one in-app message per active organizer; push is queued by ID.
+// Final release informs active organizers and the correctly associated participant.
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'JA'},'token');
 let notices=tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m1');
 assert.deepEqual(notices.map(x=>x.BenutzerID).sort(),['org1','org2']);
 assert.equal(notices.find(x=>x.BenutzerID==='org1').PushStatus,'Wartend');
 assert.equal(notices.find(x=>x.BenutzerID==='org2').PushStatus,'Kein Gerät registriert');
 assert(notices.every(x=>x.Text.includes('Zuordnung zur erweiterten Ausbildung besteht bereits')));
-assert.equal(push.length,2);
+const participantNotice=tables.Benachrichtigungen.find(x=>x.BezugID==='GABCOMPLETE:m1');
+assert.equal(participantNotice.BenutzerID,'person');assert.match(participantNotice.Text,/Herzlichen Glückwunsch/);
+assert.equal(push.length,3);
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'JA'},'token');
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'NEIN'},'token');
 ctx.gaApi('saveQualification',{MitgliedID:'m1',GABFreigabe:'JA'},'token');
 assert.equal(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m1').length,2,'No duplicates after repeat saves or re-confirmation');
+assert.equal(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABCOMPLETE:m1').length,1);
 // Alternatively the final Block B proof may finish the GAB.
 ctx.gaApi('saveAbschnittNachweis',{MitgliedID:'m2',KursID:'GAB-ABSCHNITT-BLOCK-B',Absolviert:'JA',PruefungBestanden:'JA',Ausbildungsdatum:'2026-04-01',Pruefungsdatum:'2026-04-02'},'token');
 assert.equal(tables.Benachrichtigungen.filter(x=>x.BezugID==='GABREADY:m2').length,2);

@@ -90,7 +90,8 @@ function gaOrganizerMembers(){
  '<button type="submit" class="primary">Mitglied anlegen</button></form></section>'+
  '<section class="panel"><h3>Meine erweiterten Teilnehmer ('+members.length+')</h3>'+
  '<div class="ga-organizer-roster">'+members.map(m=>'<div><b>'+h(m.Nachname+', '+m.Vorname)+'</b>'+
- '<span class="tag '+(m.Ausbildungsweg==='GAB-Gast'?'blue':'ok')+'">'+(m.Ausbildungsweg==='GAB-Gast'?'GAB-Gast':'Erweiterte Ausbildung')+'</span></div>').join('')+
+ '<span class="tag '+(m.Ausbildungsweg==='GAB-Gast'?'blue':'ok')+'">'+(m.Ausbildungsweg==='GAB-Gast'?'GAB-Gast':'Erweiterte Ausbildung')+'</span>'+
+ ((STATE.erweiterteAbschluesse||[]).some(a=>a.MitgliedID===m.ID&&!a.Fehler)?'<span class="tag ok">Ausbildung abgeschlossen</span>':'')+'</div>').join('')+
  (members.length?'':'<p class="muted">Noch keine Teilnehmer zugeordnet.</p>')+'</div></section>';
 }
 function gaOrganizerInvite(){
@@ -122,6 +123,14 @@ function gaOrganizerQualifications(){
     done:attended&&(!required||passed)&&!uncertain};
   });
   const applicable=progress.filter(x=>x.applicable),done=applicable.filter(x=>x.done).length;
+  const available=Array.isArray(STATE.erweiterteAbschluesse),completion=(STATE.erweiterteAbschluesse||[]).find(x=>x.MitgliedID===m.ID);
+  const completionHtml=!available?'<p class="notice">Für die Abschlussbestätigung zuerst Code.gs 1.13.4 bereitstellen.</p>':
+   completion?.Fehler?'<p class="notice">Der gespeicherte Abschluss muss durch den Administrator geprüft werden.</p>':
+   completion?'<div class="notice"><b>Erweiterte Ausbildung abgeschlossen</b> · '+h(gaTrainerTime(completion.AbgeschlossenAm))+
+    (completion.Benachrichtigt?'<br>Glückwunsch als App-Benachrichtigung erstellt.':'<br>Glückwunsch noch nicht zugestellt. Bitte den Teilnehmerzugang prüfen.')+'</div>'+
+    (!completion.Benachrichtigt&&m.Aktiv==='JA'?'<button type="button" class="secondary" data-adv-complete="'+h(m.ID)+'" data-adv-retry="1">Glückwunsch erneut prüfen</button>':''):
+   m.Aktiv==='JA'?'<p class="small muted">Die Ausbildungsleitung bestätigt den Gesamtabschluss nach Prüfung der Voraussetzungen.</p>'+
+    '<button type="button" class="primary" data-adv-complete="'+h(m.ID)+'" data-adv-open="'+h(applicable.length-done)+'" data-adv-total="'+h(applicable.length)+'">Erweiterte Ausbildung abschließen</button>':'';
   return '<details class="ga-member-fold ga-org-qualification"><summary><span>'+h(m.Nachname+', '+m.Vorname)+
    '</span><span class="tag '+(done===applicable.length&&applicable.length?'ok':'blue')+'">'+done+' / '+applicable.length+' Module</span></summary>'+
    '<div class="ga-fold-body">'+(m.Ausbildungsweg==='GAB-Gast'?
@@ -129,7 +138,7 @@ function gaOrganizerQualifications(){
    (progress.length?progress.map(c=>
     '<div class="ga-org-list-row"><strong>'+h(c.name)+'</strong><span class="tag '+(c.done?'ok':c.attended?'warn':'blue')+'">'+
     (c.done?'Positiv abgeschlossen':c.uncertain?'Turnus-Startdatum prüfen':!c.applicable?'Für diesen Turnus nicht verpflichtend':c.attended&&c.required?'Pflichtquiz ausständig':'Noch offen')+'</span></div>').join(''):
-    '<p class="muted">Noch keine erweiterten Module vorhanden.</p>')+'</div></details>';
+    '<p class="muted">Noch keine erweiterten Module vorhanden.</p>')+completionHtml+'</div></details>';
  });
  return '<section class="panel"><h2>Qualifikationen – Erweiterte Ausbildung</h2>'+
  '<p class="muted">Nur Anwesenheit, Wissenstests und Kursabschlüsse der erweiterten Ausbildung. Die GAB-Dokumentation bleibt verborgen.</p>'+
@@ -184,4 +193,22 @@ document.getElementById('app')?.addEventListener('change',e=>{
  if(!e.target.matches('[data-adv-msg-select]'))return;
  const mode=e.target.value;
  e.target.closest('form')?.querySelectorAll('[data-adv-msg]').forEach(x=>{x.hidden=x.dataset.advMsg!==mode;});
+});
+document.getElementById('app')?.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-adv-complete]');if(!button)return;
+ if(typeof GA_ROLE_PREVIEW!=='undefined'&&GA_ROLE_PREVIEW){tip('Die Rollenvorschau ist schreibgeschützt.',true);return;}
+ const member=(STATE.mitglieder||[]).find(m=>m.ID===button.dataset.advComplete);
+ if(!member||member.Aktiv!=='JA')return tip('Aktives Mitglied nicht gefunden.',true);
+ const retry=button.dataset.advRetry==='1',open=Number(button.dataset.advOpen||0),total=Number(button.dataset.advTotal||0);
+ const question=retry?'Den Glückwunsch für '+name(member)+' erneut prüfen und bei eindeutigem Zugang zustellen?':
+  'Die erweiterte Ausbildung für '+name(member)+' offiziell als abgeschlossen bestätigen?'+
+  (!total?'\n\nFür diese Person werden derzeit keine anwendbaren Module angezeigt. Bitte die Voraussetzungen prüfen.':
+   open?'\n\nIn der Übersicht sind '+open+' Module noch nicht als abgeschlossen angezeigt. Bitte die Voraussetzungen prüfen.':'')+
+  '\n\nDer Teilnehmer erhält eine Gratulation. Bestehende Turnuszuordnungen und Nachweise bleiben erhalten.';
+ if(!confirm(question))return;
+ button.disabled=true;
+ try{const result=await api('completeAdvancedTraining',{MitgliedID:member.ID});
+  tip(result.message||'Abschluss gespeichert.',result.benachrichtigt===false);await reload();
+ }catch(error){tip(error.message||'Abschluss konnte nicht gespeichert werden.',true);}
+ finally{button.disabled=false;}
 });

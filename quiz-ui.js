@@ -381,6 +381,7 @@ function qParticipant(){
  const result=Q_RESULT?'<div class="ga-q-result"><h2>'+ (Q_RESULT.Bestanden?'Bestanden!':'Nicht bestanden')+'</h2>'+
  '<strong>'+h(Q_RESULT.Prozent)+' %</strong><p>'+h(Q_RESULT.Punkte)+' von '+h(Q_RESULT.MaxPunkte)+' Fragen richtig. Mindestwert: '+h(Q_RESULT.Bestehensgrenze)+' %.</p>'+
  '<p>'+(Q_RESULT.Bestanden?'Dein Abschluss wurde gespeichert.':'Verbleibende Versuche: '+h(Q_RESULT.VersucheVerbleibend))+'</p>'+
+ (Q_RESULT.MitteilungsHinweis?'<p class="small muted">'+h(Q_RESULT.MitteilungsHinweis)+'</p>':'')+
  '<button type="button" class="secondary" data-qresult-close="1">Schließen</button></div>':'';
  return '<div class="ga-review-banner"><div><p class="ga-eyebrow">NACH DEM KURS</p><h2>Meine Wissenstests</h2>'+
  '<p>Fragen beantworten und den Lernfortschritt überprüfen.</p></div></div>'+result+

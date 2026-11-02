@@ -75,13 +75,14 @@ label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:#3c53
 <button class="secondary full" style="margin-top:14px" id="installApp" type="button">App am Handy installieren</button>
 <div id="backendInfo" class="small muted" style="margin-top:13px"></div>
 <p class="small muted" style="margin-top:20px">Zugänge werden vom Administrator angelegt. Bei der ersten Installation zuerst das Administrator-Konto in Google Sheets einrichten.</p></div></div>
-<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.13.3</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="gaViewButton" type="button" class="secondary hidden">👁 Ansicht wechseln</button><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><section id="gaViewChooser" class="panel hidden"><h2>Ansicht wechseln</h2><p>Sieh dir die App eines aktiven Kontos an. Diese Vorschau ist schreibgeschützt.</p><label>Konto und Rolle<select id="gaViewAccount"><option value="">Konto auswählen</option></select></label><div class="btnline"><button id="gaViewPreview" type="button" class="primary">Vorschau öffnen</button><button id="gaViewAdvanced" type="button" class="secondary">Erweiterte Ausbildung verwalten</button><button id="gaViewCancel" type="button" class="secondary">Schließen</button></div><p class="small muted">In der Verwaltung der erweiterten Ausbildung arbeitest du weiterhin als Administrator; Änderungen werden gespeichert.</p></section><div id="gaViewBanner" class="notice hidden"></div><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
+<div id="app" class="layout hidden"><div id="gaBackdrop" class="ga-nav-backdrop"></div><aside class="sidebar"><div class="brand">🚒 Grundausbildung<small>Ausbildungsplattform · V1.13.4</small></div><nav id="nav" class="menu"></nav><div class="sidebar-user"><strong id="userName"></strong><span id="userRole"></span><br><button id="logout">Abmelden</button></div></aside><main class="main"><header class="top"><button type="button" class="ga-sidebar-toggle" id="gaOpenMenu">☰ Menü</button><div><h1 id="pageTitle">Übersicht</h1><p id="pageSubtitle">Kurse, Turnusse und Fortschritt</p></div><div class="row"><button id="gaViewButton" type="button" class="secondary hidden">👁 Ansicht wechseln</button><button id="refresh" class="secondary">↻ Aktualisieren</button><button id="installAppTop" class="secondary">App installieren</button><button id="mobileLogout" class="secondary" style="display:none">Abmelden</button></div></header><section id="gaViewChooser" class="panel hidden"><h2>Ansicht wechseln</h2><p>Sieh dir die App eines aktiven Kontos an. Diese Vorschau ist schreibgeschützt.</p><label>Konto und Rolle<select id="gaViewAccount"><option value="">Konto auswählen</option></select></label><div class="btnline"><button id="gaViewPreview" type="button" class="primary">Vorschau öffnen</button><button id="gaViewAdvanced" type="button" class="secondary">Erweiterte Ausbildung verwalten</button><button id="gaViewCancel" type="button" class="secondary">Schließen</button></div><p class="small muted">In der Verwaltung der erweiterten Ausbildung arbeitest du weiterhin als Administrator; Änderungen werden gespeichert.</p></section><div id="gaViewBanner" class="notice hidden"></div><div id="content"></div></main></div><div id="toast" class="toast hidden"></div>
 <script src="./config.js"></script>
 <script>
 'use strict';
 let TOKEN='',STATE=null,VIEW='overview',FORM='',EDIT=null,TERM=null,ATT={},inviteToken='';
 let GA_MANUAL_LOGIN_PENDING=false;
 let GA_ADMIN_ADV_VIEW=false,GA_ROLE_PREVIEW='',GA_ADMIN_USERS=[],GA_VIEW_BUSY=false;
+let GA_GAB_NOTICE_PREVIEW=null,GA_GAB_NOTICE_BUSY=false;
 const GA_LOGIN_STORAGE_KEY='ga_session_30d_v1';
 let REPORT_FILTER={category:'',status:''},REVIEW_FILTER={course:'',score:''};
 let PUSH_FEEDBACK='',PUSH_FEEDBACK_ERROR=false;
@@ -302,7 +303,7 @@ async function api(action,payload={}){
 async function reload(){
  const token=TOKEN,preview=GA_ROLE_PREVIEW,advanced=GA_ADMIN_ADV_VIEW,next=await api('state');
  if(token!==TOKEN||preview!==GA_ROLE_PREVIEW||advanced!==GA_ADMIN_ADV_VIEW)return;
- STATE=next;render();
+ STATE=next;GA_GAB_NOTICE_PREVIEW=null;render();
 }
 function gaUpdateViewControls(){
  const allowed=role()==='Administrator'||GA_ADMIN_ADV_VIEW||!!GA_ROLE_PREVIEW;
@@ -327,7 +328,7 @@ async function gaSwitchView(mode,id=''){
    mode==='admin'&&next.user?.Rolle!=='Administrator')
    throw new Error('Bitte zuerst Code.gs 1.13.3 in der bestehenden Apps-Script-Bereitstellung aktualisieren.');
   if(typeof Q_EDIT!=='undefined'&&Q_EDIT){try{qAutoDraft();}catch(_){} Q_EDIT='';Q_SESSION=null;Q_META=null;Q_ITEMS=[];}
-  GA_ROLE_PREVIEW=mode==='preview'?id:'';GA_ADMIN_ADV_VIEW=mode==='advanced';STATE=next;
+  GA_ROLE_PREVIEW=mode==='preview'?id:'';GA_ADMIN_ADV_VIEW=mode==='advanced';STATE=next;GA_GAB_NOTICE_PREVIEW=null;
   VIEW=GA_ADMIN_ADV_VIEW?'advOverview':'overview';FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';
   $('gaViewChooser').classList.add('hidden');document.body.classList.remove('ga-nav-open');render();
  }catch(e){tip(e.message||'Ansicht konnte nicht geladen werden.',true);}
@@ -946,6 +947,8 @@ function mine(){
  const member=STATE.meMember;
  if(!member)return '<section class="panel"><h2>Dein Teilnehmerprofil fehlt</h2><p>Die App konnte dein Mitgliedsprofil nicht zuordnen. Bitte die Datenverbindung prüfen.</p></section>'+gaParticipantDiagnosticBox();
  const q=(STATE.qualifikationen||[]).find(x=>x.MitgliedID===member.ID)||{};
+ const advancedCompletion=(STATE.erweiterteAbschluesse||[]).find(x=>x.MitgliedID===member.ID&&!x.Fehler);
+ const advancedNotice=advancedCompletion?'<section class="panel"><h2>🎉 Erweiterte Ausbildung abgeschlossen</h2><p>Dein Abschluss wurde am '+h(gaTrainerTime(advancedCompletion.AbgeschlossenAm))+' bestätigt. Herzlichen Glückwunsch!</p></section>':'';
  const total=Number(q.PflichtGesamt||0),done=Number(q.PflichtAbsolviert||0);
  const percent=Math.max(0,Math.min(100,Number(q.Fortschritt)||0));
  const completed=(STATE.teilnahmen||[]).filter(t=>t.MitgliedID===member.ID&&t.Anwesend==='JA');
@@ -1002,7 +1005,7 @@ function mine(){
   '<div class="ga-fold-body"><p class="small muted">Deine Nachweise kannst du hier hochladen oder ihren Prüfstatus ansehen.</p>'+
   aidPanel(false)+
   '<p class="small muted">FDISK: '+h(q.FDISKPlatzhalter==='JA'?'Platzhalter erfasst – kein Ausbildungsnachweis':q.FDISKEintragDatum||'Noch kein Datum hinterlegt')+'</p></div></details>';
- return hero+((q.GueltigkeitUnklar||[]).length?'<div class="notice">Für deinen Turnus muss das Startdatum geprüft werden. Bitte wende dich an die Ausbildungsleitung.</div>':'')+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>'+gaParticipantDiagnosticBox();
+ return hero+advancedNotice+((q.GueltigkeitUnklar||[]).length?'<div class="notice">Für deinen Turnus muss das Startdatum geprüft werden. Bitte wende dich an die Ausbildungsleitung.</div>':'')+stats+nextPanel+openCourses+((STATE.quizKurse||[]).some(c=>c.Aktiv==='JA')?'<section class="panel ga-quiz-teaser"><h2>Wissenstests zu deinen Kursen</h2><p class="muted">Nach bestätigter Teilnahme kannst du passende Quiz absolvieren.</p><button type="button" class="primary" data-view="myquiz">Wissenstests öffnen</button></section>':'')+'<div class="ga-member-folds">'+doneCourses+checkSection+documents+'</div>'+gaParticipantDiagnosticBox();
 }
 function myterms(){
  const allowed=new Set([STATE.meMember?.TurnusID,...(STATE.erweiterteZuordnungen||[]).map(x=>x.TurnusID)]);
@@ -1038,6 +1041,59 @@ function myterms(){
 }
 function tasks(){const open=STATE.checks.filter(x=>x.Status==='Offen');return '<div class="cards">'+metric(open.length,'Offene Aufgaben')+metric(STATE.checks.length,'Aufgaben insgesamt')+'</div><section class="panel"><h2>Offene Aufgaben</h2><div class="items">'+(open.length?checkRows(open):'<div class="notice">Derzeit keine offenen Aufgaben.</div>')+'</div></section><section class="panel"><h2>Weitere Bearbeitungen</h2><div class="items">'+checkRows(STATE.checks.filter(x=>x.Status!=='Offen'))+'</div></section>'}
 
+function gaGabNoticeSupported(){
+ const found=String(STATE?.version||'').split('.').map(Number),required=[1,13,4];
+ for(let i=0;i<required.length;i++){if(!Number.isFinite(found[i]))return false;if(found[i]!==required[i])return found[i]>required[i];}
+ return true;
+}
+function gaGabNoticeAdminPanel(){
+ if(role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)return '';
+ if(!gaGabNoticeSupported())return '<section class="panel"><h2>GAB-Abschlussnachrichten</h2><p>Für die Abschlussgratulation bitte zuerst Code.gs 1.13.4 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
+ const preview=GA_GAB_NOTICE_PREVIEW,items=preview?.Teilnehmer||[],ready=items.filter(x=>x.Status==='Bereit');
+ const rows=items.map(p=>'<details class="item message-expand"><summary><b>'+h(p.Name)+'</b> <span class="tag '+(p.Status==='Bereit'?'ok':'warn')+'">'+h(p.Status)+'</span>'+
+  (p.BSW?'<div class="detail">'+h(p.BSW)+'</div>':'')+'</summary>'+(p.Text?'<p class="msg">'+h(p.Text)+'</p>':'<p class="small muted">Für dieses Mitglied wird bei diesem Versand keine Nachricht erstellt.</p>')+'</details>').join('');
+ return '<section class="panel"><h2>GAB-Abschlussnachrichten</h2><p>Für bereits abgeschlossene GAB-Teilnehmer kannst du hier die Empfänger und den persönlichen Nachrichtentext prüfen und die Gratulation nachträglich versenden.</p>'+
+  '<p class="small muted">Es werden nur aktive GAB-Mitglieder mit bestätigtem Abschluss und eindeutig zugeordnetem aktivem Teilnehmerzugang berücksichtigt. Bereits über diese Funktion benachrichtigte Personen erhalten keine zweite Nachricht.</p>'+
+  '<div class="btnline"><button type="button" class="secondary" data-gab-notice-preview="1" '+(GA_GAB_NOTICE_BUSY?'disabled':'')+'>Empfänger und Texte prüfen</button></div>'+
+  (preview?'<p><b>'+h(ready.length)+'</b> bereit · '+h(items.length-ready.length)+' bereits informiert oder ohne eindeutigen Zugang</p>'+
+   '<div class="items">'+(rows||'<p class="muted">Keine aktiven GAB-Absolventen gefunden.</p>')+'</div>'+
+   (ready.length?'<div class="btnline"><button type="button" class="primary" data-gab-notice-send="1" '+(GA_GAB_NOTICE_BUSY?'disabled':'')+'>Gratulation an '+h(ready.length)+' Teilnehmer senden</button></div>':''):'')+
+  '<p class="small muted">Der BSW-Stand wird beim Versand erneut geprüft. Die Nachricht erscheint in der App; Push wird zusätzlich gemäß Gerätestatus und Benachrichtigungseinstellungen zugestellt.</p></section>';
+}
+async function gaGabNoticePreview(){
+ if(GA_GAB_NOTICE_BUSY||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)return;
+ const token=TOKEN;
+ GA_GAB_NOTICE_BUSY=true;render();
+ try{const result=await api('gabCompletionNoticePreview');
+  if(TOKEN!==token||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)return;
+  if(!Array.isArray(result?.Teilnehmer))throw new Error('Die Empfängerliste ist nicht verfügbar.');
+  GA_GAB_NOTICE_PREVIEW=result;
+ }catch(error){if(TOKEN===token){GA_GAB_NOTICE_PREVIEW=null;tip(error.message||'Empfänger konnten nicht geladen werden.',true);}}
+ finally{GA_GAB_NOTICE_BUSY=false;render();}
+}
+async function gaGabNoticeSend(){
+ if(GA_GAB_NOTICE_BUSY||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)return;
+ const ids=(GA_GAB_NOTICE_PREVIEW?.Teilnehmer||[]).filter(x=>x.Status==='Bereit').map(x=>x.MitgliedID);
+ if(!ids.length)return;
+ if(!confirm('Die angezeigte Gratulation jetzt an '+ids.length+' berechtigte Teilnehmer senden? Bereits über diese Funktion versendete Nachrichten werden nicht erneut erstellt.'))return;
+ const token=TOKEN;let created=0,skipped=0,failed=0;
+ GA_GAB_NOTICE_BUSY=true;render();
+ try{
+  for(let i=0;i<ids.length;i+=5){
+   if(TOKEN!==token||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)throw new Error('Die Sitzung oder Ansicht wurde gewechselt. Bitte Empfänger erneut prüfen.');
+   const result=await api('sendGabCompletionNotices',{MitgliedIDs:ids.slice(i,i+5)});
+   created+=Number(result?.erstellt||0);skipped+=Number(result?.uebersprungen||0);failed+=Number(result?.fehler||0);
+  }
+  if(TOKEN!==token||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)throw new Error('Die Sitzung oder Ansicht wurde gewechselt. Bitte Empfänger erneut prüfen.');
+  const nextPreview=await api('gabCompletionNoticePreview');
+  if(TOKEN!==token||role()!=='Administrator'||GA_ROLE_PREVIEW||GA_ADMIN_ADV_VIEW)return;
+  GA_GAB_NOTICE_PREVIEW=nextPreview;
+  tip(created+' Abschlussnachrichten erstellt'+(skipped?' · '+skipped+' übersprungen':'')+(failed?' · '+failed+' fehlgeschlagen':'')+'.',failed>0);
+ }catch(error){
+  if(TOKEN===token){GA_GAB_NOTICE_PREVIEW=null;
+   tip('Der Versand wurde unterbrochen. Einzelne Nachrichten können bereits erstellt sein. Bitte Empfänger erneut prüfen. '+(error.message||''),true);}
+ }finally{GA_GAB_NOTICE_BUSY=false;render();}
+}
 function notifications(){
  const supported='serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
  const permission=supported?Notification.permission:'Nicht unterstützt';
@@ -1063,7 +1119,7 @@ function notifications(){
      (n.PushStatus?' · Push: '+h(n.PushStatus):'');
    return expandedMessage(n.Titel,details,n.Text,n.ID,n.ID===NOTICE_FOCUS,footer);
  }).join(''):'Noch keine Benachrichtigungen.';
- return controls+'<section class="panel"><h2>Mitteilungen</h2><p class="small muted">Tippe auf einen Betreff, um den gesamten Nachrichtentext zu öffnen.</p>'+
+ return controls+gaGabNoticeAdminPanel()+'<section class="panel"><h2>Mitteilungen</h2><p class="small muted">Tippe auf einen Betreff, um den gesamten Nachrichtentext zu öffnen.</p>'+
  '<div class="items">'+list+'</div></section>';
 }
 function pushAdmin(){
@@ -1182,14 +1238,16 @@ $('loginForm').addEventListener('submit',async e=>{
 async function logout(){
  gaClearLogin();
  const oldToken=TOKEN;
- TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';GA_ADMIN_ADV_VIEW=false;GA_ROLE_PREVIEW='';GA_ADMIN_USERS=[];
+ TOKEN='';STATE=null;FORM='';EDIT=null;PROJECT_REVIEW_ID='';GA_ADMIN_ADV_VIEW=false;GA_ROLE_PREVIEW='';GA_ADMIN_USERS=[];GA_GAB_NOTICE_PREVIEW=null;
  $('gaViewChooser').classList.add('hidden');
  document.body.classList.remove('ga-nav-open');
  $('app').classList.add('hidden');$('login').classList.remove('hidden');$('loginForm').reset();
  try{if(oldToken)await rpc('gaApi','logout',{},oldToken);}catch(e){tip('Lokal abgemeldet. Bei fehlender Verbindung kann die Sitzung serverseitig noch gültig sein.',true);}
 }
 $('logout').addEventListener('click',logout);$('refresh').addEventListener('click',async()=>{try{await reload();tip('Aktualisiert.')}catch(e){tip(e.message,true);if(/Sitzung/.test(e.message))logout()}});
-$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-self-check],[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-push-remind-later],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+$('app').addEventListener('click',async e=>{const x=e.target.closest('[data-gab-notice-preview],[data-gab-notice-send],[data-self-check],[data-view],[data-edit],[data-cancel],[data-term],[data-close-term],[data-linkcourse],[data-read],[data-invite-member],[data-remove-member],[data-read-direct],[data-reset-password],[data-submit-project],[data-review-project],[data-close-review],[data-push-enable],[data-push-disable],[data-test-push],[data-push-check],[data-push-remind-later],[data-aid-pdf],[data-aid-resend],[data-aid-correct]');if(!x)return;
+ if(x.dataset.gabNoticePreview!==undefined){await gaGabNoticePreview();return;}
+ if(x.dataset.gabNoticeSend!==undefined){await gaGabNoticeSend();return;}
  if(x.dataset.selfCheck!==undefined){await gaCheckParticipantData(x);return;}
  if(x.dataset.pushRemindLater!==undefined){GA_PUSH_ONBOARD_DISMISSED=true;render();return;}
  if(x.dataset.view){VIEW=x.dataset.view;FORM='';EDIT=null;TERM=null;PROJECT_REVIEW_ID='';document.body.classList.remove('ga-nav-open');render();return}
@@ -1417,4 +1475,4 @@ $('app').addEventListener('submit',async e=>{const form=e.target.closest('form[d
  else if(type==='advDirect')await doSave('sendDirect',data);
  }catch(err){tip(err.message||'Speichern fehlgeschlagen.',true)}finally{if(btn)btn.disabled=false}
 });
-</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=rollen-1"></script><script src="./admin-ui.js?v=startseiten-2"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=startseiten-1"></script></body></html>
+</script><script src="./aid-ui.js"></script><script src="./quiz-ui.js?v=abschluss-1"></script><script src="./admin-ui.js?v=startseiten-2"></script><script src="./training-report-ui.js?v=kurs-planung-1"></script><script src="./free-activity-ui.js"></script><script src="./organizer-ui.js?v=abschluss-1"></script></body></html>
