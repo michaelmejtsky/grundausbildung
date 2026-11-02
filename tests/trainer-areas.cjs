@@ -67,7 +67,7 @@ for(const [area,cid,tid,pid] of [[G,'gab','t1','pg'],[E,'adv','t2','pe']]){
  assert.deepEqual(plain(state.kurse.map(x=>x.ID)),[cid]);assert.deepEqual(plain(state.termine.map(x=>x.ID)),[tid]);
  assert.deepEqual(plain(state.kursProjekte.map(x=>x.ID)),[pid]);assert.deepEqual(plain(state.ausbildungsberichte.map(x=>x.TerminID)),[tid]);
  assert(state.teilnahmen.every(x=>x.TerminID===tid));assert(state.quizKurse.every(x=>x.KursID===cid));assert(state.quizFreigaben.every(x=>x.KursID===cid));
- assert(state.bewertungen.every(x=>x.KursID===cid));assert(state.frageboegen.every(x=>x.KursID===cid));
+ assert(state.bewertungen.every(x=>x.KursID===cid));assert(state.frageboegen.every(x=>x.KursID==='ALLGEMEIN'||x.KursID===cid));assert(state.frageboegen.some(x=>x.KursID==='ALLGEMEIN'));
  assert(state.meldungen.every(x=>x.KursID===cid||x.ErstelltVon===trainer.ID));assert(!state.freieTaetigkeiten.some(x=>x.ID==='otherlegacy'));
  assert(state.freieTaetigkeiten.some(x=>x.ID==='legacy'));
  if(area===E){const guest=state.mitglieder.find(m=>m.ID==='m1');assert(guest);assert(!guest.Email);assert(!guest.Telefon);assert(!guest.Geburtsdatum);assert.equal(guest.TurnusID,'e1');}

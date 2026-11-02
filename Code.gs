@@ -614,7 +614,7 @@ function gaTrainerState_(u){
  s.meldungen=s.meldungen.filter(r=>r.KursID?courseIds.has(r.KursID):r.ErstelltVon===u.ID);
  s.bewertungen=s.bewertungen.filter(r=>courseIds.has(r.KursID)&&(!r.TerminID||termIds.has(r.TerminID)));
  s.eigeneBewertungen=s.eigeneBewertungen.filter(r=>courseIds.has(r.KursID));
- s.frageboegen=s.frageboegen.filter(r=>courseIds.has(r.KursID));
+ s.frageboegen=s.frageboegen.filter(r=>r.KursID==='ALLGEMEIN'||courseIds.has(r.KursID));
  s.quizKurse=s.quizKurse.filter(r=>courseIds.has(r.KursID));
  for(const key of ['quizFreigaben','quizVersuche'])s[key]=s[key].filter(r=>courseIds.has(r.KursID)&&(memberIds.has(r.MitgliedID)||historyIds.has(r.MitgliedID))&&(!r.TerminID||termIds.has(r.TerminID)));
  s.erweiterteZuordnungen=s.erweiterteZuordnungen.filter(a=>area===GA_ADV_AREA&&turnIds.has(a.TurnusID)&&memberIds.has(a.MitgliedID));
