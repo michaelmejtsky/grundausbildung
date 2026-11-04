@@ -2,6 +2,7 @@
 'use strict';
 let GA_CHECK_QUERY='',GA_CHECK_TURNUS='',GA_CHECK_STATUS='Offen',GA_CHECK_PERSON='',GA_CHECK_LIMIT=30;
 let GA_QUAL_QUERY='',GA_QUAL_TURNUS='',GA_QUAL_PERSON='',GA_QUAL_LIMIT=30;
+let GA_CHECK_ITEM_EDIT='';
 let GA_MEM_QUERY='',GA_MEM_TURNUS='',GA_MEM_LIMIT=40,GA_MEM_CREATE=false;
 const gaDeSearch=s=>String(s||'').toLocaleLowerCase('de-AT').trim();
 const gaMatches=(value,query)=>gaDeSearch(value).includes(gaDeSearch(query));
@@ -16,7 +17,7 @@ function gaMenuHtml(tabs){
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Ausbildung',['courses','projects','quizzes','turnus','qualifications','abschnitt','questionnaires','reviews']],
   ['Mitglieder & Aufgaben',['members','checks','users','attendance']],
-  ['Organisation',['rights','reports','messages','pushadmin']]
+  ['Organisation',['rights','reports','messages','adminMails','pushadmin']]
  ]:organizer?[
   ['Start',['advOverview','notifications']],
   ['Erweiterte Ausbildung',['advReady','advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
@@ -132,6 +133,31 @@ function gaCheckSelect(row){
  '<div><label>Notiz</label><input name="Kommentar" maxlength="500" value="'+h(row.Kommentar||'')+'"></div>'+
  '<button type="submit" class="smallbtn">Speichern</button></form>';
 }
+function gaChecklistManager(){
+ if(role()!=='Administrator')return '';
+ const ready=Array.isArray(STATE.checkArchiv),items=STATE.checklistenpunkte||[],edit=items.find(i=>i.ID===GA_CHECK_ITEM_EDIT),
+  active=items.filter(i=>i.Aktiv==='JA'),archived=items.filter(i=>i.Aktiv!=='JA');
+ const row=i=>'<div class="item"><div class="row between"><div><strong>'+h(i.Titel)+'</strong><p class="small muted">'+h(i.Bereich)+' · '+h(i.Zustaendig)+'</p></div><div class="btnline">'+
+  '<button type="button" class="smallbtn" data-check-item-edit="'+h(i.ID)+'" '+(!ready?'disabled':'')+'>Bearbeiten</button>'+
+  (i.Aktiv==='JA'?'<button type="button" class="smallbtn" data-check-item-active="'+h(i.ID)+'" data-active="NEIN" '+(!ready?'disabled':'')+'>Entfernen</button>':
+   '<button type="button" class="smallbtn" data-check-item-active="'+h(i.ID)+'" data-active="JA" '+(!ready?'disabled':'')+'>Wiederherstellen</button>')+'</div></div></div>';
+ const areas=['Alle','Grundausbildung','Erweiterte Ausbildung'],offices=[...new Set(['Zeugkammer','Administration','IT','Ausbildungsleitung',edit?.Zustaendig].filter(Boolean))];
+ const form='<form data-form="checkItem" class="grid">'+(edit?'<input type="hidden" name="ID" value="'+h(edit.ID)+'">':'')+
+  '<div><label>Bezeichnung</label><input name="Titel" required maxlength="160" value="'+h(edit?.Titel||'')+'" placeholder="z. B. Bekleidung erhalten"></div>'+
+  '<div><label>Ausbildungsbereich</label><select name="Bereich">'+areas.map(a=>'<option value="'+h(a)+'" '+(a===(edit?.Bereich||'Alle')?'selected':'')+'>'+h(a)+'</option>').join('')+'</select></div>'+
+  '<div><label>Zuständig</label><select name="Zustaendig">'+offices.map(a=>'<option '+(a===edit?.Zustaendig?'selected':'')+'>'+h(a)+'</option>').join('')+'</select></div>'+
+  '<div class="btnline"><button class="primary" type="submit" '+(edit&&!ready?'disabled':'')+'>'+(edit?'Änderungen speichern':'Neuen Punkt anlegen')+'</button>'+
+  (edit?'<button type="button" class="secondary" data-check-item-cancel>Abbrechen</button>':'')+'</div></form>';
+ const history=STATE.checkArchiv||[];
+ return '<section class="panel"><h2>Checklistenpunkte verwalten</h2><p>Hier bearbeitest du die Punkte selbst. Die Erledigung für einzelne Mitglieder kannst du weiterhin oben ändern.</p>'+
+  (!ready?'<div class="notice">Bearbeiten und Entfernen nach Aktualisierung der bestehenden Apps-Script-Bereitstellung auf Code.gs 1.13.6 verfügbar.</div>':'')+
+  (active.map(row).join('')||'<p class="muted">Keine aktiven Checklistenpunkte vorhanden.</p>')+
+  (edit?'<div class="ga-fold-body"><h3>Checklistenpunkt bearbeiten</h3>'+form+'</div>':'<details class="ga-member-fold"><summary>Neuen Checklistenpunkt anlegen</summary><div class="ga-fold-body">'+form+'</div></details>')+
+  '<details class="ga-member-fold"><summary>Archivierte Punkte ('+archived.length+')</summary><div class="ga-fold-body"><p class="small muted">Entfernte Punkte zählen nicht mehr als offene Aufgaben. Erledigungen und Notizen bleiben erhalten; Wiederherstellen übernimmt die bisherigen Statuswerte.</p>'+
+  (archived.map(row).join('')||'<p class="muted">Keine archivierten Punkte.</p>')+
+  (history.length?'<details><summary>Gespeicherte Nachweise und Notizen ('+history.length+')</summary>'+history.map(c=>'<p><strong>'+h(name(by(STATE.mitglieder,c.MitgliedID))||'Archiviertes Mitglied')+'</strong> · '+h(by(items,c.PunktID)?.Titel)+' · '+h(c.Status)+(c.Kommentar?' · '+h(c.Kommentar):'')+'</p>').join('')+'</details>':'')+
+  '</div></details></section>';
+}
 function checks(){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
  const activeMemberIds=new Set(members.map(m=>m.ID));
@@ -162,12 +188,9 @@ function checks(){
  '<section class="panel"><h2>Mitglieder & Status</h2>'+controls+'<div class="ga-admin-split"><div class="ga-person-list">'+(list||gaNotice('Keine Mitglieder für diesen Filter gefunden.'))+
  (filtered.length>GA_CHECK_LIMIT?'<button class="secondary full" type="button" data-ga-more="check">Weitere '+(filtered.length-GA_CHECK_LIMIT)+' Mitglieder anzeigen</button>':'')+
  '<p class="small muted">'+filtered.length+' Mitglieder entsprechen der Auswahl</p></div>'+panel+'</div></section>'+
- '<details class="ga-member-fold ga-admin-bottom"><summary>Neuen Checklistenpunkt anlegen</summary><div class="ga-fold-body">'+
- '<form data-form="checkItem" class="grid"><div><label>Bezeichnung</label><input name="Titel" required placeholder="z. B. Bekleidung erhalten"></div>'+
- '<div><label>Ausbildungsbereich</label><select name="Bereich"><option value="Alle">Alle</option>'+areaOptions()+'</select></div>'+
- '<div><label>Zuständig</label><select name="Zustaendig"><option>Zeugkammer</option><option>Administration</option><option>IT</option><option>Ausbildungsleitung</option></select></div>'+
- '<div><button class="primary" type="submit">Anlegen</button></div></form></div></details>';
+ gaChecklistManager();
 }
+
 function gaExternalBlockForms(q){
  const blocks=[
  {id:'GAB-ABSCHNITT-BLOCK-A',title:'Block A · Basiswissen im Abschnitt',exam:false},
@@ -225,7 +248,7 @@ function gaAbschnittOverview(){
  '<p>Wähle links die gewünschte Person aus. Danach kannst du Block A und Block B mit Abschlussprüfung einzeln dokumentieren.</p></section>';
  return '<div class="ga-page-heading"><div><h2>Abschnittsmodule A & B</h2>'+
  '<p>Verpflichtende GAB-Hauptmodule: externe Teilnahme und positive Abschlussprüfung dokumentieren.</p></div>'+
- '<button type="button" class="secondary" data-view="qualifications">Zurück zu Qualifikationen</button></div>'+
+ '<div class="btnline"><button type="button" class="secondary" data-view="adminMails">Block-B-E-Mail und Versandstatus</button><button type="button" class="secondary" data-view="qualifications">Zurück zu Qualifikationen</button></div></div>'+
  '<div class="ga-kpis">'+gaMetric(qs.length,'Teilnehmer','In der Qualifikationsübersicht')+
  gaMetric(completedA,'Block A bestätigt','Abschnittsmodul')+
  gaMetric(completedB,'Block B inkl. ASMTRM','Positiv abgeschlossen')+'</div>'+alerts+
@@ -296,6 +319,47 @@ function qualifications(){
  attendance+requirements+
  '<details class="ga-member-fold ga-admin-bottom"><summary>Erste-Hilfe-Nachweise und E-Mail-Weiterleitung</summary><div class="ga-fold-body">'+aidPanel(true)+'</div></details>';
 }
+function gaAdminMailPage(){
+ if(role()!=='Administrator')return '';
+ const s=STATE.verwaltungsMails;
+ if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.6 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
+ const rows=(s.Verlauf||[]).map(r=>{
+  const member=by(STATE.mitglieder,r.MitgliedID),turnus=by(STATE.turnusse,r.TurnusID),term=by(STATE.termine,r.BerichtID),reportTitle=r.Art==='ausbildungsbericht'?(by(STATE.kurse,term?.KursID)?.Titel||'Ausbildungsbericht'):r.Art==='freieTaetigkeit'?(by(STATE.freieTaetigkeiten,r.BerichtID)?.Titel||'Freie Tätigkeit'):'',retry=['Fehler','Versand läuft'].includes(r.Status);
+  return '<div class="item"><div class="row between"><strong>'+h(r.Art==='transponder'?'Transponder für Zugang':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
+   '<span class="tag '+(r.Status==='Gesendet'?'ok':r.Status==='Fehler'||r.Status==='Versand läuft'?'warn':'blue')+'">'+h(r.Status)+'</span></div>'+
+   '<p>'+h(r.Art==='transponder'?(member?name(member):r.Name||'Mitglied'):reportTitle||(turnus?.Bezeichnung||'Turnus')+' · '+gaShortDate(r.Datum))+'</p>'+
+   (r.GesendetAm?'<p class="small muted">Gesendet: '+dt(r.GesendetAm)+(r.Anzahl?' · '+h(r.Anzahl)+' Teilnehmer':'')+'</p>':'')+
+   (r.Status==='Wartend'?'<p class="small muted">Automatischer Versand vorgemerkt. Die Prüfung läuft alle 5 Minuten.</p>':'')+
+   (r.Hinweis?'<p class="notice">'+h(r.Hinweis)+'</p>':'')+
+   (retry?'<button type="button" class="secondary" data-admin-mail-retry="'+h(r.ID)+'">Versand erneut versuchen</button>':'')+'</div>';
+ }).join('');
+ return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
+ '<section class="panel"><h3>Empfänger hinterlegen</h3><form data-form="adminMailSettings"><div class="grid">'+
+ '<label>Transponder für Zugang<input name="TransponderEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.TransponderEmpfaenger)+'"></label>'+
+ '<label>Truppmann-Abschluss Block B<input name="BlockBEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.BlockBEmpfaenger)+'"></label>'+
+ '<label>Fertige Tätigkeitsberichte als PDF<input name="BerichtEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.BerichtEmpfaenger||'')+'"></label></div>'+
+ '<p class="small muted">Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen.</p>'+
+ '<button class="primary" type="submit">Empfänger speichern</button></form></section>'+
+ (!s.TriggerAktiv?'<div class="notice">Der automatische Versandtrigger ist noch nicht aktiv. Empfänger speichern oder im bestehenden Google Sheet unter Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten einmalig ausführen und Berechtigungen erlauben.</div>':'')+
+ '<section class="panel"><h3>So werden die Mails versendet</h3><p><strong>Transponder:</strong> Bei der Aufnahme eines GAB-Mitglieds „Transponder für Zugang erforderlich“ anhaken. Standesbuchnummer und Telefonnummer sind dafür erforderlich. Der Punkt bleibt offen, bis die Ausgabe unter Checklisten bestätigt wird. Die Anforderung wird einmalig per Mail verschickt.</p>'+
+ '<p><strong>Block B:</strong> Unter Abschnittsmodule A & B die Ausbildung und den positiven Abschluss Truppmann samt Datum bestätigen. Pro Turnus und Abschlussdatum entsteht eine Sammelmail. Sie wird frühestens 5 Minuten nach dem letzten neuen positiven Abschluss versendet; die Prüfung läuft alle 5 Minuten. Nicht bestandene oder noch unbestätigte Teilnehmer werden nicht als Absolventen gemeldet. Später bestätigte Teilnehmer folgen in einer ergänzenden Meldung.</p>'+
+ '<p><strong>Tätigkeitsberichte:</strong> Beim ersten vollständigen Abschluss eines Ausbildungstermins oder Speichern einer fertigen freien Tätigkeit wird das PDF automatisch vorgemerkt und bei der nächsten Versandprüfung als Anhang verschickt. Im PDF stehen die Standesbuchnummern direkt bei den Teilnehmernamen. Spätere Änderungen lösen keinen zweiten Versand aus.</p>'+
+ '<p class="small muted">Normales Bearbeiten oder erneutes Speichern löst keinen zweiten Versand aus. Alle Mailtexte enthalten „Automatische Nachricht – bitte nicht antworten“.</p></section>'+
+ '<section class="panel"><h3>Versandstatus</h3><p class="small muted">Die letzten 40 vorgemerkten oder bearbeiteten Meldungen. Fehler werden nicht automatisch erneut versendet.</p>'+ (rows||'<p class="muted">Noch keine Verwaltungs-Mails vorgemerkt.</p>')+'</section>';
+}
+function gaTransponderFields(edit){
+ if(role()!=='Administrator')return '';
+ if(!STATE.verwaltungsMails)return '<p class="small muted">Transponder-Anforderungen nach Aktualisierung auf Code.gs 1.13.6 verfügbar.</p>';
+ if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich!=='Grundausbildung')return '';
+ const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===STATE.verwaltungsMails.TransponderPunktID||i.Titel==='Transponder für Zugang'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
+ if(STATE.verwaltungsMails.TransponderPunktFehler)return '<p class="notice">'+h(STATE.verwaltungsMails.TransponderPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
+ if(STATE.verwaltungsMails.TransponderPunktArchiviert)return '<p class="notice">Transponder-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Transponder anzufordern.</p>';
+ if(check?.Status==='Erledigt')return '<p class="notice">Transponder für Zugang: bereits erledigt. Der bestätigte Checklistenpunkt bleibt erhalten.</p>';
+ return '<div data-transponder-field><label class="inline-check"><input type="checkbox" name="TransponderErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Transponder für Zugang erforderlich</label>'+
+ '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
+ (!STATE.verwaltungsMails.TransponderEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Transponder-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+}
 function gaMemberForm(edit){
  const options=(STATE.turnusse||[]).filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(edit?.TurnusID===t.ID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
  return '<section class="panel ga-member-form"><div class="row between"><h2>'+ (edit?'Mitglied bearbeiten':'Neues Mitglied aufnehmen')+'</h2><button type="button" class="secondary" data-ga-clear="member">Schließen</button></div>'+
@@ -311,6 +375,7 @@ function gaMemberForm(edit){
  '<option value="Grundausbildung" '+(edit?.Ausbildungsweg!=='Erweiterte Ausbildung'?'selected':'')+'>Grundausbildung</option>'+
  '<option value="Erweiterte Ausbildung" '+(edit?.Ausbildungsweg==='Erweiterte Ausbildung'?'selected':'')+'>Erweiterte Ausbildung</option></select></div>'+
  '<div><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
+ gaTransponderFields(edit)+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Zugangs-Einladung per E-Mail senden</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern':'Mitglied aufnehmen')+'</button></div></form></section>';
 }
@@ -332,7 +397,7 @@ function members(){
   (m.Aktiv==='JA'?'<button type="button" class="smallbtn" data-remove-member="'+h(m.ID)+'">Entfernen</button>':'')+'</div></div>';
  }).join('');
  return '<div class="ga-page-heading"><div><h2>Mitgliederverwaltung</h2><p>Nur die ausgewählte Person bearbeiten. Die vollständige Liste ist durchsuchbar.</p></div>'+
- '<button type="button" class="primary" data-ga-add-member="1">+ Mitglied aufnehmen</button></div>'+
+ '<div class="btnline"><button type="button" class="secondary" data-view="adminMails">Verwaltungs-Mails</button><button type="button" class="primary" data-ga-add-member="1">+ Mitglied aufnehmen</button></div></div>'+
  '<div class="ga-kpis">'+gaMetric(members.filter(x=>x.Aktiv==='JA').length,'Aktive Mitglieder','')+
  gaMetric(members.filter(x=>x.Aktiv!=='JA').length,'Deaktiviert','Archivierte Mitglieder')+
  gaMetric((STATE.qualifikationen||[]).filter(x=>x.GABAbgeschlossen).length,'GAB bestätigt','')+'</div>'+
@@ -467,4 +532,26 @@ gaApp?.addEventListener('change',event=>{
 gaApp?.addEventListener('click',event=>{
  const x=event.target.closest('[data-ga-more="user"]');if(!x)return;
  GA_USER_LIMIT+=40;render();
+});
+
+// Fehlerhafte Sendungen nur nach ausdrücklicher Prüfung erneut anstoßen.
+gaApp?.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-admin-mail-retry]');if(!button)return;
+ if(role()!=='Administrator'||GA_ROLE_PREVIEW)return;
+ if(!confirm('Vor erneutem Versand bitte den Posteingang prüfen: Bei unklarem Versandstatus könnte die Mail bereits angekommen sein. Jetzt an den aktuell hinterlegten Empfänger erneut versuchen?'))return;
+ button.disabled=true;
+ try{const result=await api('retryAdminMail',{ID:button.dataset.adminMailRetry});tip(result.message);await reload();}
+ catch(error){tip(error.message||'Versand nicht möglich.',true);}finally{button.disabled=false;}
+});
+
+gaApp?.addEventListener('click',async e=>{
+ const b=e.target.closest('[data-check-item-edit],[data-check-item-cancel],[data-check-item-active]');if(!b||role()!=='Administrator')return;
+ if(b.dataset.checkItemEdit){GA_CHECK_ITEM_EDIT=b.dataset.checkItemEdit;render();return;}
+ if(b.hasAttribute('data-check-item-cancel')){GA_CHECK_ITEM_EDIT='';render();return;}
+ if(GA_ROLE_PREVIEW){tip('Die Rollenvorschau ist schreibgeschützt.',true);return;}
+ const point=by(STATE.checklistenpunkte,b.dataset.checkItemActive);if(!point)return;
+ const active=b.dataset.active==='JA';
+ if(!confirm(active?'„'+point.Titel+'“ wiederherstellen? Bestehende Erledigungen bleiben erhalten.':'„'+point.Titel+'“ aus den aktiven Checklisten entfernen? Der Punkt zählt danach nicht mehr als offene Aufgabe. Alle Erledigungen und Notizen bleiben im Archiv erhalten.'))return;
+ b.disabled=true;try{const result=await api('setChecklistItemActive',{ID:point.ID,Aktiv:active?'JA':'NEIN'});GA_CHECK_ITEM_EDIT='';tip(result.message);await reload();}
+ catch(error){tip(error.message||'Checklistenpunkt konnte nicht geändert werden.',true);}finally{b.disabled=false;}
 });
