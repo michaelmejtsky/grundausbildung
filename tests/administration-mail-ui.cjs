@@ -7,7 +7,7 @@ const handlers={},messages=[],calls=[];
 const context=vm.createContext({STATE:state,role:()=>context.STATE.user.Rolle,h:esc,by:(r,id)=>(r||[]).find(x=>x.ID===id),name:m=>m.Vorname+' '+m.Nachname,option:()=>'',gaShortDate:s=>s,dt:esc,
  document:{getElementById:()=>({addEventListener:(event,handler)=>{(handlers[event]??=[]).push(handler);}})},GA_ROLE_PREVIEW:'',confirm:()=>false,api:async(m,d)=>{calls.push({m,d});return {message:'Gesendet'};},tip:s=>messages.push(s),reload:async()=>{}});
 vm.runInContext(source,context,{filename:'admin-ui.js'});
-let page=context.gaAdminMailPage();assert(page.includes('access@example.test'));assert(page.includes('abschluss@example.test'));assert(page.includes('5 Minuten'));assert(page.includes('data-form="adminMailSettings"'));assert.equal((page.match(/type="email" multiple/g)||[]).length,5);assert(page.includes('Mehrere Adressen mit Komma trennen'));
+let page=context.gaAdminMailPage();assert(page.includes('access@example.test'));assert(page.includes('abschluss@example.test'));assert(page.includes('5 Minuten'));assert(page.includes('data-form="adminMailSettings"'));assert.equal((page.match(/type="email" multiple/g)||[]).length,6);assert(page.includes('Mehrere Adressen mit Komma trennen'));
 let form=context.gaMemberForm(null);assert(form.includes('Transponder für Zugang erforderlich'));assert(form.includes('name="TransponderErforderlich"'));
 state.checklistenpunkte=[{ID:'point',Titel:'Transponder für Zugang'}];state.checks=[{MitgliedID:'m',PunktID:'point',Status:'Offen'}];
 form=context.gaTransponderFields(state.mitglieder[0]);assert.match(form,/TransponderErforderlich" value="JA" checked/);
@@ -43,3 +43,11 @@ let uniform=context.gaZeugkammerFields(state.mitglieder[0]);assert(uniform.inclu
 assert(html.includes("data.ZeugkammerAnfordern=fd.has('ZeugkammerAnfordern')?'JA':'NEIN'"));
 state.verwaltungsMails.ZeugkammerAuswahl=false;assert(!context.gaZeugkammerFields(null).includes('name="ZeugkammerAnfordern"'));assert(context.gaZeugkammerFields(null).includes('1.13.10'));
 state.user.Rolle='Ausbilder';assert.equal(context.gaZeugkammerFields(null),'');state.user.Rolle='Administrator';
+
+state.user.Rolle='Administrator';state.verwaltungsMails.PagerAuswahl=true;state.verwaltungsMails.PagerEmpfaenger='pager@example.test';
+state.checklistenpunkte.push({ID:'pager',Titel:'Pager'});let pagerForm=context.gaPagerFields(state.mitglieder[0]);assert(pagerForm.includes('name="PagerErforderlich"'));assert(pagerForm.includes('Pager erforderlich'));
+state.checks.push({MitgliedID:'m',PunktID:'pager',Status:'Offen'});pagerForm=context.gaPagerFields(state.mitglieder[0]);assert.match(pagerForm,/PagerErforderlich" value="JA" checked/);
+state.checks.at(-1).Status='Erledigt';assert(!context.gaPagerFields(state.mitglieder[0]).includes('name="PagerErforderlich"'));assert(context.gaPagerFields(state.mitglieder[0]).includes('bereits erledigt'));
+assert(context.gaAdminMailPage().includes('pager@example.test'));assert(html.includes("data.PagerErforderlich=fd.has('PagerErforderlich')?'JA':'NEIN'"));
+state.verwaltungsMails.PagerAuswahl=false;assert(!context.gaPagerFields(null).includes('name="PagerErforderlich"'));assert(context.gaPagerFields(null).includes('1.13.11'));
+state.user.Rolle='Ausbilder';assert.equal(context.gaPagerFields(null),'');state.user.Rolle='Administrator';

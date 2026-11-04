@@ -14,7 +14,7 @@
 <div id="details" class="hidden"><div class="person"><strong id="person"></strong><span id="task"></span></div>
 <div id="success" class="ok hidden" role="status"></div>
 <form id="confirmForm" class="hidden">
-<p>Bitte bestätige nur, wenn du diese Ausgabe oder Erfassung tatsächlich durchgeführt hast.</p>
+<p id="confirmationHint">Bitte bestätige nur, wenn du diese Ausgabe oder Erfassung tatsächlich durchgeführt hast.</p>
 <label id="dateLabel" class="hidden">Tatsächliches Datum der Eintragung in FDISK<input type="date" id="entryDate"></label>
 <p id="previousDate" class="muted hidden"></p>
 <button id="confirmButton" type="submit" disabled>Als erledigt bestätigen</button>
@@ -45,10 +45,12 @@ async function request(action,data){
 function render(info){
  current=info;el('loading').classList.add('hidden');el('details').classList.remove('hidden');
  el('person').textContent=info.Name;el('task').textContent=info.Aufgabe;el('confirmForm').classList.toggle('hidden',!!info.Erledigt);
- el('success').classList.toggle('hidden',!info.Erledigt);el('success').textContent=info.Erledigt?'Bereits bestätigt – der Punkt ist erledigt.'+(info.BestaetigtesDatum?' FDISK-Eintragsdatum: '+dateText(info.BestaetigtesDatum)+'.':''):'';
+ el('success').classList.toggle('hidden',!info.Erledigt);el('success').textContent=info.Erledigt?(info.Status==='Nicht erforderlich'?'Bereits bestätigt – dieser Punkt ist nicht erforderlich.':'Bereits bestätigt – der Punkt ist erledigt.')+(info.BestaetigtesDatum?' FDISK-Eintragsdatum: '+dateText(info.BestaetigtesDatum)+'.':''):'';
  el('dateLabel').classList.toggle('hidden',!info.DatumErforderlich);el('entryDate').required=!!info.DatumErforderlich;
  if(info.DatumErforderlich){el('entryDate').min=info.Kursdatum||'';el('entryDate').max=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Vienna'}).format(new Date());}
  el('previousDate').classList.toggle('hidden',!info.DatumErforderlich||!info.AktuellesDatum);el('previousDate').textContent='Bisher im System hinterlegt: '+dateText(info.AktuellesDatum||'');
+ el('confirmationHint').textContent=info.NichtErforderlichAktion?'Bitte bestätige, dass für dieses Mitglied keine Ausgabe erforderlich ist. Es wird keine Ausgabe als erfolgt dokumentiert.':'Bitte bestätige nur, wenn du diese Ausgabe oder Erfassung tatsächlich durchgeführt hast.';
+ el('confirmButton').textContent=info.NichtErforderlichAktion?'Als nicht erforderlich bestätigen':'Als erledigt bestätigen';
  el('expiry').textContent='Dieser Link ist bis '+info.Ablauf+' gültig.';controls();
 }
 async function load(){
@@ -62,7 +64,7 @@ el('confirmForm').addEventListener('submit',async event=>{
  busy=true;controls();el('error').classList.add('hidden');el('confirmButton').textContent='Bestätigung wird gespeichert …';
  try{const info=await request('confirmMailAction',{Bestaetigt:true,Datum:el('entryDate').value,VorherigesDatum:current.AktuellesDatum||''});render(info);}
  catch(error){showError(error.message);el('confirmForm').classList.add('hidden');}
- finally{busy=false;el('confirmButton').textContent='Als erledigt bestätigen';controls();}
+ finally{busy=false;el('confirmButton').textContent=current?.NichtErforderlichAktion?'Als nicht erforderlich bestätigen':'Als erledigt bestätigen';controls();}
 });
 load();
 </script></body></html>

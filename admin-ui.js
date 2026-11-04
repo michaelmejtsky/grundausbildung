@@ -325,29 +325,32 @@ function gaAdminMailPage(){
  if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.8 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
  const rows=(s.Verlauf||[]).map(r=>{
   const member=by(STATE.mitglieder,r.MitgliedID),turnus=by(STATE.turnusse,r.TurnusID),term=by(STATE.termine,r.BerichtID),reportTitle=r.Art==='ausbildungsbericht'?(by(STATE.kurse,term?.KursID)?.Titel||'Ausbildungsbericht'):r.Art==='freieTaetigkeit'?(by(STATE.freieTaetigkeiten,r.BerichtID)?.Titel||'Freie Tätigkeit'):'',retry=['Fehler','Versand läuft'].includes(r.Status);
-  return '<div class="item"><div class="row between"><strong>'+h(r.Art==='blaulicht'?'Blaulicht SMS/Lea':r.Art==='transponder'?'Transponder für Zugang':r.Art==='zeugkammer'?'Zeugkammer – Ausgaben':r.Art==='ersteHilfe'?'Erste-Hilfe-Zertifikat':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
+  return '<div class="item"><div class="row between"><strong>'+h(r.Art==='pager'?'Pager':r.Art==='blaulicht'?'Blaulicht SMS/Lea':r.Art==='transponder'?'Transponder für Zugang':r.Art==='zeugkammer'?'Zeugkammer – Ausgaben':r.Art==='ersteHilfe'?'Erste-Hilfe-Zertifikat':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
    '<span class="tag '+(r.Status==='Gesendet'?'ok':r.Status==='Fehler'||r.Status==='Versand läuft'?'warn':'blue')+'">'+h(r.Status)+'</span></div>'+
-   '<p>'+h(['transponder','blaulicht','zeugkammer','ersteHilfe'].includes(r.Art)?(member?name(member):r.Name||'Mitglied'):reportTitle||(turnus?.Bezeichnung||'Turnus')+' · '+gaShortDate(r.Datum))+'</p>'+
+   '<p>'+h(['transponder','pager','blaulicht','zeugkammer','ersteHilfe'].includes(r.Art)?(member?name(member):r.Name||'Mitglied'):reportTitle||(turnus?.Bezeichnung||'Turnus')+' · '+gaShortDate(r.Datum))+'</p>'+
    (r.GesendetAm?'<p class="small muted">Gesendet: '+dt(r.GesendetAm)+(r.Anzahl?' · '+h(r.Anzahl)+' Teilnehmer':'')+'</p>':'')+
    (r.Status==='Wartend'?'<p class="small muted">Automatischer Versand vorgemerkt. Die Prüfung läuft alle 5 Minuten.</p>':'')+
    (r.Hinweis?'<p class="notice">'+h(r.Hinweis)+'</p>':'')+
    (retry?'<button type="button" class="secondary" data-admin-mail-retry="'+h(r.ID)+'">Versand erneut versuchen</button>':'')+
-   (r.Status==='Gesendet'&&['transponder','blaulicht','zeugkammer','ersteHilfe'].includes(r.Art)?'<button type="button" class="secondary" data-renew-checklist-mail="'+h(r.ID)+'">Offene Bestätigungslinks neu senden</button>':'')+'</div>';
+   (r.Status==='Gesendet'&&['transponder','pager','blaulicht','zeugkammer','ersteHilfe'].includes(r.Art)?'<button type="button" class="secondary" data-renew-checklist-mail="'+h(r.ID)+'">Offene Bestätigungslinks neu senden</button>':'')+'</div>';
  }).join('');
- return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Blaulicht SMS/Lea, Zeugkammer, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
+ return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Pager, Blaulicht SMS/Lea, Zeugkammer, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
  '<section class="panel"><h3>Empfänger hinterlegen</h3><form data-form="adminMailSettings"><div class="grid">'+
  '<label>Transponder für Zugang<input name="TransponderEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.TransponderEmpfaenger)+'"></label>'+
+ '<label>Pager – Ausgabe<input name="PagerEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse@beispiel.at" value="'+h(s.PagerEmpfaenger||'')+'" '+(!s.PagerAuswahl?'disabled':'')+'></label>'+
  '<label>Blaulicht SMS/Lea – Registrierung und Zuordnung<input name="BlaulichtEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse@beispiel.at" value="'+h(s.BlaulichtEmpfaenger||'')+'" '+(!s.BlaulichtSMSLea?'disabled':'')+'></label>'+
  '<label>Zeugkammer – Dienst- und Einsatzbekleidung<input name="ZeugkammerEmpfaenger" type="email" multiple maxlength="5000" placeholder="zeugkammer@beispiel.at" value="'+h(s.ZeugkammerEmpfaenger||'')+'"></label>'+
  '<label>Truppmann-Abschluss Block B<input name="BlockBEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BlockBEmpfaenger)+'"></label>'+
  '<label>Fertige Tätigkeitsberichte als PDF<input name="BerichtEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BerichtEmpfaenger||'')+'"></label></div>'+
  '<p class="small muted">Mehrere Adressen mit Komma trennen (höchstens 20 je Bereich). Doppelte Adressen werden nur einmal verwendet. Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen. Wenn sich Empfänger ändern, werden bisherige Bestätigungslinks dieser Versandart ungültig; bei Bedarf neue Links senden.</p>'+
+ (!s.PagerAuswahl?'<p class="notice">Pager und die Mail-Auswahl „Nicht erforderlich“ benötigen Code.gs 1.13.11.</p>':'')+
  (!s.BlaulichtSMSLea?'<p class="notice">Blaulicht SMS/Lea benötigt die vollständige Code.gs 1.13.9 in der bestehenden Bereitstellung.</p>':'')+
  (!s.MailBestaetigungen?'<p class="notice">Zeugkammer-Mails und Bestätigungsbuttons benötigen Code.gs 1.13.8 in der bestehenden Bereitstellung.</p>':'')+
  (!s.MehrereEmpfaenger?'<p class="notice">Für mehrere Empfänger bitte Code.gs 1.13.8 in der bestehenden Bereitstellung aktualisieren.</p>':'')+
  '<button class="primary" type="submit">Empfänger speichern</button></form></section>'+
  (!s.TriggerAktiv?'<div class="notice">Der automatische Versandtrigger ist noch nicht aktiv. Empfänger speichern oder im bestehenden Google Sheet unter Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten einmalig ausführen und Berechtigungen erlauben.</div>':'')+
  '<section class="panel"><h3>So werden die Mails versendet</h3><p><strong>Transponder:</strong> Bei der Aufnahme eines GAB-Mitglieds „Transponder für Zugang erforderlich“ anhaken. Standesbuchnummer und Telefonnummer sind dafür erforderlich. Der Punkt bleibt offen, bis die Ausgabe unter Checklisten bestätigt wird. Die Anforderung wird einmalig per Mail verschickt.</p>'+
+ '<p><strong>Pager:</strong> Beim GAB-Mitglied „Pager erforderlich“ anhaken. Eigene Empfängeradresse; die Mail enthält die Buttons „Pager ausgegeben“ und „Pager nicht erforderlich“. Auch die Transponder-Mail bietet beide Möglichkeiten. Die erste Bestätigung schließt den Punkt ab; die andere Auswahl kann ihn nicht überschreiben.</p>'+
  '<p><strong>Blaulicht SMS/Lea:</strong> Beim GAB-Mitglied „Registrierung und Zuordnung erforderlich“ anhaken und speichern. Der hinterlegte Empfänger erhält Name, Standesbuchnummer, Telefon und E-Mail mit einem Bestätigungsbutton. Erst nach der tatsächlichen Registrierung und Zuordnung bestätigt er den Punkt als erledigt. Gewöhnliches Speichern versendet keine zweite Mail.</p>'+
  '<p><strong>Zeugkammer:</strong> Beim neuen oder bestehenden Mitglied „Zeugkammer-Ausstattung anfordern (E-Mail)“ anhaken und speichern. Nur mit dieser Auswahl wird beim Speichern eine Anforderung verschickt; die bestehenden Bekleidungs-Checklistenpunkte bleiben erhalten. Die Mail enthält pro Mitglied getrennte Buttons für die tatsächlich offenen Aufgaben. Der Empfänger bestätigt die Ausgabe auf einer persönlichen Seite; erst dann wird der jeweilige Punkt erledigt. Das gilt auch für den Transponder. Links gelten 30 Tage und geben keinen allgemeinen App-Zugang.</p>'+
  '<p><strong>Block B:</strong> Unter Abschnittsmodule A & B die Ausbildung und den positiven Abschluss Truppmann samt Datum bestätigen. Pro Turnus und Abschlussdatum entsteht eine Sammelmail. Sie wird frühestens 5 Minuten nach dem letzten neuen positiven Abschluss versendet; die Prüfung läuft alle 5 Minuten. Nicht bestandene oder noch unbestätigte Teilnehmer werden nicht als Absolventen gemeldet. Später bestätigte Teilnehmer folgen in einer ergänzenden Meldung.</p>'+
@@ -367,6 +370,19 @@ function gaTransponderFields(edit){
  return '<div data-transponder-field><label class="inline-check"><input type="checkbox" name="TransponderErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Transponder für Zugang erforderlich</label>'+
  '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
  (!STATE.verwaltungsMails.TransponderEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Transponder-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+}
+function gaPagerFields(edit){
+ if(role()!=='Administrator')return '';
+ if(!STATE.verwaltungsMails?.PagerAuswahl)return '<p class="small muted">Pager-Anforderungen nach Aktualisierung auf Code.gs 1.13.11 verfügbar.</p>';
+ if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich!=='Grundausbildung')return '';
+ const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===STATE.verwaltungsMails.PagerPunktID||i.Titel==='Pager'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
+ if(STATE.verwaltungsMails.PagerPunktFehler)return '<p class="notice">'+h(STATE.verwaltungsMails.PagerPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
+ if(STATE.verwaltungsMails.PagerPunktArchiviert)return '<p class="notice">Pager-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Pager anzufordern.</p>';
+ if(check?.Status==='Erledigt')return '<p class="notice">Pager: bereits erledigt. Der bestätigte Checklistenpunkt bleibt erhalten.</p>';
+ return '<div data-pager-field><label class="inline-check"><input type="checkbox" name="PagerErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Pager erforderlich</label>'+
+ '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
+ (!STATE.verwaltungsMails.PagerEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Pager-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
  '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
 }
 function gaBlaulichtFields(edit){
@@ -406,7 +422,7 @@ function gaMemberForm(edit){
  '<option value="Grundausbildung" '+(edit?.Ausbildungsweg!=='Erweiterte Ausbildung'?'selected':'')+'>Grundausbildung</option>'+
  '<option value="Erweiterte Ausbildung" '+(edit?.Ausbildungsweg==='Erweiterte Ausbildung'?'selected':'')+'>Erweiterte Ausbildung</option></select></div>'+
  '<div><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
- gaTransponderFields(edit)+gaBlaulichtFields(edit)+gaZeugkammerFields(edit)+
+ gaTransponderFields(edit)+gaPagerFields(edit)+gaBlaulichtFields(edit)+gaZeugkammerFields(edit)+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Zugangs-Einladung per E-Mail senden</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern':'Mitglied aufnehmen')+'</button></div></form></section>';
 }

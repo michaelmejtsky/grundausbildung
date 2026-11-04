@@ -1,13 +1,13 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.10
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.11
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.10 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.11 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.10, der statische Cache heißt ga-shell-v2.47.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.11, der statische Cache heißt ga-shell-v2.48.
 5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
@@ -88,10 +88,20 @@ Alte, bereits vor dieser Version versendete Mails erhalten keine Buttons nachtr�
 
 Die Link-Prüfung ist lesend. Erst die ausdrückliche Bestätigung verwendet einen einmaligen, serverseitig gehashten Berechtigungsnachweis. Der Prüf- und Bestätigungsaufruf liefert keinen allgemeinen Mitglieder-, Konto- oder Dokumentenzugriff. Abgelaufene Link-Berechtigungen werden bereinigt; vorhandene Ausbildungs- und Checklistennachweise bleiben erhalten. Bestätigungen werden als E-Mail-Link-Aktion mit Zeitpunkt protokolliert, ohne eine Anmeldung einer bestimmten Person vorzutäuschen.
 
-## Zeugkammer-Auswahl beim Mitglied (1.13.10)
+## Zeugkammer-Auswahl beim Mitglied (1.13.11)
 
 Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** befindet sich neben den optionalen Transponder- und Blaulicht-Anforderungen das Häkchen **Zeugkammer-Ausstattung anfordern (E-Mail)**. Es löst beim Speichern gezielt die Anforderungsmail aus. Die bestehenden Punkte für Dienstbekleidung, Einsatzbekleidung und andere Aufgaben mit Zuständigkeit Zeugkammer werden wiederverwendet. Bereits erledigte Punkte und Notizen bleiben erhalten; nur offene Punkte erhalten Mailbuttons.
 
 Das Häkchen ist ein Versandauftrag für diesen Speichervorgang und beim erneuten Öffnen wieder leer. Es steuert weder den Ausbildungsstand noch die Gültigkeit bestehender Bekleidungs-Checklisten. Ohne Häkchen entsteht keine neue Anforderungsmail; offene Aufgaben bleiben offen. Bereits versendete Mails werden auch bei erneutem Anhaken nicht automatisch wiederholt. Versandstatus und gezieltes Erneuern abgelaufener Links stehen weiterhin unter **Verwaltungs-Mails** zur Verfügung.
 
 Empfänger sowie aktive Zeugkammer-Punkte müssen vor der Anforderung vorhanden sein. Das gilt für neue und bestehende Mitglieder beider Ausbildungsbereiche. Die Auswahl steht ausschließlich der Administration zur Verfügung. Ältere Oberflächen ohne Auswahl lösen beim Speichern ebenfalls keine automatische Zeugkammer-Mail mehr aus. Bisher vorgemerkte und bereits versendete Anforderungen sowie ihre gültigen Bestätigungslinks bleiben erhalten.
+
+## Pager und Transponder: ausgegeben oder nicht erforderlich (1.13.11)
+
+Unter **Verwaltungs-Mails** gibt es eine eigene Empfängergruppe **Pager – Ausgabe** mit bis zu 20 kommagetrennten Adressen. Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** kann die Administration für einen GAB-Teilnehmer **Pager erforderlich** anhaken. Standesbuchnummer und Telefonnummer sind erforderlich. Der optionale Checklistenpunkt **Pager** wird nur den ausgewählten Mitgliedern zugeordnet; ein vorhandener Punkt mit diesem Namen wird wiederverwendet. Ursprünglicher Turnus, Ausbildungsnachweise, bestehende Erledigungen und Notizen bleiben erhalten.
+
+Neue Pager-Mails enthalten pro Mitglied zwei Buttons: **Pager ausgegeben bestätigen** und **Pager nicht erforderlich bestätigen**. Auch neu versendete Transponder-Mails haben beide Möglichkeiten. Der jeweilige Mailbutton öffnet die persönliche Seite, auf der die Entscheidung nochmals ausdrücklich gespeichert wird. Bloßes Öffnen ändert keine Daten.
+
+Die erste Bestätigung setzt nur den passenden Punkt dieses Mitglieds auf **Erledigt** beziehungsweise **Nicht erforderlich**. Nicht erforderlich dokumentiert keine erfolgte Ausgabe und zählt nicht als offene Aufgabe. Der andere Button zeigt anschließend das tatsächliche Ergebnis, ohne die Entscheidung zu überschreiben oder eine zweite Benachrichtigung auszulösen. Wird der Punkt durch die Administration später wieder geöffnet, können beide alten Links keine neue Entscheidung treffen; über **Offene Bestätigungslinks neu senden** wird eine neue Mail benötigt.
+
+Gewöhnliches Speichern verschickt keine zweite Anforderung, und bereits dokumentierte Ausgaben werden durch die optionale Mitgliedsauswahl nicht zurückgesetzt. Alte empfangene Mails erhalten keine zusätzlichen Buttons: Für noch offene Transponder-Anforderungen nach dem GS-Update gezielt neue Bestätigungslinks senden. Die 30 Tage Gültigkeit, Empfängerbindung und Rollenbegrenzung bleiben bestehen. Für diese Änderungen ist kein neuer Cloudflare-Worker und keine neue Web-App-Adresse erforderlich.
