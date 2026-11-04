@@ -1,13 +1,13 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.8
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.9
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.8 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.9 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.8, der statische Cache heißt ga-shell-v2.45.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.9, der statische Cache heißt ga-shell-v2.46.
 5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
@@ -17,6 +17,16 @@ GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Q
 Unter **Mitglieder → Mitglied aufnehmen** lässt sich für einen GAB-Teilnehmer **Transponder für Zugang erforderlich** anhaken. Für eine vollständige Anforderung müssen Standesbuchnummer und Telefonnummer hinterlegt sein. Dafür wird ein optionaler Checklistenpunkt erstellt und nur diesem Mitglied als offen zugeordnet. Mitglieder ohne Häkchen bekommen diesen Punkt nicht automatisch.
 
 Die Mail enthält den Text „Dieses Mitglied wurde in die Grundausbildung aufgenommen und benötigt noch einen Transponder“, Name, Standesbuchnummer, Telefonnummer, E-Mail und Turnus. Ein späteres Speichern oder erneutes Anhaken nach bereits bestätigtem Versand erzeugt keine weitere Anforderungsmail. Die tatsächliche Ausgabe des Transponders wird unter Checklisten als erledigt bestätigt; dieser Nachweis wird beim Bearbeiten des Mitglieds nicht zurückgesetzt.
+
+## Blaulicht SMS/Lea
+
+Unter **Verwaltungs-Mails** die eigene Empfängergruppe **Blaulicht SMS/Lea – Registrierung und Zuordnung** hinterlegen (mehrere Adressen mit Komma möglich). Beim neuen oder bereits vorhandenen GAB-Mitglied **Blaulicht SMS/Lea: Registrierung und Zuordnung erforderlich** anhaken und speichern. Standesbuchnummer und Telefonnummer sind erforderlich.
+
+Das erstellt beziehungsweise verwendet den optionalen Checklistenpunkt **Blaulicht SMS/Lea** mit Zuständigkeit **IT**, ausschließlich für ausgewählte Mitglieder. Ein vorhandener Punkt mit genau diesem Namen wird wiederverwendet. Mitglieder ohne Auswahl erhalten keine zusätzliche offene Aufgabe und keine Mail. Bereits erledigte Einträge, Notizen und ursprüngliche Turnuszuordnungen bleiben erhalten.
+
+Die Anforderung enthält Name, Standesbuchnummer, Telefonnummer, E-Mail, Turnus und den Button **In Blaulicht SMS/Lea registriert und zugeordnet bestätigen**. Der Empfänger führt die Registrierung und Zuordnung in Blaulicht SMS/Lea selbst durch und bestätigt anschließend auf der verlinkten Seite ohne App-Konto. Dann erscheint der zugehörige Punkt unter **Checklisten → Mitglied** als erledigt. Das ist eine Bestätigung der manuellen Erfassung, keine automatische Schnittstelle zu Blaulicht SMS/Lea.
+
+Gewöhnliches erneutes Speichern löst keinen weiteren Versand aus. Bei abgelaufenen Links unter **Verwaltungs-Mails → Versandverlauf → Offene Bestätigungslinks neu senden** gezielt eine neue Mail auslösen. Die gleichen Schutzregeln und 30 Tage Gültigkeit wie beim Transponder gelten.
 
 ## Sammelmail nach Block B
 

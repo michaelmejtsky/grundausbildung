@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.8',
+  VERSION: '1.13.9',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -1075,13 +1075,13 @@ function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFi
   gaPushQueue_(5);return {ok:true};}
 /** Verwaltungs-Mails: optionale Transponder und gebündelte Block-B-Abschlüsse. */
 const GA_ADMINMAIL_SETTINGS='GA_ADMINMAIL_SETTINGS_V1',GA_ADMINMAIL_QUEUE='GA_ADMINMAIL_QUEUE_V1_',
- GA_ADMINMAIL_B_SENT='GA_ADMINMAIL_BLOCKB_SENT_V1_',GA_TRANSPONDER_TITLE='Transponder für Zugang';
+ GA_ADMINMAIL_B_SENT='GA_ADMINMAIL_BLOCKB_SENT_V1_',GA_TRANSPONDER_TITLE='Transponder für Zugang',GA_BLAULICHT_TITLE='Blaulicht SMS/Lea';
 /** Einmalige, eng begrenzte Mail-Aktionen. GET/Preview ändern niemals einen Nachweis. */
 const GA_MAIL_ACTION_PREFIX='GA_MAIL_ACTION_V1_',GA_AID_MAIL_ACK_PREFIX='GA_AID_MAIL_ACK_V1_';
 function gaMailHtml_(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function gaMailActionRecipients_(art){
  if(art==='ersteHilfe'){const s=gaAidSettings_();return s.Aktiv?gaAdminMailAddress_(s.Empfaenger):'';}
- const s=gaAdminMailSettings_();return gaAdminMailAddress_(art==='transponder'?s.TransponderEmpfaenger:art==='zeugkammer'?s.ZeugkammerEmpfaenger:'');
+ const s=gaAdminMailSettings_();return gaAdminMailAddress_(art==='blaulicht'?s.BlaulichtEmpfaenger:art==='transponder'?s.TransponderEmpfaenger:art==='zeugkammer'?s.ZeugkammerEmpfaenger:'');
 }
 function gaMailActionLink_(delivery,action){
  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,''),digest=gaInviteDigest_(token),
@@ -1139,15 +1139,15 @@ function gaMailActionTarget_(token){
   !gaSame_(grant.EmpfaengerHash,gaInviteDigest_(grant.Art+'\n'+recipients.split(',').sort().join(','))))throw new Error('Dieser Bestätigungslink wurde ersetzt oder deaktiviert. Bitte einen aktuellen Link verwenden.');
  const member=gaFind_('Mitglieder',grant.MitgliedID);if(!member||!gaBool_(member.Aktiv))throw new Error('Dieses Mitglied ist nicht mehr aktiv.');
  if(grant.Aktion==='check'){
-  if(!['transponder','zeugkammer'].includes(grant.Art))throw new Error('Ungültige Bestätigung.');
+  if(!['transponder','blaulicht','zeugkammer'].includes(grant.Art))throw new Error('Ungültige Bestätigung.');
   const check=gaFind_('MitgliedChecks',grant.CheckID),item=gaFind_('Checklistenpunkte',grant.PunktID);
   if(!check||check.MitgliedID!==member.ID||check.PunktID!==grant.PunktID||!gaChecklistInScope_(item,member,gaRows_('Turnusse'))||
-   grant.Art==='zeugkammer'&&item.Zustaendig!=='Zeugkammer'||grant.Art==='transponder'&&!gaIsTransponderItem_(item))
+   grant.Art==='zeugkammer'&&item.Zustaendig!=='Zeugkammer'||grant.Art==='transponder'&&!gaIsTransponderItem_(item)||grant.Art==='blaulicht'&&!gaIsBlaulichtItem_(item))
    throw new Error('Dieser Checklistenpunkt ist nicht mehr für diese Bestätigung freigegeben.');
   if(check.Status==='Nicht erforderlich')throw new Error('Dieser Checklistenpunkt ist nicht erforderlich.');
   if(!['Offen','Erledigt'].includes(check.Status))throw new Error('Der aktuelle Checklistenstatus kann nicht bestätigt werden.');
   if(grant.VerwendetAm&&check.Status!=='Erledigt')throw new Error('Dieser Link wurde bereits verwendet. Für eine erneute Ausgabe ist ein neuer Link erforderlich.');
-  return {key,grant,member,check,item,done:check.Status==='Erledigt',label:grant.Art==='transponder'?'Transponder / Schlüssel ausgegeben':item.Titel};
+  return {key,grant,member,check,item,done:check.Status==='Erledigt',label:grant.Art==='blaulicht'?'Blaulicht SMS/Lea: registriert und zugeordnet':grant.Art==='transponder'?'Transponder / Schlüssel ausgegeben':item.Titel};
  }
  if(grant.Art!=='ersteHilfe'||!['aid-filed','aid-fdisk'].includes(grant.Aktion))throw new Error('Ungültige Bestätigung.');
  const proof=gaFind_('ErsteHilfeNachweise',grant.NachweisID);
@@ -1203,7 +1203,7 @@ function gaConfirmMailAction_(d){
 function gaRenewChecklistMail_(u,d){
  gaRequire_(u,['Administrator']);const key=gaNeed_(d.ID,'Mail',300);
  if(!key.startsWith(GA_ADMINMAIL_QUEUE))throw new Error('Mail nicht gefunden.');
- const row=gaAdminMailRead_(key);if(!row||!['transponder','zeugkammer','ersteHilfe'].includes(row.Art))throw new Error('Keine Ausgabe-Mail.');
+ const row=gaAdminMailRead_(key);if(!row||!['transponder','blaulicht','zeugkammer','ersteHilfe'].includes(row.Art))throw new Error('Keine Ausgabe-Mail.');
  if(row.Art==='ersteHilfe')return gaResendAidEmail_(u,{ID:row.NachweisID});
  const draft=gaAdminMailDraft_({...row,key},true);if(draft.pause||draft.cancel)throw new Error('Kein aktueller Empfänger oder keine offenen Ausgaben vorhanden.');
  gaAdminMailWrite_(key,{...row,Status:'Wartend',FaelligMillis:Date.now(),AktualisiertMillis:Date.now()});
@@ -1219,7 +1219,7 @@ function gaAdminMailRead_(key){
 }
 function gaAdminMailSettings_(){
  const s=gaAdminMailRead_(GA_ADMINMAIL_SETTINGS)||{};
- return {TransponderEmpfaenger:s.TransponderEmpfaenger||'',BlockBEmpfaenger:s.BlockBEmpfaenger||'',BerichtEmpfaenger:s.BerichtEmpfaenger||'',ZeugkammerEmpfaenger:s.ZeugkammerEmpfaenger||''};
+ return {BlaulichtEmpfaenger:s.BlaulichtEmpfaenger||'',TransponderEmpfaenger:s.TransponderEmpfaenger||'',BlockBEmpfaenger:s.BlockBEmpfaenger||'',BerichtEmpfaenger:s.BerichtEmpfaenger||'',ZeugkammerEmpfaenger:s.ZeugkammerEmpfaenger||''};
 }
 function gaAdminMailAddress_(v){
  const text=String(v||'').trim().toLowerCase();if(!text)return '';
@@ -1240,10 +1240,10 @@ function gaVerwaltungsMailEinrichten(){
 function gaSaveAdminMailSettings_(u,d){
  gaRequire_(u,['Administrator']);
  const old=gaAdminMailSettings_(),s={};
- for(const field of ['TransponderEmpfaenger','BlockBEmpfaenger','BerichtEmpfaenger','ZeugkammerEmpfaenger'])s[field]=gaAdminMailAddress_(Object.prototype.hasOwnProperty.call(d,field)?d[field]:old[field]);
- if(s.TransponderEmpfaenger||s.BlockBEmpfaenger||s.BerichtEmpfaenger||s.ZeugkammerEmpfaenger)gaAdminMailEnsureTrigger_();
+ for(const field of ['BlaulichtEmpfaenger','TransponderEmpfaenger','BlockBEmpfaenger','BerichtEmpfaenger','ZeugkammerEmpfaenger'])s[field]=gaAdminMailAddress_(Object.prototype.hasOwnProperty.call(d,field)?d[field]:old[field]);
+ if(s.BlaulichtEmpfaenger||s.TransponderEmpfaenger||s.BlockBEmpfaenger||s.BerichtEmpfaenger||s.ZeugkammerEmpfaenger)gaAdminMailEnsureTrigger_();
  PropertiesService.getScriptProperties().setProperty(GA_ADMINMAIL_SETTINGS,JSON.stringify(s));
- gaLog_(u.ID,'VERWALTUNGSMAIL_EINSTELLUNGEN','System','',{TransponderAktiv:!!s.TransponderEmpfaenger,BlockBAktiv:!!s.BlockBEmpfaenger,BerichteAktiv:!!s.BerichtEmpfaenger});
+ gaLog_(u.ID,'VERWALTUNGSMAIL_EINSTELLUNGEN','System','',{BlaulichtAktiv:!!s.BlaulichtEmpfaenger,TransponderAktiv:!!s.TransponderEmpfaenger,BlockBAktiv:!!s.BlockBEmpfaenger,BerichteAktiv:!!s.BerichtEmpfaenger});
  return {ok:true,message:'Empfänger gespeichert. Wartende Meldungen verwenden die aktuell hinterlegten Adressen. Bereits versendete Mails werden nicht wiederholt.'};
 }
 function gaAdminMailKey_(kind,id,date){return GA_ADMINMAIL_QUEUE+kind+'_'+encodeURIComponent(id)+(date?'_'+date:'');}
@@ -1254,7 +1254,7 @@ function gaAdminMailWrite_(key,row){
 function gaAdminMailRows_(){
  const all=PropertiesService.getScriptProperties().getProperties(),rows=[];
  for(const key of Object.keys(all).filter(k=>k.startsWith(GA_ADMINMAIL_QUEUE))){
-  try{const row=JSON.parse(all[key]);if(row&&['transponder','zeugkammer','blockB','ausbildungsbericht','freieTaetigkeit','ersteHilfe'].includes(row.Art))rows.push({key,...row});}
+  try{const row=JSON.parse(all[key]);if(row&&['transponder','blaulicht','zeugkammer','blockB','ausbildungsbericht','freieTaetigkeit','ersteHilfe'].includes(row.Art))rows.push({key,...row});}
   catch(e){rows.push({key,Art:'unknown',Status:'Beschädigt',Hinweis:'Verwaltungs-Mail-Datensatz muss geprüft werden.'});}
  }
  return rows;
@@ -1263,7 +1263,8 @@ function gaAdminMailState_(){
  const s=gaAdminMailSettings_();let trigger=false;
  try{trigger=typeof ScriptApp!=='undefined'&&ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='gaVerwaltungsMailJob_');}catch(e){console.warn('Verwaltungs-Mail-Trigger noch nicht autorisiert.');}
  let point=null,pointError='';try{point=gaTransponderItem_(false);}catch(e){pointError=String(e.message||e);}
- return {...s,Version:3,MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
+ let blaulicht=null,blaulichtError='';try{blaulicht=gaBlaulichtItem_(false);}catch(e){blaulichtError=String(e.message||e);}
+ return {...s,Version:4,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
   Verlauf:gaAdminMailRows_().sort((a,b)=>Number(b.AktualisiertMillis||0)-Number(a.AktualisiertMillis||0)).slice(0,40)
    .map(r=>({ID:r.key,Art:r.Art,Status:r.Status,Hinweis:r.Hinweis||'',MitgliedID:r.MitgliedID||'',BerichtID:r.BerichtID||'',TurnusID:r.TurnusID||'',Datum:r.Datum||'',
     Anzahl:r.Anzahl||0,Name:r.Name||'',GesendetAm:r.GesendetAm||'',FaelligMillis:r.FaelligMillis||0}))};
@@ -1306,6 +1307,45 @@ function gaTransponderApply_(u,m,input){
   gaAdminMailWrite_(key,{Art:'transponder',MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,Status:'Wartend',FaelligMillis:Date.now(),AktualisiertMillis:Date.now()});
   return gaAdminMailDispatch_(key)?' Transponder-Anforderung per E-Mail versendet.':' Transponder-Anforderung gespeichert; Versandstatus unter Verwaltungs-Mails prüfen.';
  }catch(e){console.warn('Transponder-Nachbearbeitung fehlgeschlagen:',String(e));return ' Mitglied gespeichert. Transponder-Checkliste oder Mail konnte nicht vollständig angelegt werden; bitte prüfen und die Transponder-Auswahl erneut speichern.';}
+}
+function gaBlaulichtItem_(create){
+ const item=gaChecklistNamedItem_(GA_BLAULICHT_TITLE,'GA_BLAULICHT_CHECK_ID_V1');
+ if(item||!create)return item;
+ const value={ID:gaId_(),Titel:GA_BLAULICHT_TITLE,Bereich:'Grundausbildung',Zustaendig:'IT',Aktiv:'JA',ErstelltAm:gaNow_()};
+ gaAppend_('Checklistenpunkte',value);gaChecklistRememberIdentity_(value);return value;
+}
+function gaBlaulichtInput_(u,d,m,turnus){
+ if(!Object.prototype.hasOwnProperty.call(d,'BlaulichtErforderlich'))return null; // Alte Formulare verändern diese Auswahl nicht.
+ gaRequire_(u,['Administrator']);
+ const required=d.BlaulichtErforderlich===true||d.BlaulichtErforderlich==='JA';
+ const item=gaBlaulichtItem_(false),checks=item?gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===d.ID&&c.PunktID===item.ID):[];
+ if(checks.length>1)throw new Error('Mehrere Blaulicht-Checklisten für dieses Mitglied. Bitte Administration prüfen lassen.');
+ if(checks[0]?.Status==='Erledigt')return {required:true,complete:true};
+ if(required){
+  if(item&&!gaBool_(item.Aktiv))throw new Error('Der Blaulicht-Checklistenpunkt ist archiviert. Bitte unter Checklisten → Checklistenpunkte verwalten wiederherstellen.');
+  if(turnus.Bereich!=='Grundausbildung')throw new Error('Die Blaulicht-Aufnahmemeldung ist für die Grundausbildung vorgesehen.');
+  if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Für die Blaulicht SMS/Lea-Anforderung bitte Standesbuchnummer und Telefonnummer ergänzen.');
+  const sent=d.ID?gaAdminMailRead_(gaAdminMailKey_('blaulicht',d.ID)):null;
+  if(sent?.Status!=='Gesendet'&&!gaAdminMailSettings_().BlaulichtEmpfaenger)
+   throw new Error('Bitte zuerst unter Verwaltungs-Mails eine Empfängeradresse für Blaulicht hinterlegen.');
+ }
+ return {required,complete:false};
+}
+function gaBlaulichtApply_(u,m,input){
+ if(!input)return '';
+ try{
+  const item=gaBlaulichtItem_(input.required);if(!item)return '';
+  const old=gaRows_('MitgliedChecks').find(c=>c.MitgliedID===m.ID&&c.PunktID===item.ID);
+  if(old?.Status==='Erledigt'||input.complete)return '';
+  if(old){if(input.required&&old.Status==='Nicht erforderlich'||!input.required&&old.Status==='Offen')
+   gaReplace_('MitgliedChecks',old.ID,{Status:input.required?'Offen':'Nicht erforderlich',GeaendertVon:u.ID,GeaendertAm:gaNow_()});}
+  else if(input.required)gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:m.ID,PunktID:item.ID,Status:'Offen',Kommentar:'Registrierung und Zuordnung in Blaulicht SMS/Lea angefordert.',GeaendertVon:u.ID,GeaendertAm:gaNow_()});
+  const key=gaAdminMailKey_('blaulicht',m.ID),previous=gaAdminMailRead_(key);
+  if(!input.required){if(previous&&['Wartend','Fehler'].includes(previous.Status))gaAdminMailWrite_(key,{...previous,Status:'Nicht erforderlich',AktualisiertMillis:Date.now()});return '';}
+  if(previous&&['Gesendet','Versand läuft','Fehler'].includes(previous.Status))return previous.Status==='Fehler'?' Blaulicht-Mail noch nicht versendet; bitte unter Verwaltungs-Mails prüfen.':'';
+  gaAdminMailWrite_(key,{Art:'blaulicht',MitgliedID:m.ID,Name:m.Vorname+' '+m.Nachname,Status:'Wartend',FaelligMillis:Date.now(),AktualisiertMillis:Date.now()});
+  return gaAdminMailDispatch_(key)?' Blaulicht SMS/Lea-Anforderung per E-Mail versendet.':' Blaulicht SMS/Lea-Anforderung gespeichert; Versandstatus unter Verwaltungs-Mails prüfen.';
+ }catch(e){console.warn('Blaulicht-Nachbearbeitung fehlgeschlagen:',String(e));return ' Mitglied gespeichert. Blaulicht-Checkliste oder Mail konnte nicht vollständig angelegt werden; bitte prüfen und die Blaulicht SMS/Lea-Auswahl erneut speichern.';}
 }
 function gaBlockBPositive_(proof){return !!proof&&gaBool_(proof.Absolviert)&&gaBool_(proof.PruefungBestanden)&&/^\d{4}-\d{2}-\d{2}$/.test(String(proof.Pruefungsdatum||''));}
 function gaQueueBlockBMail_(m,previous,next){
@@ -1377,6 +1417,17 @@ function gaAdminMailDraft_(r,previewOnly=false){
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
   return {to:gaAdminMailAddress_(settings.TransponderEmpfaenger),subject:'Transponder für Zugang benötigt – '+line(m.Vorname)+' '+line(m.Nachname),memberIds:[m.ID],...gaMailActionExtras_(r,[{Aktion:'check',CheckID:check.ID,MitgliedID:m.ID,PunktID:item.ID,Label:'Transponder / Schlüssel ausgegeben bestätigen'}],body,previewOnly)};
  }
+ if(r.Art==='blaulicht'){
+  if(!settings.BlaulichtEmpfaenger)return {pause:true};
+  const m=gaFind_('Mitglieder',r.MitgliedID),item=gaBlaulichtItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
+  if(!m||!gaBool_(m.Aktiv)||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung'||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
+  if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
+  const body=['Dieses Mitglied wurde in die Grundausbildung aufgenommen und muss noch in Blaulicht SMS/Lea registriert und zugeordnet werden.','',
+   'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
+   'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
+   'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
+  return {to:gaAdminMailAddress_(settings.BlaulichtEmpfaenger),subject:'Blaulicht SMS/Lea: Registrierung und Zuordnung – '+line(m.Vorname)+' '+line(m.Nachname),memberIds:[m.ID],...gaMailActionExtras_(r,[{Aktion:'check',CheckID:check.ID,MitgliedID:m.ID,PunktID:item.ID,Label:'In Blaulicht SMS/Lea registriert und zugeordnet bestätigen'}],body,previewOnly)};
+ }
  if(r.Art!=='blockB')throw new Error('Ungültiger Mail-Typ.');
  if(!settings.BlockBEmpfaenger)return {pause:true};
  const turnus=gaFind_('Turnusse',r.TurnusID);if(!turnus||turnus.Bereich!=='Grundausbildung')return {cancel:true};
@@ -1394,7 +1445,7 @@ function gaAdminMailDraft_(r,previewOnly=false){
 }
 function gaAdminMailDispatch_(key){
  const stored=gaAdminMailRead_(key);if(!stored||stored.Status!=='Wartend')return false;
- const row={...stored,...(['transponder','zeugkammer'].includes(stored.Art)?{key,LinkVersion:gaId_()}: {})};
+ const row={...stored,...(['transponder','blaulicht','zeugkammer'].includes(stored.Art)?{key,LinkVersion:gaId_()}: {})};
  let draft;try{draft=gaAdminMailDraft_(row);}catch(e){gaAdminMailWrite_(key,{...row,Status:'Fehler',Hinweis:String(e.message||e).slice(0,250),AktualisiertMillis:Date.now()});return false;}
  if(draft.pause)return false;
  if(draft.cancel){gaAdminMailWrite_(key,{...row,Status:'Nicht mehr erforderlich',AktualisiertMillis:Date.now()});return false;}
@@ -1420,7 +1471,7 @@ function gaVerwaltungsMailJob_(){
 function gaRetryAdminMail_(u,d){
  gaRequire_(u,['Administrator']);const key=gaNeed_(d.ID,'Mail',300);
  if(!key.startsWith(GA_ADMINMAIL_QUEUE))throw new Error('Verwaltungs-Mail nicht gefunden.');
- const row=gaAdminMailRead_(key);if(!row||!['transponder','zeugkammer','blockB','ausbildungsbericht','freieTaetigkeit','ersteHilfe'].includes(row.Art))throw new Error('Verwaltungs-Mail nicht gefunden.');
+ const row=gaAdminMailRead_(key);if(!row||!['transponder','blaulicht','zeugkammer','blockB','ausbildungsbericht','freieTaetigkeit','ersteHilfe'].includes(row.Art))throw new Error('Verwaltungs-Mail nicht gefunden.');
  if(row.Art==='ersteHilfe')return gaResendAidEmail_(u,{ID:row.NachweisID});
  if(!['Fehler','Versand läuft','Wartend'].includes(row.Status))return {ok:true,message:'Diese Meldung wird nicht erneut versendet.'};
  const draft=gaAdminMailDraft_(row,true);if(draft.pause)throw new Error('Bitte zuerst die Empfängeradresse hinterlegen.');
@@ -1438,7 +1489,7 @@ function gaSaveMember_(u,d){
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
     Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35),Ausbildungsweg:gaChoice_(d.Ausbildungsweg||turnus.Bereich,GA.AREAS,'Ausbildungsweg')};
-  const transponder=gaTransponderInput_(u,d,val,turnus);
+  const transponder=gaTransponderInput_(u,d,val,turnus),blaulicht=gaBlaulichtInput_(u,d,val,turnus);
   const rows=gaRows_('Mitglieder');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
   if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
@@ -1481,13 +1532,13 @@ function gaSaveMember_(u,d){
       throw new Error('Änderung konnte nicht vollständig gespeichert werden: '+error.message);
     }
     const checks=gaRows_('MitgliedChecks');
-    gaRows_('Checklistenpunkte').filter(i=>!gaIsTransponderItem_(i)&&gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich))
+    gaRows_('Checklistenpunkte').filter(i=>!gaIsOptionalIntakeItem_(i)&&gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich))
       .filter(i=>!checks.some(ch=>ch.MitgliedID===d.ID&&ch.PunktID===i.ID))
       .forEach(i=>gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:d.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()}));
     gaLog_(u.ID,'BEARBEITEN','Mitglied',d.ID,{Vorher:existing.Vorname+' '+existing.Nachname,
       Nachher:val.Vorname+' '+val.Nachname,TurnusVorher:existing.TurnusID,TurnusNachher:val.TurnusID,
       EMailGeaendert:changedEmail,ZugangAktualisiert:!!user,EinladungenErsetzt:pending.length});
-    const transponderMessage=gaTransponderApply_(u,{...val,ID:d.ID},transponder);
+    const transponderMessage=gaTransponderApply_(u,{...val,ID:d.ID},transponder)+gaBlaulichtApply_(u,{...val,ID:d.ID},blaulicht);
     return {ok:true,emailGeaendert:changedEmail,zugangAktualisiert:!!user,
       neueEinladungNoetig:pending.length>0,
       message:(changedEmail?
@@ -1497,13 +1548,13 @@ function gaSaveMember_(u,d){
        'Mitglied aktualisiert. Bestehende Ausbildungsnachweise bleiben erhalten.')+transponderMessage};
   }
   val.ID=gaId_();val.ErstelltAm=gaNow_();gaAppend_('Mitglieder',val);
-  gaRows_('Checklistenpunkte').filter(i=>!gaIsTransponderItem_(i)&&gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich)).forEach(i=>
+  gaRows_('Checklistenpunkte').filter(i=>!gaIsOptionalIntakeItem_(i)&&gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich)).forEach(i=>
     gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:val.ID,PunktID:i.ID,Status:'Offen',Kommentar:'',GeaendertVon:u.ID,GeaendertAm:gaNow_()}));
   const candidates=gaRows_('Checklistenpunkte');
   gaRows_('Benutzer').filter(x=>x.Rolle==='Fachverwaltung'&&gaBool_(x.Aktiv)&&candidates.some(i=>i.Zustaendig===x.Bereich)).forEach(x=>
     gaNotify_(x.ID,'Aufgabe','Neues Mitglied: '+val.Vorname+' '+val.Nachname,'Offene Checklistenpunkte prüfen.',val.ID));
   gaLog_(u.ID,'ANLEGEN','Mitglied',val.ID,{Vorname:val.Vorname,Nachname:val.Nachname,TurnusID:val.TurnusID});
-  return {ok:true,message:'Mitglied aufgenommen.'+gaTransponderApply_(u,val,transponder)+gaQueueZeugkammerMail_(val)};
+  return {ok:true,message:'Mitglied aufgenommen.'+gaTransponderApply_(u,val,transponder)+gaBlaulichtApply_(u,val,blaulicht)+gaQueueZeugkammerMail_(val)};
 }
 function gaRemoveMember_(u,d){
   gaRequire_(u,['Administrator']);
@@ -1531,16 +1582,19 @@ function gaChecklistNamedItem_(title,property){
 function gaChecklistRememberIdentity_(item){
  const props=PropertiesService.getScriptProperties();
  if(item.Titel===GA_TRANSPONDER_TITLE)props.setProperty('GA_TRANSPONDER_CHECK_ID_V1',item.ID);
+ if(item.Titel===GA_BLAULICHT_TITLE)props.setProperty('GA_BLAULICHT_CHECK_ID_V1',item.ID);
  if(item.Titel==='Erste-Hilfe-Bescheinigung abgegeben')props.setProperty('GA_EH_CHECK_ID_V1',item.ID);
 }
 function gaIsTransponderItem_(item){return item.Titel===GA_TRANSPONDER_TITLE||item.ID===PropertiesService.getScriptProperties().getProperty('GA_TRANSPONDER_CHECK_ID_V1');}
+function gaIsBlaulichtItem_(item){return item.Titel===GA_BLAULICHT_TITLE||item.ID===PropertiesService.getScriptProperties().getProperty('GA_BLAULICHT_CHECK_ID_V1');}
+function gaIsOptionalIntakeItem_(item){return gaIsTransponderItem_(item)||gaIsBlaulichtItem_(item);}
 function gaChecklistInScope_(item,member,turns){
  if(!item||!member||!gaBool_(item.Aktiv))return false;
  const turnus=turns.find(t=>t.ID===member.TurnusID);
  return !!turnus&&(item.Bereich==='Alle'||item.Bereich===turnus.Bereich);
 }
 function gaChecklistFillMissing_(item,actor){
- if(gaIsTransponderItem_(item)||!gaBool_(item.Aktiv))return;
+ if(gaIsOptionalIntakeItem_(item)||!gaBool_(item.Aktiv))return;
  const turns=gaRows_('Turnusse'),checks=gaRows_('MitgliedChecks');
  for(const m of gaRows_('Mitglieder').filter(m=>gaBool_(m.Aktiv)&&gaChecklistInScope_(item,m,turns))){
   if(!checks.some(c=>c.MitgliedID===m.ID&&c.PunktID===item.ID))gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:m.ID,PunktID:item.ID,Status:'Offen',Kommentar:'',GeaendertVon:actor.ID,GeaendertAm:gaNow_()});
@@ -1552,10 +1606,11 @@ function gaSaveChecklistItem_(u,d){
  if(d.ID&&!old)throw new Error('Checklistenpunkt nicht gefunden.');
  const val={Titel:gaNeed_(d.Titel,'Checklistenpunkt',160),Bereich:gaChoice_(d.Bereich,['Alle'].concat(GA.AREAS),'Bereich'),
   Zustaendig:gaNeed_(d.Zustaendig,'Zuständigkeit',100),Aktiv:old?old.Aktiv:'JA'};
- const reserved=old&&gaIsTransponderItem_(old)||val.Titel===GA_TRANSPONDER_TITLE;
+ const reserved=old&&gaIsOptionalIntakeItem_(old)||[GA_TRANSPONDER_TITLE,GA_BLAULICHT_TITLE].includes(val.Titel);
+ if(val.Titel===GA_BLAULICHT_TITLE){const current=gaBlaulichtItem_(false);if(current&&current.ID!==old?.ID)throw new Error('Der optionale Blaulicht SMS/Lea-Checklistenpunkt besteht bereits, gegebenenfalls unter einer geänderten Bezeichnung.');}
  if(val.Titel===GA_TRANSPONDER_TITLE){const current=gaTransponderItem_(false);if(current&&current.ID!==old?.ID)throw new Error('Der optionale Transponder-Checklistenpunkt besteht bereits, gegebenenfalls unter einer geänderten Bezeichnung.');}
  if(val.Titel==='Erste-Hilfe-Bescheinigung abgegeben'){const current=gaChecklistNamedItem_(val.Titel,'GA_EH_CHECK_ID_V1');if(current&&current.ID!==old?.ID)throw new Error('Der automatische Erste-Hilfe-Checklistenpunkt besteht bereits.');}
- if(reserved&&val.Bereich!=='Grundausbildung')throw new Error('Der optionale Transponder-Punkt gehört zur Grundausbildung.');
+ if(reserved&&val.Bereich!=='Grundausbildung')throw new Error('Dieser optionale Aufnahme-Punkt gehört zur Grundausbildung.');
  if(val.Titel===GA_TRANSPONDER_TITLE&&gaRows_('Checklistenpunkte').some(i=>i.Titel===GA_TRANSPONDER_TITLE&&i.ID!==d.ID))
   throw new Error('Der optionale Transponder-Checklistenpunkt besteht bereits.');
  let id=old?.ID||gaId_();
