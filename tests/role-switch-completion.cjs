@@ -34,7 +34,7 @@ ctx.gaPushQueue_=(limit,id)=>{push.push({limit,id});};
 const before=JSON.stringify(tables),org=ctx.gaState_(users[1]);
 assert.deepEqual(Array.from(org.gabAbgeschlossen,x=>x.ID),['m4']);
 assert.deepEqual(Array.from(org.gabAbgeschlossen[0].ErweiterteTurnusIDs),['adv']);
-assert.deepEqual(Object.keys(org.gabAbgeschlossen[0]).sort(),['ErweiterteTurnusIDs','ID','Nachname','Vorname']);
+assert.deepEqual(Object.keys(org.gabAbgeschlossen[0]).sort(),['ErweiterteTurnusIDs','ID','Nachname','VerwaltungUeberstellt','Vorname']);
 assert(!JSON.stringify(org).includes('secret-m4'));assert(!JSON.stringify(org).includes('GAB geheim'));
 assert.equal(JSON.stringify(tables),before,'Opening the overview cannot create notices or change data');
 // The administrator sees a particular person's own state; neither role nor login changes.

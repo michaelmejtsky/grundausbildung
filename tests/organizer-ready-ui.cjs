@@ -14,7 +14,7 @@ vm.runInContext(source,ctx,{filename:'organizer-ui.js'});
 const overview=ctx.gaOrganizerOverview(),list=ctx.gaOrganizerReady();
 assert(overview.includes('1 noch ohne erweiterten Turnus'));assert(overview.includes('data-view="advReady"'));
 assert(list.includes('Erste Person'));assert(list.includes('Zweite Person'));assert(list.includes('Noch nicht zugeordnet'));
-assert(list.includes('Bereits zugeordnet'));assert(list.includes('name="MitgliedID" value="one"'));
+assert(list.includes('Als Gast zugeordnet · Überstellung offen'));assert(list.includes('name="MitgliedID" value="one"'));
 assert(list.includes('Erweiterter Turnus')||list.includes('Turnus auswählen'));
 assert(list.includes('value="adv"'));assert(!list.includes('value="old"'));
 assert(list.includes('GAB-Turnus'));

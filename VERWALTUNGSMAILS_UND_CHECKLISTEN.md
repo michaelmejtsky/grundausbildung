@@ -1,13 +1,13 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.12
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.13
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.12 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.13 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.12, der statische Cache heißt ga-shell-v2.49.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.13, der statische Cache heißt ga-shell-v2.50.
 5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
@@ -88,7 +88,7 @@ Alte, bereits vor dieser Version versendete Mails erhalten keine Buttons nachtr�
 
 Die Link-Prüfung ist lesend. Erst die ausdrückliche Bestätigung verwendet einen einmaligen, serverseitig gehashten Berechtigungsnachweis. Der Prüf- und Bestätigungsaufruf liefert keinen allgemeinen Mitglieder-, Konto- oder Dokumentenzugriff. Abgelaufene Link-Berechtigungen werden bereinigt; vorhandene Ausbildungs- und Checklistennachweise bleiben erhalten. Bestätigungen werden als E-Mail-Link-Aktion mit Zeitpunkt protokolliert, ohne eine Anmeldung einer bestimmten Person vorzutäuschen.
 
-## Zeugkammer-Auswahl beim Mitglied (1.13.12)
+## Zeugkammer-Auswahl beim Mitglied (1.13.13)
 
 Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** befindet sich neben den optionalen Transponder- und Blaulicht-Anforderungen das Häkchen **Zeugkammer-Ausstattung anfordern (E-Mail)**. Es löst beim Speichern gezielt die Anforderungsmail aus. Die bestehenden Punkte für Dienstbekleidung, Einsatzbekleidung und andere Aufgaben mit Zuständigkeit Zeugkammer werden wiederverwendet. Bereits erledigte Punkte und Notizen bleiben erhalten; nur offene Punkte erhalten Mailbuttons.
 
@@ -96,7 +96,7 @@ Das Häkchen ist ein Versandauftrag für diesen Speichervorgang und beim erneute
 
 Empfänger sowie aktive Zeugkammer-Punkte müssen vor der Anforderung vorhanden sein. Das gilt für neue und bestehende Mitglieder beider Ausbildungsbereiche. Die Auswahl steht ausschließlich der Administration zur Verfügung. Ältere Oberflächen ohne Auswahl lösen beim Speichern ebenfalls keine automatische Zeugkammer-Mail mehr aus. Bisher vorgemerkte und bereits versendete Anforderungen sowie ihre gültigen Bestätigungslinks bleiben erhalten.
 
-## Pager und Transponder: ausgegeben oder nicht erforderlich (1.13.12)
+## Pager und Transponder: ausgegeben oder nicht erforderlich (1.13.13)
 
 Unter **Verwaltungs-Mails** gibt es eine eigene Empfängergruppe **Pager – Ausgabe** mit bis zu 20 kommagetrennten Adressen. Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** kann die Administration für einen GAB-Teilnehmer **Pager erforderlich** anhaken. Standesbuchnummer und Telefonnummer sind erforderlich. Der optionale Checklistenpunkt **Pager** wird nur den ausgewählten Mitgliedern zugeordnet; ein vorhandener Punkt mit diesem Namen wird wiederverwendet. Ursprünglicher Turnus, Ausbildungsnachweise, bestehende Erledigungen und Notizen bleiben erhalten.
 
@@ -106,7 +106,7 @@ Die erste Bestätigung setzt nur den passenden Punkt dieses Mitglieds auf **Erle
 
 Gewöhnliches Speichern verschickt keine zweite Anforderung, und bereits dokumentierte Ausgaben werden durch die optionale Mitgliedsauswahl nicht zurückgesetzt. Alte empfangene Mails erhalten keine zusätzlichen Buttons: Für noch offene Transponder-Anforderungen nach dem GS-Update gezielt neue Bestätigungslinks senden. Die 30 Tage Gültigkeit, Empfängerbindung und Rollenbegrenzung bleiben bestehen. Für diese Änderungen ist kein neuer Cloudflare-Worker und keine neue Web-App-Adresse erforderlich.
 
-## Aufnahme in die erweiterte Ausbildung und PDF-Mail-Auswahl (1.13.12)
+## Aufnahme in die erweiterte Ausbildung und PDF-Mail-Auswahl (1.13.13)
 
 Die vier Aufnahme-Häkchen **Transponder für Zugang**, **Pager**, **Blaulicht SMS/Lea** und **Zeugkammer-Ausstattung anfordern** stehen jetzt auch für Mitglieder mit ursprünglichem Turnus in der erweiterten Ausbildung zur Verfügung: in der normalen administrativen Mitgliedsverwaltung und unter **Erweiterte Ausbildung → Teilnehmer & Gäste → Neues Mitglied nur für die erweiterte Ausbildung anlegen**. Der Organisator darf diese Anforderungen für direkt angelegte erweiterte Mitglieder auslösen; bestehende persönliche GAB-Mitgliedsdaten von Gästen bleiben geschützt.
 
@@ -117,3 +117,19 @@ Bereits vorhandene optionale Systempunkte werden unter unveränderter ID für be
 **Tätigkeitsberichte:** Vor dem ersten Abschluss einer Ausbildung oder einer freien Tätigkeit gibt es das Häkchen **Fertiges PDF beim Abschluss per E-Mail versenden**, in beiden Ausbildungsbereichen für Administration, Ausbilder und Organisator. Bei konfigurierter Berichtsadresse ist es wie beim bisherigen automatischen Ablauf vorausgewählt und kann abgewählt werden. Ohne Häkchen wird der Bericht vollständig gespeichert, aber keine PDF-Mail vorgemerkt. Ohne konfigurierte Adresse ist die Auswahl deaktiviert. Spätere Korrekturen lösen keine zweite automatische Mail aus. Ältere Oberflächen ohne das neue Feld behalten den bisherigen automatischen Erstversand bei.
 
 Alle früheren Funktionen einschließlich der zwei Mailentscheidungen für Pager/Transponder, Erste-Hilfe-/FDISK-Bestätigungen und der GAB-Ausbildungslogik bleiben enthalten. Code.gs vollständig ersetzen und die bestehende Web-App-Bereitstellung auf eine neue Version aktualisieren. Weder eine neue Datenbank noch eine neue Web-App-Adresse oder ein neuer Cloudflare-Worker sind erforderlich. Die GitHub-Seitenveröffentlichung muss erfolgreich abgeschlossen sein, damit die neuen Häkchen sichtbar werden.
+
+## Verwaltungsübergabe und Bereichsrechte (1.13.13)
+
+**Oberadmin:** Die bestehende Rolle Administrator behält Vollzugriff, Rollenverwaltung und Rollenvorschau. Nur der Oberadmin darf nach dem offiziellen GAB-Abschluss ein Mitglied zur vollständigen Verwaltung an die erweiterte Ausbildung überstellen. In **Qualifikationen → Mitglied** befindet sich dazu **In die erweiterte Verwaltung überstellen** mit Auswahl eines aktiven erweiterten Turnus. Der GAB-Abschluss muss vorab offiziell bestätigt und dokumentiert sein; die Überstellung ersetzt keine GAB-Abschlussprüfung.
+
+**GAB-Teilnehmer als Gast:** Der erweiterte Organisator kann Namen auswählen und eine zusätzliche erweiterte Turnuszuordnung erfassen. Er sieht weiterhin nur Namen und die Daten der eigenen erweiterten Kurse, Anwesenheiten und Quiz. Telefonnummer, E-Mail, Geburtsdatum, persönliche GAB-Checklisten, GAB-Ergebnisse und GAB-Qualifikationsvermerke bleiben verborgen. Eine Gastzuordnung oder ein bestätigter GAB-Abschluss allein erteilt keine Stammdatenrechte.
+
+**Eigene erweiterte Mitglieder:** Direkt für die erweiterte Ausbildung angelegte und ausdrücklich vom Oberadmin überstellte Mitglieder erscheinen unter **Teilnehmer & Gäste** mit **Bearbeiten**, **Einladungslink senden** beziehungsweise **Passwort-Reset senden**. Die erweiterte Leitung kann Namen, Kontaktdaten, Geburtsdatum, Standesbuchnummer und aktuellen erweiterten Turnus verwalten und die Aufnahme-Mails anfordern. E-Mail-Änderungen aktualisieren wie bisher den verknüpften Teilnehmerzugang; das vorhandene Passwort und die Nachweise bleiben erhalten. Passwort-Reset ist ausschließlich für die eigenen freigegebenen Teilnehmerkonten möglich, niemals für andere Rollen oder noch gesperrte GAB-Gäste.
+
+Unter **Erweiterte Checklisten** kann der Organisator Punkte seines Bereichs anlegen, bearbeiten, archivieren und deren Erledigungen für eigene verwaltete Mitglieder pflegen. Globale Systempunkte und GAB-Checklisten können nicht durch ihn umdefiniert oder archiviert werden. Die bisher vorhandenen Funktionen für erweiterte Kurse, Kursprojekte, Quiz, Anwesenheiten, Qualifikationsübersicht, Abschlussbestätigung, Berichte, Nachrichten und Einladungen bleiben innerhalb seines Bereichs bestehen. Rollenverwaltung und fremde Profilvorschauen bleiben beim Oberadmin.
+
+**Datenerhalt:** Die Überstellung überschreibt niemals Mitglieds-ID, ursprünglichen GAB-Turnus oder den damaligen Ausbildungsweg. Die aktuelle erweiterte Verwaltungszuordnung wird getrennt als protokollierte Freigabe in Script Properties gespeichert (`GA_ADV_TRANSFER_V1_`). Bestehende erweiterte Gastzuordnungen werden wiederverwendet. Bei späterem Wechsel des erweiterten Turnus bleiben ältere Zuordnungen bestehen, damit absolvierte Kurse, Anwesenheiten und bestandene Quiz im eigenen Ausbildungspass sichtbar und angerechnet bleiben. Es werden keine Quizversuche, Kurse, Nachweise oder Konten gelöscht oder zurückgesetzt.
+
+**Freigabe zurückholen:** Der Oberadmin kann unter der Mitgliedsqualifikation **Verwaltung zurückholen** wählen. Das beendet ausschließlich die erweiterten Stammdatenrechte. Die Person bleibt als Kursgast zugeordnet; alle Nachweise und bisherigen Einträge bleiben erhalten. Beide Vorgänge werden mit verantwortlichem Benutzer und Zeitpunkt protokolliert. Die erweiterte Leitung erhält bei erstmaliger Überstellung eine Mitteilung; erneutes Speichern derselben Freigabe erzeugt keine weitere.
+
+**Bereitstellung:** Die vollständige Code.gs 1.13.13 enthält sämtliche vorherigen Änderungen. Im bestehenden Projekt ersetzen und die bestehende Web-App-Bereitstellung auf eine neue Version aktualisieren. Dieselbe Datenbank und `/exec`-Adresse behalten. Die Oberfläche muss nach erfolgreicher GitHub-Pages-Veröffentlichung V1.13.13 anzeigen.

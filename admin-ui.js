@@ -20,7 +20,7 @@ function gaMenuHtml(tabs){
   ['Organisation',['rights','reports','messages','adminMails','pushadmin']]
  ]:organizer?[
   ['Start',['advOverview','notifications']],
-  ['Erweiterte Ausbildung',['advReady','advMembers','advInvite','courses','projects','quizzes','terms','turnus','advQual']],
+  ['Erweiterte Ausbildung',['advReady','advMembers','advInvite','advChecks','courses','projects','quizzes','terms','turnus','advQual']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
  ]:trainer?[
@@ -134,14 +134,14 @@ function gaCheckSelect(row){
  '<button type="submit" class="smallbtn">Speichern</button></form>';
 }
 function gaChecklistManager(){
- if(role()!=='Administrator')return '';
- const ready=Array.isArray(STATE.checkArchiv),items=STATE.checklistenpunkte||[],edit=items.find(i=>i.ID===GA_CHECK_ITEM_EDIT),
+ if(!['Administrator','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const ready=Array.isArray(STATE.checkArchiv),items=(STATE.checklistenpunkte||[]).filter(i=>role()==='Administrator'||i.Bereich==='Erweiterte Ausbildung'),edit=items.find(i=>i.ID===GA_CHECK_ITEM_EDIT),
   active=items.filter(i=>i.Aktiv==='JA'),archived=items.filter(i=>i.Aktiv!=='JA');
  const row=i=>'<div class="item"><div class="row between"><div><strong>'+h(i.Titel)+'</strong><p class="small muted">'+h(i.Bereich)+' · '+h(i.Zustaendig)+'</p></div><div class="btnline">'+
   '<button type="button" class="smallbtn" data-check-item-edit="'+h(i.ID)+'" '+(!ready?'disabled':'')+'>Bearbeiten</button>'+
   (i.Aktiv==='JA'?'<button type="button" class="smallbtn" data-check-item-active="'+h(i.ID)+'" data-active="NEIN" '+(!ready?'disabled':'')+'>Entfernen</button>':
    '<button type="button" class="smallbtn" data-check-item-active="'+h(i.ID)+'" data-active="JA" '+(!ready?'disabled':'')+'>Wiederherstellen</button>')+'</div></div></div>';
- const areas=['Alle','Grundausbildung','Erweiterte Ausbildung'],offices=[...new Set(['Zeugkammer','Administration','IT','Ausbildungsleitung',edit?.Zustaendig].filter(Boolean))];
+ const areas=role()==='Administrator'?['Alle','Grundausbildung','Erweiterte Ausbildung']:['Erweiterte Ausbildung'],offices=[...new Set(['Zeugkammer','Administration','IT','Ausbildungsleitung',edit?.Zustaendig].filter(Boolean))];
  const form='<form data-form="checkItem" class="grid">'+(edit?'<input type="hidden" name="ID" value="'+h(edit.ID)+'">':'')+
   '<div><label>Bezeichnung</label><input name="Titel" required maxlength="160" value="'+h(edit?.Titel||'')+'" placeholder="z. B. Bekleidung erhalten"></div>'+
   '<div><label>Ausbildungsbereich</label><select name="Bereich">'+areas.map(a=>'<option value="'+h(a)+'" '+(a===(edit?.Bereich||'Alle')?'selected':'')+'>'+h(a)+'</option>').join('')+'</select></div>'+
@@ -258,6 +258,16 @@ function gaAbschnittOverview(){
  '<p class="small muted">'+filtered.length+' Teilnehmer in der Auswahl</p></div>'+detail+'</div></section>';
 }
 
+function gaAdvancedTransferForm(q){
+ if(role()!=='Administrator')return '';
+ if(!Array.isArray(STATE.erweiterteUeberstellungen))return '<p class="notice">Für eine Verwaltungsüberstellung zuerst Code.gs 1.13.13 aktualisieren.</p>';
+ const member=by(STATE.mitglieder,q.MitgliedID);if(by(STATE.turnusse,member?.TurnusID)?.Bereich!=='Grundausbildung')return '';
+ const transfer=STATE.erweiterteUeberstellungen.find(t=>t.MitgliedID===q.MitgliedID);
+ if(transfer)return '<section class="panel"><h3>Verwaltung übergeben</h3><p>Erweiterter Turnus: '+h(by(STATE.turnusse,transfer.TurnusID)?.Bezeichnung||'–')+' · Freigabe: '+dt(transfer.FreigegebenAm)+'</p><p class="small muted">GAB-Turnus und Nachweise bleiben erhalten. Die erweiterte Ausbildungsleitung darf dieses Mitglied verwalten.</p><button type="button" class="secondary" data-revoke-adv-transfer="'+h(q.MitgliedID)+'">Verwaltung zurückholen</button></section>';
+ if(!q.GABAbgeschlossen)return '<p class="small muted">Die vollständige Verwaltungsüberstellung ist erst nach dem offiziellen GAB-Abschluss möglich. Eine Gastzuordnung ist vorher weiterhin möglich.</p>';
+ const turns=(STATE.turnusse||[]).filter(t=>t.Bereich==='Erweiterte Ausbildung'&&t.Aktiv==='JA');
+ return '<section class="panel"><h3>In die erweiterte Verwaltung überstellen</h3><p>Nur diese ausdrückliche Freigabe übergibt die Mitgliedsverwaltung. Eine Gastzuordnung allein erteilt keine Stammdatenrechte.</p><form data-form="advancedTransfer"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'"><label>Erweiterter Turnus<select name="TurnusID" required><option value="">Bitte wählen</option>'+turns.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('')+'</select></label><button type="submit" class="primary" '+(!turns.length?'disabled':'')+'>Nach GAB-Abschluss Verwaltung übergeben</button></form></section>';
+}
 function gaQualForm(q){
  const warn=q.GABManuellBestaetigt&&!q.GABDokuVollstaendig?
   '<div class="ga-alert">GAB ist durch den Administrator bestätigt. Dokumentation noch unvollständig: '+h(q.GABHinweis)+'</div>':
@@ -269,7 +279,7 @@ function gaQualForm(q){
  gaStatusBadge(q.BSWModulAbgeschlossen,'BSW-Modul vollständig','BSW noch offen')+
  gaStatusBadge(q.Alter16,'Mindestalter erreicht','Alter fehlt/unter 16')+'</div>'+warn+
  '<p class="small muted">Pflichtmodule: '+h(q.PflichtAbsolviert)+' / '+h(q.PflichtGesamt)+' · '+h(q.Fortschritt)+' % · Ausbildungsstufe: '+h(q.Ausbildungsweg||'–')+'</p>'+
- gaExternalBlockForms(q)+
+ gaExternalBlockForms(q)+gaAdvancedTransferForm(q)+
  '<form data-form="qualification"><input type="hidden" name="MitgliedID" value="'+h(q.MitgliedID)+'">'+
  '<div class="ga-qual-approval"><label class="inline-check"><input type="checkbox" name="GABFreigabe" value="JA" '+(q.GABFreigabe==='JA'?'checked':'')+'> <b>GAB abgeschlossen und durch die Ausbildungsleitung bestätigt</b></label>'+
  '<p class="small muted">Diese Bestätigung setzt den GAB-Status auf abgeschlossen. Noch fehlende Nachweise bleiben als Hinweis sichtbar.</p></div>'+
@@ -620,4 +630,11 @@ gaApp?.addEventListener('click',async e=>{
  if(!confirm('Eine neue Mail mit persönlichen Bestätigungslinks an die aktuell hinterlegten Empfänger senden? Alte Links dieser Mail werden dadurch ungültig. Bereits erledigte Aufgaben werden nicht zurückgesetzt.'))return;
  button.disabled=true;try{const result=await api('renewChecklistMail',{ID:button.dataset.renewChecklistMail});tip(result.message);await reload();}
  catch(error){tip(error.message||'Neue Links konnten nicht versendet werden.',true);}finally{button.disabled=false;}
+});
+
+document.getElementById('app')?.addEventListener('click',async event=>{
+ const b=event.target.closest('[data-revoke-adv-transfer]');if(!b)return;
+ if(role()!=='Administrator'||GA_ROLE_PREVIEW)return tip('Nur der Oberadmin kann Verwaltungsrechte zurückholen.',true);
+ if(!confirm('Die erweiterte Mitgliedsverwaltung zurückholen? Kurszuordnungen und Ausbildungsnachweise bleiben erhalten.'))return;
+ b.disabled=true;try{const r=await api('revokeAdvancedTransfer',{MitgliedID:b.dataset.revokeAdvTransfer,Bestaetigt:true});tip(r.message);await reload();}catch(e){tip(e.message,true);}finally{b.disabled=false;}
 });

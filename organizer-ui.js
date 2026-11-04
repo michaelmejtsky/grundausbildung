@@ -1,6 +1,7 @@
 /* Organisator Erweiterte Ausbildung – getrennte Verwaltungsansichten V1.11 */
 'use strict';
 const GA_ORG_ROLE='Organisator Erweiterte Ausbildung';
+let GA_ORG_MEMBER_EDIT='';
 function gaOrganizerOverview(now=Date.now()){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
  const readyKnown=Array.isArray(STATE.gabAbgeschlossen);
@@ -59,9 +60,9 @@ function gaOrganizerReady(){
  const cards=people.map(m=>{
   const ids=m.ErweiterteTurnusIDs||[],assigned=ids.map(id=>turns.find(t=>t.ID===id)?.Bezeichnung||'Erweiterter Turnus');
   return '<section class="panel"><div class="row between"><strong>'+h(m.Vorname+' '+m.Nachname)+'</strong><span class="tag '+(ids.length?'ok':'warn')+'">'+
-   (ids.length?'Bereits zugeordnet':'Noch nicht zugeordnet')+'</span></div>'+
+   (m.VerwaltungUeberstellt?'Verwaltung vom Oberadmin übergeben':ids.length?'Als Gast zugeordnet · Überstellung offen':'Noch nicht zugeordnet')+'</span></div>'+
    (assigned.length?'<p class="small muted">'+h(assigned.join(', '))+'</p>':'')+
-   (active.length?'<form data-form="advEnroll"><input type="hidden" name="MitgliedID" value="'+h(m.ID)+'">'+
+   (active.length&&!m.VerwaltungUeberstellt?'<form data-form="advEnroll"><input type="hidden" name="MitgliedID" value="'+h(m.ID)+'">'+
     '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label>'+
     '<button type="submit" class="primary">'+(ids.length?'Weiteren Turnus zuordnen':'Zur erweiterten Ausbildung zuordnen')+'</button></form>':
     '<p class="small muted">Bitte zuerst einen aktiven erweiterten Turnus anlegen.</p>')+'</section>';
@@ -71,7 +72,8 @@ function gaOrganizerReady(){
 }
 function gaOrganizerMembers(){
  const turnusse=(STATE.turnusse||[]).filter(x=>x.Aktiv==='JA');
- const everyone=STATE.gabNamen||[],members=STATE.mitglieder||[];
+ const everyone=STATE.gabNamen||[],members=STATE.mitglieder||[],edit=members.find(m=>m.ID===GA_ORG_MEMBER_EDIT&&m.VerwaltungErweitert);
+ const editOpts=turnusse.map(t=>'<option value="'+h(t.ID)+'" '+(edit?.TurnusID===t.ID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
  const opts=turnusse.map(t=>'<option value="'+h(t.ID)+'">'+h(t.Bezeichnung)+'</option>').join('');
  return '<div class="ga-page-heading"><div><h2>Teilnehmer & GAB-Gäste</h2><p>GAB-Mitglieder bleiben in ihrem bisherigen Turnus und können trotzdem erweiterte Module besuchen.</p></div></div>'+
  '<section class="panel"><h3>GAB-Mitglied zusätzlich aufnehmen</h3>'+
@@ -80,20 +82,27 @@ function gaOrganizerMembers(){
  everyone.map(m=>'<option value="'+h(m.ID)+'">'+h(m.Nachname+', '+m.Vorname)+'</option>').join('')+'</select></label>'+
  '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label></div>'+
  '<button class="primary" type="submit">Für erweiterte Ausbildung zuordnen</button></form></section>'+
- '<section class="panel"><h3>Neues Mitglied nur für die erweiterte Ausbildung anlegen</h3>'+
- '<form data-form="advMember"><div class="grid"><label>Vorname<input name="Vorname" required maxlength="100"></label>'+
- '<label>Nachname<input name="Nachname" required maxlength="100"></label>'+
- '<label>E-Mail für späteren Zugang<input name="Email" type="email"></label>'+
- '<label>Telefon (optional)<input name="Telefon"></label>'+
- '<label>Standesbuchnummer (optional)<input name="Standesbuchnummer"></label>'+
- '<label>Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label></div>'+
- gaTransponderFields(null)+gaPagerFields(null)+gaBlaulichtFields(null)+gaZeugkammerFields(null)+
- '<button type="submit" class="primary">Mitglied anlegen</button></form></section>'+
+ '<section class="panel" id="gaOrgMemberEditor"><h3>'+ (edit?'Mitglied bearbeiten: '+h(name(edit)):'Neues Mitglied nur für die erweiterte Ausbildung anlegen')+'</h3>'+
+ (edit?.GABUeberstellt?'<p class="notice">Durch den Oberadmin überstellt. Du verwaltest jetzt die Stammdaten und erweiterte Ausbildung; ursprünglicher GAB-Turnus und GAB-Ergebnisse bleiben geschützt.</p>':'')+
+ '<form data-form="advMember">'+(edit?'<input type="hidden" name="ID" value="'+h(edit.ID)+'">':'')+'<div class="grid">'+
+ '<label>Vorname<input name="Vorname" required maxlength="100" value="'+h(edit?.Vorname||'')+'"></label>'+
+ '<label>Nachname<input name="Nachname" required maxlength="100" value="'+h(edit?.Nachname||'')+'"></label>'+
+ '<label>E-Mail / Teilnehmerzugang<input name="Email" type="email" value="'+h(edit?.Email||'')+'"></label>'+
+ '<label>Telefon<input name="Telefon" value="'+h(edit?.Telefon||'')+'"></label>'+
+ '<label>Geburtsdatum<input name="Geburtsdatum" type="date" value="'+h(edit?.Geburtsdatum||'')+'"></label>'+
+ '<label>Standesbuchnummer<input name="Standesbuchnummer" value="'+h(edit?.Standesbuchnummer||'')+'"></label>'+
+ '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+editOpts+'</select></label></div>'+
+ (edit?'<p class="small muted">Eine geänderte E-Mail wird auch für den verknüpften Teilnehmerzugang übernommen. Passwort und Ausbildungsnachweise bleiben erhalten.</p>':'')+
+ gaTransponderFields(edit)+gaPagerFields(edit)+gaBlaulichtFields(edit)+gaZeugkammerFields(edit)+
+ '<button type="submit" class="primary">'+(edit?'Änderungen speichern':'Mitglied anlegen')+'</button>'+ (edit?'<button type="button" class="secondary" data-adv-edit-close>Schließen</button>':'')+'</form></section>'+
  '<section class="panel"><h3>Meine erweiterten Teilnehmer ('+members.length+')</h3>'+
  '<div class="ga-organizer-roster">'+members.map(m=>'<div><b>'+h(m.Nachname+', '+m.Vorname)+'</b>'+
- '<span class="tag '+(m.Ausbildungsweg==='GAB-Gast'?'blue':'ok')+'">'+(m.Ausbildungsweg==='GAB-Gast'?'GAB-Gast':'Erweiterte Ausbildung')+'</span>'+
+ '<span class="tag '+(m.Ausbildungsweg==='GAB-Gast'?'blue':'ok')+'">'+(m.Ausbildungsweg==='GAB-Gast'?'GAB-Gast · nur Teilnahme':m.GABUeberstellt?'Überstellt · Verwaltung übernommen':'Eigene Mitgliedsverwaltung')+'</span>'+
  ((STATE.erweiterteAbschluesse||[]).some(a=>a.MitgliedID===m.ID&&!a.Fehler)?'<span class="tag ok">Ausbildung abgeschlossen</span>':'')+
- (STATE.checks||[]).filter(c=>c.MitgliedID===m.ID).map(c=>'<span class="tag '+(c.Status==='Erledigt'?'ok':c.Status==='Nicht erforderlich'?'blue':'warn')+'">'+h(by(STATE.checklistenpunkte,c.PunktID)?.Titel||'Aufnahme')+': '+h(c.Status)+'</span>').join('')+'</div>').join('')+
+ (STATE.checks||[]).filter(c=>c.MitgliedID===m.ID).map(c=>'<span class="tag '+(c.Status==='Erledigt'?'ok':c.Status==='Nicht erforderlich'?'blue':'warn')+'">'+h(by(STATE.checklistenpunkte,c.PunktID)?.Titel||'Aufnahme')+': '+h(c.Status)+'</span>').join('')+
+ (m.VerwaltungErweitert?'<p class="small muted">'+h(m.Email||'Keine E-Mail')+' · '+h(m.Telefon||'Kein Telefon')+' · Stb.-Nr. '+h(m.Standesbuchnummer||'–')+'</p><div class="btnline">'+
+ '<button type="button" class="smallbtn" data-adv-edit="'+h(m.ID)+'">Bearbeiten</button>'+
+ (m.ZugangAktiv?'<span class="tag ok">Zugang aktiv</span><button type="button" class="smallbtn" data-adv-reset="'+h(m.ID)+'">Passwort-Reset senden</button>':'<button type="button" class="smallbtn" data-adv-invite="'+h(m.ID)+'">Einladungslink senden</button>')+'</div>':'<p class="small muted">GAB-Stammdaten bleiben gesperrt. Teilnahme, Anwesenheit und Ergebnisse der erweiterten Module werden diesem Mitglied angerechnet.</p>')+'</div>').join('')+
  (members.length?'':'<p class="muted">Noch keine Teilnehmer zugeordnet.</p>')+'</div></section>';
 }
 function gaOrganizerInvite(){
@@ -213,4 +222,16 @@ document.getElementById('app')?.addEventListener('click',async e=>{
   tip(result.message||'Abschluss gespeichert.',result.benachrichtigt===false);await reload();
  }catch(error){tip(error.message||'Abschluss konnte nicht gespeichert werden.',true);}
  finally{button.disabled=false;}
+});
+
+document.getElementById('app')?.addEventListener('click',async event=>{
+ const b=event.target.closest('[data-adv-edit],[data-adv-edit-close],[data-adv-invite],[data-adv-reset]');if(!b)return;
+ if(b.hasAttribute('data-adv-edit-close')){GA_ORG_MEMBER_EDIT='';render();return;}
+ const id=b.dataset.advEdit||b.dataset.advInvite||b.dataset.advReset,m=(STATE.mitglieder||[]).find(m=>m.ID===id&&m.VerwaltungErweitert);
+ if(!m)return tip('Mitglied nicht zur Verwaltung freigegeben.',true);
+ if(b.dataset.advEdit){GA_ORG_MEMBER_EDIT=id;render();document.getElementById('gaOrgMemberEditor')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
+ if(GA_ROLE_PREVIEW)return tip('Die Rollenvorschau ist schreibgeschützt.',true);
+ if(!confirm((b.dataset.advReset?'Passwort-Reset':'Einladungslink')+' an die hinterlegte Adresse von '+name(m)+' senden?'))return;
+ b.disabled=true;try{const r=await api(b.dataset.advReset?'resetPassword':'inviteUser',b.dataset.advReset?{BenutzerID:m.ZugangBenutzerID}:{MitgliedID:m.ID,Rolle:'Teilnehmer'});tip(r.message||'Link versendet.');await reload();}
+ catch(e){tip(e.message,true);}finally{b.disabled=false;}
 });

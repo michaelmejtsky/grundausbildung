@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.12',
+  VERSION: '1.13.13',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -286,6 +286,55 @@ function gaAdvancedTurnus_(u,id){
  if(!t||gaIsAdvOrg_(u)&&t.Bereich!==GA_ADV_AREA)throw new Error('Zugriff nur auf Turnusse der erweiterten Ausbildung.');
  return t;
 }
+// Ausdrückliche Verwaltungsübergabe; ursprüngliche Mitglieds-/Turnus-IDs bleiben erhalten.
+const GA_ADV_TRANSFER_PREFIX='GA_ADV_TRANSFER_V1_';
+function gaAdvTransfer_(m){
+ if(!m)return null;
+ const raw=PropertiesService.getScriptProperties().getProperty(GA_ADV_TRANSFER_PREFIX+encodeURIComponent(m.ID));
+ if(!raw)return null;
+ try{const r=JSON.parse(raw);
+  if(r.Version!==1||r.Aktiv!=='JA'||r.MitgliedID!==m.ID||r.UrspruenglicherTurnusID!==m.TurnusID||!r.FreigegebenVon||!r.FreigegebenAm||gaFind_('Turnusse',r.TurnusID)?.Bereich!==GA_ADV_AREA)return null;
+  return r;
+ }catch(e){console.warn('Verwaltungsübergabe ungültig; keine erweiterten Stammdatenrechte erteilt.');return null;}
+}
+function gaAdvManaged_(m){return !!m&&(gaFind_('Turnusse',m.TurnusID)?.Bereich===GA_ADV_AREA||!!gaAdvTransfer_(m));}
+function gaAdvProfile_(m){
+ const transfer=gaAdvTransfer_(m),accounts=gaRows_('Benutzer').filter(u=>u.Rolle==='Teilnehmer'&&String(u.Email||'').trim().toLowerCase()===String(m.Email||'').trim().toLowerCase());
+ return {...m,TurnusID:transfer?.TurnusID||m.TurnusID,Ausbildungsweg:GA_ADV_AREA,VerwaltungErweitert:true,GABUeberstellt:!!transfer,
+  ZugangAktiv:accounts.length===1&&gaBool_(accounts[0].Aktiv),ZugangBenutzerID:accounts.length===1?accounts[0].ID:''};
+}
+function gaAdvTransferList_(){return gaRows_('Mitglieder').map(m=>gaAdvTransfer_(m)).filter(Boolean).map(r=>({...r}));}
+function gaTransferAdvanced_(u,d){
+ gaRequire_(u,['Administrator']);
+ const m=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100)),t=gaAdvancedTurnus_(u,gaNeed_(d.TurnusID,'Erweiterter Turnus',100));
+ if(d.Bestaetigt!==true)throw new Error('Die Überstellung bitte ausdrücklich bestätigen.');
+ if(!m||!gaBool_(m.Aktiv)||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung'||t.Bereich!==GA_ADV_AREA||!gaBool_(t.Aktiv))throw new Error('Aktives GAB-Mitglied und aktiver erweiterter Turnus erforderlich.');
+ const previous=gaAdvTransfer_(m);if(previous){if(previous.TurnusID!==t.ID)throw new Error('Mitglied bereits überstellt. Den erweiterten Turnus in seiner Verwaltung ändern.');return {ok:true,message:'Mitglied bereits überstellt.'};}
+ if(!gaGabCompletion_(m,gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('AbschnittNachweise')).complete)throw new Error('Die Grundausbildung muss vor der Überstellung offiziell abgeschlossen sein.');
+ gaSaveAdvancedEnrollment_(u,{MitgliedID:m.ID,TurnusID:t.ID});
+ const value={Version:1,Aktiv:'JA',MitgliedID:m.ID,UrspruenglicherTurnusID:m.TurnusID,TurnusID:t.ID,FreigegebenVon:u.ID,FreigegebenAm:gaNow_()};
+ PropertiesService.getScriptProperties().setProperty(GA_ADV_TRANSFER_PREFIX+encodeURIComponent(m.ID),JSON.stringify(value));
+ try{gaLog_(u.ID,'VERWALTUNG_UEBERSTELLEN','Mitglied',m.ID,value);}catch(e){console.warn('Überstellung gespeichert; zusätzliches Änderungsprotokoll konnte nicht geschrieben werden.');}
+ try{const ref='ADVTRANSFER:'+m.ID;
+  const notices=gaRows_('Benachrichtigungen');
+  gaRows_('Benutzer').filter(x=>gaBool_(x.Aktiv)&&x.Rolle===GA_ADV_ROLE).filter(x=>!notices.some(n=>n.BenutzerID===x.ID&&n.BezugID===ref))
+   .forEach(x=>gaNotify_(x.ID,'Aufgabe','Mitglied zur Verwaltung überstellt',m.Vorname+' '+m.Nachname+' wurde durch die GAB-Leitung freigegeben. Die Mitgliedsverwaltung liegt jetzt bei der erweiterten Ausbildung.',ref));
+ }catch(e){console.warn('Überstellung gespeichert; Mitteilung konnte nicht zugestellt werden.');}
+ return {ok:true,message:'Mitglied an die erweiterte Verwaltung überstellt. GAB-Turnus, Ergebnisse und Nachweise bleiben unverändert.'};
+}
+function gaRevokeAdvancedTransfer_(u,d){
+ gaRequire_(u,['Administrator']);if(d.Bestaetigt!==true)throw new Error('Die Rücknahme bitte ausdrücklich bestätigen.');
+ const m=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100)),r=gaAdvTransfer_(m);if(!r)return {ok:true,message:'Keine aktive Verwaltungsübergabe vorhanden.'};
+ const value={...r,Aktiv:'NEIN',ZurueckgenommenVon:u.ID,ZurueckgenommenAm:gaNow_()};
+ PropertiesService.getScriptProperties().setProperty(GA_ADV_TRANSFER_PREFIX+encodeURIComponent(m.ID),JSON.stringify(value));
+ gaLog_(u.ID,'VERWALTUNG_ZURUECKHOLEN','Mitglied',m.ID,value);
+ return {ok:true,message:'Verwaltungsrechte zurückgenommen. Erweiterte Kurszuordnungen und sämtliche Nachweise bleiben erhalten.'};
+}
+function gaManagedResetGuard_(u,d){
+ if(!gaIsAdvOrg_(u))return;
+ const account=gaFind_('Benutzer',d.BenutzerID),member=account?.Rolle==='Teilnehmer'?gaOwnMember_(account):null;
+ if(!member||!gaAdvManaged_(member))throw new Error('Nur eigene, zur Verwaltung freigegebene Teilnehmerzugänge zurücksetzen.');
+}
 function gaAdvAssignments_(){return gaOptionalRows_('ErweiterteZuordnungen');}
 function gaAdvAllowedMembers_(turnusId){
  const ids=new Set(gaAdvAssignments_().filter(x=>x.TurnusID===turnusId).map(x=>x.MitgliedID));
@@ -385,13 +434,14 @@ function gaAdvancedOrganizerState_(u){
  const courseIDs=new Set(courses.map(x=>x.ID)),turnIDs=new Set(turnusse.map(x=>x.ID));
  const terms=gaRows_('Termine').filter(t=>courseIDs.has(t.KursID)&&turnIDs.has(t.TurnusID)),termIDs=new Set(terms.map(x=>x.ID));
  const assignments=gaAdvAssignments_().filter(x=>turnIDs.has(x.TurnusID));
- const native=allMembers.filter(m=>turnIDs.has(m.TurnusID));
- const intakeItems=gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(gaIsOptionalIntakeItem_(i)||i.Zustaendig==='Zeugkammer')&&(i.Bereich==='Alle'||i.Bereich===GA_ADV_AREA||gaIsOptionalIntakeItem_(i)));
- const intakeChecks=gaRows_('MitgliedChecks').filter(c=>native.some(m=>m.ID===c.MitgliedID&&gaChecklistInScope_(intakeItems.find(i=>i.ID===c.PunktID),m,allTurns)));
+ const managedRaw=allMembers.filter(m=>gaAdvManaged_(m));
+ const native=managedRaw.map(gaAdvProfile_);
+ const intakeItems=gaRows_('Checklistenpunkte').filter(i=>i.Bereich===GA_ADV_AREA||gaBool_(i.Aktiv)&&(gaIsOptionalIntakeItem_(i)||i.Zustaendig==='Zeugkammer'&&i.Bereich==='Alle'));
+ const intakeChecks=gaRows_('MitgliedChecks').filter(c=>native.some(m=>m.ID===c.MitgliedID&&gaChecklistInScope_(intakeItems.find(i=>i.ID===c.PunktID),allMembers.find(x=>x.ID===m.ID),allTurns)));
  const guestIDs=new Set(assignments.map(x=>x.MitgliedID));
  const guests=allMembers.filter(m=>guestIDs.has(m.ID)&&!native.some(n=>n.ID===m.ID))
-  .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignments.find(a=>a.MitgliedID===m.ID).TurnusID,Aktiv:m.Aktiv,Ausbildungsweg:'GAB-Gast'}));
- const gabNamen=allMembers.filter(m=>gaFind_('Turnusse',m.TurnusID)?.Bereich==='Grundausbildung'&&gaBool_(m.Aktiv))
+  .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignments.find(a=>a.MitgliedID===m.ID).TurnusID,Aktiv:m.Aktiv,Ausbildungsweg:'GAB-Gast',VerwaltungErweitert:false}));
+ const gabNamen=allMembers.filter(m=>!gaAdvTransfer_(m)&&gaFind_('Turnusse',m.TurnusID)?.Bereich==='Grundausbildung'&&gaBool_(m.Aktiv))
   .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname}));
  // Nur der Abschlussstatus und der Name sind für die Übergabe erforderlich.
  const gabQuals=gaOptionalRows_('QualifikationMitglieder'),gabProofs=gaOptionalRows_('AbschnittNachweise');
@@ -399,14 +449,14 @@ function gaAdvancedOrganizerState_(u){
    allTurns.some(t=>t.ID===m.TurnusID&&t.Bereich==='Grundausbildung')&&
    gaGabCompletion_(m,gabQuals,gabProofs).complete)
   .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,
-   ErweiterteTurnusIDs:assignments.filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID)}));
+   ErweiterteTurnusIDs:assignments.filter(a=>a.MitgliedID===m.ID).map(a=>a.TurnusID),VerwaltungUeberstellt:!!gaAdvTransfer_(m)}));
  const attend=gaRows_('Teilnahmen').filter(a=>termIDs.has(a.TerminID));
  const cfg=gaOptionalRows_('QuizKurse').filter(x=>courseIDs.has(x.KursID));
  const attempts=gaOptionalRows_('QuizVersuche').filter(x=>courseIDs.has(x.KursID));
  const rights={KurseGestalten:true,KurseFreigeben:true,KurseBearbeiten:true,TerminePlanen:true,
   FrageboegenBearbeiten:true,BewertungenAnsehen:true,MeldungenBearbeiten:true};
  return {
-  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,
+  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,mitgliederVerwaltenErweitert:true,
   kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,gabAbgeschlossen,
   erweiterteAbschluesse:gaAdvCompletionVisible_(native.concat(guests)),
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
@@ -424,13 +474,13 @@ function gaAdvancedOrganizerState_(u){
   bewertungen:gaOptionalRows_('Bewertungen').filter(x=>courseIDs.has(x.KursID)),
   qualifikationen:native.filter(x=>gaBool_(x.Aktiv)).map(m=>gaQualificationStatus_(m,
    gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('KursAnforderungen'),courses,terms,attend,
-   turnusse,cfg,attempts,[],assignments,{},validity)),
+   turnusse,cfg,attempts,[],assignments,{},validity)).map(q=>({MitgliedID:q.MitgliedID,Name:q.Name,TurnusID:q.TurnusID,Ausbildungsweg:GA_ADV_AREA,Fortschritt:q.Fortschritt,PflichtGesamt:q.PflichtGesamt,PflichtAbsolviert:q.PflichtAbsolviert})),
   ausbildungsberichte:gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID)),
   freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
   meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
   nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
   meMember:null,aufnahmeMails:gaIntakeMailState_(),berichtMail:gaReportMailState_(),
-  checklistenpunkte:intakeItems,checks:intakeChecks,eigeneBewertungen:[],offeneBewertungen:[],
+  checklistenpunkte:intakeItems,checks:intakeChecks.filter(c=>gaBool_(intakeItems.find(i=>i.ID===c.PunktID)?.Aktiv)),checkArchiv:intakeChecks.filter(c=>!gaBool_(intakeItems.find(i=>i.ID===c.PunktID)?.Aktiv)),eigeneBewertungen:[],offeneBewertungen:[],
   ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
   direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse().map(x=>{
    const sender=gaFind_('Benutzer',x.VonBenutzerID);
@@ -471,8 +521,8 @@ function gaOrganizerGuard_(u,method,d){
   gaAdvancedTurnus_(u,d.TurnusID);
   if(d.ID){
    const m=gaFind_('Mitglieder',d.ID);
-   if(!m||gaFind_('Turnusse',m.TurnusID)?.Bereich!==GA_ADV_AREA)
-    throw new Error('Bestehende GAB-Mitglieder nicht bearbeiten. Nutze die zusätzliche Zuordnung.');
+   if(!m||!gaAdvManaged_(m))
+    throw new Error('Bestehende GAB-Mitglieder nicht bearbeiten. Eine zusätzliche Gastzuordnung erteilt keine Verwaltungsrechte.');
   }
   if(d.Ausbildungsweg!==GA_ADV_AREA)throw new Error('Nur Erweiterte Ausbildung.');
  }
@@ -661,7 +711,7 @@ function gaApi(method,data,token){
   gaOrganizerGuard_(u,method,d);
   const locked=fn=>gaLock_(()=>{if(u.Rolle==='Ausbilder'){u=gaTrainerContext_(u,u._gaTrainerArea);gaTrainerGuard_(u,method,d);}return fn();});
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
-   'saveAdvancedEnrollment','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
+   'saveAdvancedEnrollment','setCheck','saveChecklistItem','setChecklistItemActive','resetPassword','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
@@ -679,6 +729,8 @@ function gaApi(method,data,token){
   if(method==='gabCompletionNoticePreview')return gaGabCompletionNoticePreview_(u);
   if(method==='sendGabCompletionNotices')return locked(()=>gaSendGabCompletionNotices_(u,d));
   if(method==='logout')return gaLogoutSession_(token);
+  if(method==='transferAdvancedMember')return locked(()=>gaTransferAdvanced_(u,d));
+  if(method==='revokeAdvancedTransfer')return locked(()=>gaRevokeAdvancedTransfer_(u,d));
   if(method==='saveAdvancedEnrollment')return locked(()=>gaSaveAdvancedEnrollment_(u,d));
   if(method==='completeAdvancedTraining')return locked(()=>gaCompleteAdvancedTraining_(u,d));
   if(method==='saveTurnus')return locked(()=>gaSaveTurnus_(u,d));
@@ -827,7 +879,7 @@ function gaBaseState_(u){
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
-  ...(admin?{verwaltungsMails:gaAdminMailState_()}:{}),
+  ...(admin?{verwaltungsMails:gaAdminMailState_(),erweiterteUeberstellungen:gaAdvTransferList_()}:{}),
   ...(admin||trainer?{berichtMail:gaReportMailState_()}:{}),
   turnusse:visibleTurns,
   // Das Ausbildungsteam erhält den Katalog mit Unterlagen. Teilnehmer erhalten
@@ -1111,7 +1163,7 @@ function gaIntakeRights_(u,d,turnus){
  if(!turnus||!GA.AREAS.includes(turnus.Bereich))throw new Error('Ungültiger Ausbildungsbereich.');
  if(gaIsAdvOrg_(u)){
   if(turnus.Bereich!==GA_ADV_AREA)throw new Error('Keine Berechtigung für GAB-Aufnahmeanforderungen.');
-  if(d.ID&&gaFind_('Turnusse',gaFind_('Mitglieder',d.ID)?.TurnusID)?.Bereich!==GA_ADV_AREA)
+  if(d.ID&&!gaAdvManaged_(gaFind_('Mitglieder',d.ID)))
    throw new Error('Keine Berechtigung zum Bearbeiten persönlicher GAB-Aufnahmepunkte.');
  }
 }
@@ -1164,7 +1216,7 @@ function gaZeugkammerDraft_(r,footer,previewOnly){
  const to=gaMailActionRecipients_('zeugkammer');if(!to)return {pause:true};
  const m=gaFind_('Mitglieder',r.MitgliedID);if(!m||!gaBool_(m.Aktiv))return {cancel:true};
  const checks=gaZeugkammerChecks_(m),items=gaRows_('Checklistenpunkte');if(!checks.length)return {cancel:true};
- const body=['Dieses Mitglied wurde in die '+(gaFind_('Turnusse',m.TurnusID)?.Bereich||'Ausbildung')+' aufgenommen und benötigt noch die folgenden Ausgaben durch die Zeugkammer.','',
+ const body=['Dieses Mitglied wurde in die '+(gaAdvTransfer_(m)?GA_ADV_AREA:gaFind_('Turnusse',m.TurnusID)?.Bereich||'Ausbildung')+' aufgenommen und benötigt noch die folgenden Ausgaben durch die Zeugkammer.','',
   'Name: '+gaAdminMailLine_(m.Vorname)+' '+gaAdminMailLine_(m.Nachname),'Standesbuchnummer: '+(gaAdminMailLine_(m.Standesbuchnummer)||'nicht hinterlegt'),
   'Telefonnummer: '+(gaAdminMailLine_(m.Telefon)||'nicht hinterlegt'),'E-Mail: '+(gaAdminMailLine_(m.Email)||'nicht hinterlegt'),
   'Turnus: '+gaAdminMailLine_(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',...checks.map(c=>'• '+items.find(i=>i.ID===c.PunktID).Titel),'',footer].join('\n');
@@ -1512,7 +1564,7 @@ function gaAdminMailDraft_(r,previewOnly=false){
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaTransponderItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
   if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und benötigt noch einen Transponder.','',
+  const body=['Dieses Mitglied wurde in die '+(gaAdvTransfer_(m)?GA_ADV_AREA:gaFind_('Turnusse',m.TurnusID).Bereich)+' aufgenommen und benötigt noch einen Transponder.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1523,7 +1575,7 @@ function gaAdminMailDraft_(r,previewOnly=false){
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaPagerItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
   if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und benötigt noch einen Pager.','',
+  const body=['Dieses Mitglied wurde in die '+(gaAdvTransfer_(m)?GA_ADV_AREA:gaFind_('Turnusse',m.TurnusID).Bereich)+' aufgenommen und benötigt noch einen Pager.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1534,7 +1586,7 @@ function gaAdminMailDraft_(r,previewOnly=false){
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaBlaulichtItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
   if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und muss noch in Blaulicht SMS/Lea registriert und zugeordnet werden.','',
+  const body=['Dieses Mitglied wurde in die '+(gaAdvTransfer_(m)?GA_ADV_AREA:gaFind_('Turnusse',m.TurnusID).Bereich)+' aufgenommen und muss noch in Blaulicht SMS/Lea registriert und zugeordnet werden.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1601,6 +1653,8 @@ function gaSaveMember_(u,d){
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
     Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35),Ausbildungsweg:gaChoice_(d.Ausbildungsweg||turnus.Bereich,GA.AREAS,'Ausbildungsweg')};
+  const existingMember=d.ID?gaFind_('Mitglieder',d.ID):null,transfer=existingMember?gaAdvTransfer_(existingMember):null;
+  if(gaIsAdvOrg_(u)&&existingMember&&!gaAdvManaged_(existingMember))throw new Error('Mitglied nicht zur Verwaltung freigegeben.');
   const transponder=gaTransponderInput_(u,d,val,turnus),blaulicht=gaBlaulichtInput_(u,d,val,turnus),pager=gaPagerInput_(u,d,val,turnus),zeugkammer=gaZeugkammerInput_(u,d,val,turnus);
   const rows=gaRows_('Mitglieder');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
@@ -1609,6 +1663,7 @@ function gaSaveMember_(u,d){
   if(d.ID){
     const existing=rows.find(m=>m.ID===d.ID);
     if(!existing)throw new Error('Mitglied wurde nicht gefunden.');
+    if(gaIsAdvOrg_(u)&&transfer){val.TurnusID=existing.TurnusID;val.Ausbildungsweg=existing.Ausbildungsweg||'Grundausbildung';}
     const beforeEmail=String(existing.Email||'').trim().toLowerCase();
     const changedEmail=beforeEmail!==email;
     const allAccounts=gaRows_('Benutzer');
@@ -1642,6 +1697,10 @@ function gaSaveMember_(u,d){
         try{gaReplace_(r.sheet,r.id,r.previous);}catch(rollback){Logger.log('E-Mail-Rollback fehlgeschlagen: '+rollback.message);}
       });
       throw new Error('Änderung konnte nicht vollständig gespeichert werden: '+error.message);
+    }
+    if(gaIsAdvOrg_(u)&&transfer&&transfer.TurnusID!==d.TurnusID){
+      gaSaveAdvancedEnrollment_(u,{MitgliedID:d.ID,TurnusID:d.TurnusID});
+      PropertiesService.getScriptProperties().setProperty(GA_ADV_TRANSFER_PREFIX+encodeURIComponent(d.ID),JSON.stringify({...transfer,TurnusID:d.TurnusID,TurnusGeaendertVon:u.ID,TurnusGeaendertAm:gaNow_()}));
     }
     const checks=gaRows_('MitgliedChecks');
     gaRows_('Checklistenpunkte').filter(i=>!gaIsOptionalIntakeItem_(i)&&gaBool_(i.Aktiv)&&(i.Bereich==='Alle'||i.Bereich===turnus.Bereich))
@@ -1705,7 +1764,7 @@ function gaIsOptionalIntakeItem_(item){return gaIsTransponderItem_(item)||gaIsBl
 function gaChecklistInScope_(item,member,turns){
  if(!item||!member||!gaBool_(item.Aktiv))return false;
  const turnus=turns.find(t=>t.ID===member.TurnusID);
- return !!turnus&&(item.Bereich==='Alle'||item.Bereich===turnus.Bereich);
+ return !!turnus&&(item.Bereich==='Alle'||item.Bereich===turnus.Bereich||item.Bereich===GA_ADV_AREA&&!!gaAdvTransfer_(member));
 }
 function gaChecklistFillMissing_(item,actor){
  if(gaIsOptionalIntakeItem_(item)||!gaBool_(item.Aktiv))return;
@@ -1714,9 +1773,13 @@ function gaChecklistFillMissing_(item,actor){
   if(!checks.some(c=>c.MitgliedID===m.ID&&c.PunktID===item.ID))gaAppend_('MitgliedChecks',{ID:gaId_(),MitgliedID:m.ID,PunktID:item.ID,Status:'Offen',Kommentar:'',GeaendertVon:actor.ID,GeaendertAm:gaNow_()});
  }
 }
+function gaAdvChecklistDefinitionGuard_(u,item,area){
+ if(gaIsAdvOrg_(u)&&((item&&item.Bereich!==GA_ADV_AREA)||(area&&area!==GA_ADV_AREA)))throw new Error('Keine Berechtigung für fremde Checklistenpunkte. Nur eigene Punkte der erweiterten Ausbildung bearbeiten.');
+}
 function gaSaveChecklistItem_(u,d){
- gaRequire_(u,['Administrator']);
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
  const old=d.ID?gaFind_('Checklistenpunkte',gaNeed_(d.ID,'Checklistenpunkt',100)):null;
+ gaAdvChecklistDefinitionGuard_(u,old,d.Bereich);
  if(d.ID&&!old)throw new Error('Checklistenpunkt nicht gefunden.');
  const val={Titel:gaNeed_(d.Titel,'Checklistenpunkt',160),Bereich:gaChoice_(d.Bereich,['Alle'].concat(GA.AREAS),'Bereich'),
   Zustaendig:gaNeed_(d.Zustaendig,'Zuständigkeit',100),Aktiv:old?old.Aktiv:'JA'};
@@ -1735,7 +1798,8 @@ function gaSaveChecklistItem_(u,d){
  return {ok:true,message:old?'Checklistenpunkt aktualisiert. Vorhandene Erledigungen und Notizen bleiben erhalten.':'Checklistenpunkt angelegt.'};
 }
 function gaSetChecklistItemActive_(u,d){
- gaRequire_(u,['Administrator']);const item=gaFind_('Checklistenpunkte',gaNeed_(d.ID,'Checklistenpunkt',100));
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);const item=gaFind_('Checklistenpunkte',gaNeed_(d.ID,'Checklistenpunkt',100));
+ gaAdvChecklistDefinitionGuard_(u,item);
  if(!item)throw new Error('Checklistenpunkt nicht gefunden.');
  const active=d.Aktiv===true||d.Aktiv==='JA';
  if(!['JA','NEIN',true,false].includes(d.Aktiv))throw new Error('Ungültiger Aktivstatus.');
@@ -1744,9 +1808,10 @@ function gaSetChecklistItemActive_(u,d){
  gaLog_(u.ID,active?'WIEDERHERSTELLEN':'ARCHIVIEREN','Checklistenpunkt',item.ID,{Titel:item.Titel});
  return {ok:true,message:active?'Checklistenpunkt wiederhergestellt. Bestehende Erledigungen bleiben erhalten.':'Checklistenpunkt aus der aktiven Checkliste entfernt. Bestehende Erledigungen und Notizen bleiben im Archiv erhalten.'};
 }
-function gaSetCheck_(u,d){gaRequire_(u,['Administrator','Fachverwaltung']);const ch=gaFind_('MitgliedChecks',d.ID),item=ch&&gaFind_('Checklistenpunkte',ch.PunktID);
+function gaSetCheck_(u,d){gaRequire_(u,['Administrator','Fachverwaltung',GA_ADV_ROLE]);const ch=gaFind_('MitgliedChecks',d.ID),item=ch&&gaFind_('Checklistenpunkte',ch.PunktID);
   if(!item)throw new Error('Checklistenpunkt nicht gefunden.');
   const target=gaFind_('Mitglieder',ch.MitgliedID);
+  if(gaIsAdvOrg_(u)&&(!gaAdvManaged_(target)||!(item.Bereich===GA_ADV_AREA||item.Bereich==='Alle'&&(gaIsOptionalIntakeItem_(item)||item.Zustaendig==='Zeugkammer'))))throw new Error('Keine Berechtigung für persönliche GAB-Checklisten oder fremde Aufgaben.');
   if(!target||!gaBool_(target.Aktiv)||!gaChecklistInScope_(item,target,gaRows_('Turnusse')))throw new Error('Dieser Checklistenpunkt ist archiviert oder für das Mitglied nicht mehr anwendbar.');
   if(u.Rolle==='Fachverwaltung'&&item.Zustaendig!==u.Bereich)throw new Error('Dieser Punkt gehört nicht zu deinem Verwaltungsbereich.');
   const val={Status:gaChoice_(d.Status,GA.CHECK_STATUSES,'Status'),Kommentar:gaText_(d.Kommentar,500),GeaendertVon:u.ID,GeaendertAm:gaNow_()};
@@ -2366,7 +2431,7 @@ function gaChangeUserRole_(actor,d){
 }
 
 function gaResetPassword_(actor,d){
-  gaRequire_(actor,['Administrator']);
+  gaRequire_(actor,['Administrator',GA_ADV_ROLE]);gaManagedResetGuard_(actor,d);
   const id=gaNeed_(d.BenutzerID,'Benutzer-ID',100);
   const user=gaFind_('Benutzer',id);
   if(!user||!gaBool_(user.Aktiv)||!gaEmail_(user.Email))
