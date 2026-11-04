@@ -15,3 +15,5 @@ state.erweiterteUeberstellungen.push({MitgliedID:'gab',TurnusID:'e',FreigegebenA
 state.user.Rolle='Organisator Erweiterte Ausbildung';assert.equal(ctx.gaAdvancedTransferForm({MitgliedID:'gab'}),'');
 const index=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(index.includes("['advChecks','Erweiterte Checklisten']"));assert(index.includes("doSave('transferAdvancedMember',{...data,Bestaetigt:true})"));
 console.log('Ownership UI: managed editor/contact data, guest read-only roster, invitation/reset controls, escaping, explicit admin handover/revocation and advanced checklist navigation passed.');
+
+state.gabAbgeschlossen=[{ID:'gab',Vorname:'GAB',Nachname:'Fertig',ErweiterteTurnusIDs:['e'],VerwaltungUeberstellt:true}];const ready=ctx.gaOrganizerReady();assert(ready.includes('Stammdaten unter Teilnehmer &amp; Gäste')||ready.includes('Stammdaten unter Teilnehmer & Gäste'));assert(!ready.includes('Bitte zuerst einen aktiven'));

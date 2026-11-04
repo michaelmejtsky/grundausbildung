@@ -5,7 +5,7 @@ let GA_ORG_MEMBER_EDIT='';
 function gaOrganizerOverview(now=Date.now()){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
  const readyKnown=Array.isArray(STATE.gabAbgeschlossen);
- const ready=readyKnown?STATE.gabAbgeschlossen.filter(m=>!m.ErweiterteTurnusIDs?.length):[];
+ const ready=readyKnown?STATE.gabAbgeschlossen.filter(m=>m.VerwaltungUeberstellt===undefined?!m.ErweiterteTurnusIDs?.length:!m.VerwaltungUeberstellt):[];
  const upcoming=gaHomeUpcoming(now),unread=(STATE.benachrichtigungen||[]).filter(n=>!n.GelesenAm);
  const pending=(STATE.kursProjekte||[]).filter(p=>p.Status==='Zur Prüfung');
  const reports=(STATE.meldungen||[]).filter(m=>['Offen','In Bearbeitung'].includes(m.Status));
@@ -28,7 +28,7 @@ function gaOrganizerOverview(now=Date.now()){
   ['reports','💡','Mängel & Ideen','Rückmeldungen bearbeiten']];
  const people=ready.slice().sort((a,b)=>String(a.Nachname||'').localeCompare(String(b.Nachname||''),'de')).slice(0,4)
   .map(m=>'<div class="ga-trainer-module"><span class="ga-home-person-icon" aria-hidden="true">🎓</span><div><strong>'+h([m.Vorname,m.Nachname].filter(Boolean).join(' '))+
-   '</strong><small>GAB abgeschlossen · noch keinem erweiterten Turnus zugeordnet</small></div></div>').join('');
+   '</strong><small>GAB abgeschlossen · Verwaltungsübergabe durch Oberadmin offen</small></div></div>').join('');
  const readyText=!readyKnown?'Die Übersicht ist mit dem aktuell verbundenen Backend noch nicht verfügbar.':
   !ready.length?'Derzeit warten keine GAB-Absolventen auf eine Zuordnung.':'';
  return '<div class="ga-trainer-home ga-lead-home"><section class="ga-trainer-hero"><div><p class="ga-trainer-eyebrow">FEUERWEHR ST. PÖLTEN-STADT · ERWEITERTE AUSBILDUNG</p>'+
@@ -36,14 +36,14 @@ function gaOrganizerOverview(now=Date.now()){
   '<button type="button" class="ga-trainer-hero-button" data-view="advMembers">Teilnehmer verwalten <span aria-hidden="true">→</span></button></div>'+
   '<div class="ga-trainer-hero-mark" aria-hidden="true">🚒</div></section>'+
   '<div class="ga-trainer-stats ga-home-stats">'+gaHomeStat(members.length,'Aktive Teilnehmer','Inklusive zugeordneter GAB-Gäste')+
-  gaHomeStat(readyKnown?ready.length:'–','GAB zur Zuordnung',readyKnown?'Abgeschlossen, noch nicht zugeordnet':'Derzeit nicht verfügbar')+
+  gaHomeStat(readyKnown?ready.length:'–','GAB zur Übergabe',readyKnown?'Abgeschlossen, Überstellung offen':'Derzeit nicht verfügbar')+
   gaHomeStat(upcoming.length,'Kommende Termine','Erweiterte Ausbildung')+
   gaHomeStat(unread.length,'Ungelesene Mitteilungen','Unter deinen letzten 100')+'</div>'+
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">SCHNELLZUGRIFF</p><h2>Was möchtest du tun?</h2></div></div>'+
   '<div class="ga-trainer-shortcuts">'+gaHomeShortcuts(shortcuts)+'</div><details class="ga-home-more"><summary>Weitere Funktionen anzeigen</summary><div class="ga-trainer-shortcuts">'+gaHomeShortcuts(more)+'</div></details></section>'+
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">AUSBILDUNGSPLAN</p><h2>Nächste Termine</h2><p>Geplante Kurse der erweiterten Ausbildung.</p></div><button type="button" class="smallbtn" data-view="terms">Alle öffnen</button></div>'+
   gaHomeAppointments(upcoming)+(upcoming.length>4?'<p class="ga-trainer-footnote">'+h(upcoming.length-4)+' weitere geplante Termine.</p>':'')+'</section>'+
-  '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">ÜBERGABE AUS DER GAB</p><h2>GAB-Absolventen</h2><p>'+h(readyKnown?ready.length+' noch ohne erweiterten Turnus':'Übersicht derzeit nicht verfügbar')+'</p></div><button type="button" class="smallbtn" data-view="advReady">Alle ansehen</button></div>'+
+  '<div class="ga-trainer-columns"><section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">ÜBERGABE AUS DER GAB</p><h2>GAB-Absolventen</h2><p>'+h(readyKnown?ready.length+' noch ohne Verwaltungsfreigabe':'Übersicht derzeit nicht verfügbar')+'</p></div><button type="button" class="smallbtn" data-view="advReady">Alle ansehen</button></div>'+
   (people||'<p class="ga-trainer-empty">'+h(readyText)+'</p>')+
   (ready.length>4?'<p class="ga-trainer-footnote">'+h(ready.length-4)+' weitere Personen in der Übersicht.</p>':'')+'</section>'+
   '<section class="ga-trainer-panel"><div class="ga-trainer-panel-head"><div><p class="ga-trainer-kicker">FÜR DICH</p><h2>Benachrichtigungen</h2><p>'+h(unread.length)+' ungelesen · letzte 100 Mitteilungen</p></div><button type="button" class="smallbtn" data-view="notifications">Alle öffnen</button></div>'+
@@ -65,7 +65,7 @@ function gaOrganizerReady(){
    (active.length&&!m.VerwaltungUeberstellt?'<form data-form="advEnroll"><input type="hidden" name="MitgliedID" value="'+h(m.ID)+'">'+
     '<label>Erweiterter Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label>'+
     '<button type="submit" class="primary">'+(ids.length?'Weiteren Turnus zuordnen':'Zur erweiterten Ausbildung zuordnen')+'</button></form>':
-    '<p class="small muted">Bitte zuerst einen aktiven erweiterten Turnus anlegen.</p>')+'</section>';
+    (m.VerwaltungUeberstellt?'<p class="small muted">Die Mitgliedsverwaltung wurde freigegeben. Stammdaten unter Teilnehmer & Gäste bearbeiten.</p>':'<p class="small muted">Bitte zuerst einen aktiven erweiterten Turnus anlegen.</p>'))+'</section>';
  }).join('');
  return '<div class="ga-page-heading"><div><h2>GAB-Absolventen</h2><p>Personen mit bestätigtem GAB-Abschluss. Eine zusätzliche Zuordnung erhält ihren ursprünglichen GAB-Turnus und alle Nachweise.</p></div></div>'+
   (cards||'<section class="panel"><p class="muted">Derzeit sind keine abgeschlossenen GAB-Mitglieder vorhanden.</p></section>');

@@ -54,7 +54,7 @@ ctx.STATE={...ctx.STATE,user:{ID:'org',Name:'Anna Beispiel',Rolle:'Organisator E
  kursProjekte:[{Status:'Zur Prüfung'},{Status:'Veröffentlicht'}],meldungen:[{Status:'Offen'},{Status:'Erledigt'}],
  benachrichtigungen:[{Titel:'Eine Nachricht',GelesenAm:'',ErstelltAm:'2026-10-30T12:00'}]};
 const orgBefore=JSON.stringify(ctx.STATE),org=ctx.gaOrganizerOverview(now);
-assert(org.includes('Servus, Anna!'));assert(org.includes('1 noch ohne erweiterten Turnus'));
+assert(org.includes('Servus, Anna!'));assert(org.includes('1 noch ohne Verwaltungsfreigabe'));
 assert(org.includes('&lt;A&gt; Beispiel'));assert(!org.includes('Schon Zugeordnet'));
 assert(org.includes('data-training-open="only-extended"'));assert(!org.includes('GAB Modul'));
 assert(org.includes('data-view="advReady"'));assert(org.includes('data-view="advMembers"'));

@@ -18,7 +18,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','service-worker.js')
  assert(added.some(x=>x.url==='https://example.test/grundausbildung/quiz-ui.js?v=abschluss-1'));
  assert(added.some(x=>x.url==='https://example.test/grundausbildung/training-report-ui.js?v=berichtmail-1'));
  assert(added.some(x=>x.url==='https://example.test/grundausbildung/admin-ui.js?v=verwaltungsmails-8'));
- assert(added.some(x=>x.url==='https://example.test/grundausbildung/organizer-ui.js?v=verwaltung-1'));
+ assert(added.some(x=>x.url==='https://example.test/grundausbildung/organizer-ui.js?v=verwaltung-2'));
  handlers.activate({waitUntil:p=>{task=p;}});await task;
  assert(claimed);assert.deepEqual(deleted,['ga-shell-v2.40','ga-shell-v2.41','ga-shell-v2.42','ga-shell-v2.43','ga-shell-v2.44','ga-shell-v2.45','ga-shell-v2.46','ga-shell-v2.47','ga-shell-v2.48','ga-shell-v2.49']);
  let response;const req={method:'GET',mode:'navigate',url:'https://example.test/grundausbildung/'};

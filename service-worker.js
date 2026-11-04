@@ -1,6 +1,6 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
 const CACHE='ga-shell-v2.50';
-const CORE=['./','./index.html','./quiz-ui.js?v=abschluss-1','./bsw-quiz-vorlage.json','./aid-ui.js?v=mailbestaetigung-1','./admin-ui.js?v=verwaltungsmails-8','./training-report-ui.js?v=berichtmail-1','./free-activity-ui.js?v=berichtmail-1','./organizer-ui.js?v=verwaltung-1','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
+const CORE=['./','./index.html','./quiz-ui.js?v=abschluss-1','./bsw-quiz-vorlage.json','./aid-ui.js?v=mailbestaetigung-1','./admin-ui.js?v=verwaltungsmails-8','./training-report-ui.js?v=berichtmail-1','./free-activity-ui.js?v=berichtmail-1','./organizer-ui.js?v=verwaltung-2','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     // Fehlende Offline-Dateien dürfen die Installation des Push-Dienstes nicht blockieren.
