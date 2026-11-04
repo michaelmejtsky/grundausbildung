@@ -1,14 +1,14 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.7
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.8
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.7 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.8 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.7, der statische Cache heißt ga-shell-v2.44.
-5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die drei Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.8, der statische Cache heißt ga-shell-v2.45.
+5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
 
@@ -51,3 +51,29 @@ Alle Texte enthalten den Hinweis auf eine automatische Nachricht mit der Bitte, 
 **Verwaltungs-Mails → Versandstatus** zeigt vorgemerkte, gesendete und fehlerhafte Meldungen. Fehler oder ein unklarer Versandstatus werden nicht blind automatisch erneut versendet. Vor **Versand erneut versuchen** muss kontrolliert werden, ob die Mail möglicherweise bereits angekommen ist. MailApp bietet keine transaktionale Zustellgarantie; bei einem Ausfall genau zwischen Versand und Statusspeicherung kann die tatsächliche Zustellung unklar sein. Normales Bearbeiten und die regelmäßige Versandprüfung lösen dabei keinen automatischen zweiten Versand aus.
 
 Empfänger und Versanddaten sind nur für die Administration sichtbar. Ausbilder, Teilnehmer und der Organisator können weder diese Adressen ändern noch fremde Verwaltungs-Mails erneut verschicken. Die vorhandenen Prüfungen für Ausbildungsbereiche gelten weiterhin. Es wurden keine echten Teilnehmerdaten verändert und keine produktiven Mails zum Prüfen verschickt.
+
+
+## Mail-Buttons für Zeugkammer, Transponder und Erste Hilfe
+
+Unter **Verwaltungs-Mails** gibt es zusätzlich die **Zeugkammer-Empfänger** (auch mehrere Adressen mit Komma). Bei neuen Mitgliedern mit offenen, aktuell gültigen Zeugkammer-Punkten wird eine Mail pro Mitglied erstellt. Sie enthält getrennte Buttons beispielsweise für **Dienstbekleidung erhalten** und **Einsatzbekleidung erhalten**. Jeder Button bestätigt nur den konkreten Punkt dieser Person.
+
+Für bereits vorhandene Mitglieder kann die Administration unter **Verwaltungs-Mails → Zeugkammer-Mail für vorhandene Mitglieder** eine noch nicht versendete Anforderung gezielt starten. Bei bereits versendeten Anforderungen steht im Verlauf **Offene Bestätigungslinks neu senden** zur Verfügung. Das ersetzt die bisherigen Links und setzt keine bereits erledigten Punkte zurück. Normales Bearbeiten eines Mitglieds versendet keine zusätzliche Zeugkammer-Mail.
+
+Die Transponder-Mail enthält **Transponder / Schlüssel ausgegeben bestätigen**. Nach erfolgreicher Bestätigung steht der vorhandene optionale Checklistenpunkt auf **Erledigt**; bisherige Notizen bleiben erhalten.
+
+Die weitergeleitete **Erste-Hilfe-Mail mit PDF** enthält zwei getrennte Buttons:
+
+- **Erste-Hilfe-Zertifikat abgelegt bestätigen** speichert die Ablagebestätigung für genau diesen Nachweis.
+- **In FDISK eingetragen – Datum bestätigen** lässt das tatsächliche Eintragsdatum erfassen. Dieses wird im bestehenden Feld FDISK-Eintragungsdatum dokumentiert; ein bloßer Platzhalter wird aufgehoben. Der Kursnachweis bleibt fachlich ungeprüft, bis die Administration ihn wie bisher prüft. GAB-Freigaben, Kursabschlüsse, Quizversuche und bestehende Prüfnotizen werden durch diese Mail-Aktionen nicht verändert.
+
+Ablage und FDISK-Eintrag erscheinen beim zugehörigen Erste-Hilfe-PDF getrennt grün. Der Teilnehmer sieht diese Angaben nur bei seinem eigenen Nachweis. Der Vorgang bestätigt eine bereits außerhalb der App durchgeführte Ablage oder FDISK-Eintragung; die App schreibt nichts direkt in das externe FDISK-System.
+
+### Ablauf beim Empfänger
+
+Der Mail-Button öffnet eine persönliche Bestätigungsseite. Sie zeigt nur die betreffende Person und Aufgabe. Mit **Als erledigt bestätigen** wird genau diese Aufgabe abgeschlossen; beim FDISK-Button muss vorher das tatsächliche Datum angegeben werden. Ein App-Konto ist dafür nicht erforderlich. Ein reines Öffnen des Mail-Links oder der Seite ändert keine Daten. Dadurch können automatische Mail-Linkprüfungen keine Ausgaben als erledigt markieren.
+
+Die Links sind 30 Tage gültig, eng auf die jeweilige Aufgabe begrenzt und nach Verwendung nicht für eine später erneut geöffnete Aufgabe wiederverwendbar. Änderungen an der Empfängergruppe oder ein erneuter Versand mit neuen Links machen bisherige Links ungültig. Archivierte bzw. nicht mehr erforderliche Punkte und ersetzte oder abgelehnte Erste-Hilfe-Nachweise können nicht über alte Links bestätigt werden. Links sollten nur den vorgesehenen Empfängern zugänglich sein.
+
+Alte, bereits vor dieser Version versendete Mails erhalten keine Buttons nachträglich. Bei Bedarf eine neue Ausgabe-Mail über den Verlauf anstoßen oder beim Erste-Hilfe-PDF **E-Mail erneut senden** verwenden. Dafür muss die neue Code.gs in der bestehenden Bereitstellung laufen; die neue Bestätigungsseite wird mit GitHub Pages veröffentlicht. Am Cloudflare Worker ist keine Änderung nötig, da die Aktionen über die vorhandene API-Weiterleitung laufen.
+
+Die Link-Prüfung ist lesend. Erst die ausdrückliche Bestätigung verwendet einen einmaligen, serverseitig gehashten Berechtigungsnachweis. Der Prüf- und Bestätigungsaufruf liefert keinen allgemeinen Mitglieder-, Konto- oder Dokumentenzugriff. Abgelaufene Link-Berechtigungen werden bereinigt; vorhandene Ausbildungs- und Checklistennachweise bleiben erhalten. Bestätigungen werden als E-Mail-Link-Aktion mit Zeitpunkt protokolliert, ohne eine Anmeldung einer bestimmten Person vorzutäuschen.

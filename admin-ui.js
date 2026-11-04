@@ -322,30 +322,35 @@ function qualifications(){
 function gaAdminMailPage(){
  if(role()!=='Administrator')return '';
  const s=STATE.verwaltungsMails;
- if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.7 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
+ if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.8 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
  const rows=(s.Verlauf||[]).map(r=>{
   const member=by(STATE.mitglieder,r.MitgliedID),turnus=by(STATE.turnusse,r.TurnusID),term=by(STATE.termine,r.BerichtID),reportTitle=r.Art==='ausbildungsbericht'?(by(STATE.kurse,term?.KursID)?.Titel||'Ausbildungsbericht'):r.Art==='freieTaetigkeit'?(by(STATE.freieTaetigkeiten,r.BerichtID)?.Titel||'Freie Tätigkeit'):'',retry=['Fehler','Versand läuft'].includes(r.Status);
-  return '<div class="item"><div class="row between"><strong>'+h(r.Art==='transponder'?'Transponder für Zugang':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
+  return '<div class="item"><div class="row between"><strong>'+h(r.Art==='transponder'?'Transponder für Zugang':r.Art==='zeugkammer'?'Zeugkammer – Ausgaben':r.Art==='ersteHilfe'?'Erste-Hilfe-Zertifikat':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
    '<span class="tag '+(r.Status==='Gesendet'?'ok':r.Status==='Fehler'||r.Status==='Versand läuft'?'warn':'blue')+'">'+h(r.Status)+'</span></div>'+
-   '<p>'+h(r.Art==='transponder'?(member?name(member):r.Name||'Mitglied'):reportTitle||(turnus?.Bezeichnung||'Turnus')+' · '+gaShortDate(r.Datum))+'</p>'+
+   '<p>'+h(['transponder','zeugkammer','ersteHilfe'].includes(r.Art)?(member?name(member):r.Name||'Mitglied'):reportTitle||(turnus?.Bezeichnung||'Turnus')+' · '+gaShortDate(r.Datum))+'</p>'+
    (r.GesendetAm?'<p class="small muted">Gesendet: '+dt(r.GesendetAm)+(r.Anzahl?' · '+h(r.Anzahl)+' Teilnehmer':'')+'</p>':'')+
    (r.Status==='Wartend'?'<p class="small muted">Automatischer Versand vorgemerkt. Die Prüfung läuft alle 5 Minuten.</p>':'')+
    (r.Hinweis?'<p class="notice">'+h(r.Hinweis)+'</p>':'')+
-   (retry?'<button type="button" class="secondary" data-admin-mail-retry="'+h(r.ID)+'">Versand erneut versuchen</button>':'')+'</div>';
+   (retry?'<button type="button" class="secondary" data-admin-mail-retry="'+h(r.ID)+'">Versand erneut versuchen</button>':'')+
+   (r.Status==='Gesendet'&&['transponder','zeugkammer','ersteHilfe'].includes(r.Art)?'<button type="button" class="secondary" data-renew-checklist-mail="'+h(r.ID)+'">Offene Bestätigungslinks neu senden</button>':'')+'</div>';
  }).join('');
- return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
+ return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Zeugkammer, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
  '<section class="panel"><h3>Empfänger hinterlegen</h3><form data-form="adminMailSettings"><div class="grid">'+
  '<label>Transponder für Zugang<input name="TransponderEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.TransponderEmpfaenger)+'"></label>'+
+ '<label>Zeugkammer – Dienst- und Einsatzbekleidung<input name="ZeugkammerEmpfaenger" type="email" multiple maxlength="5000" placeholder="zeugkammer@beispiel.at" value="'+h(s.ZeugkammerEmpfaenger||'')+'"></label>'+
  '<label>Truppmann-Abschluss Block B<input name="BlockBEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BlockBEmpfaenger)+'"></label>'+
  '<label>Fertige Tätigkeitsberichte als PDF<input name="BerichtEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BerichtEmpfaenger||'')+'"></label></div>'+
- '<p class="small muted">Mehrere Adressen mit Komma trennen (höchstens 20 je Bereich). Doppelte Adressen werden nur einmal verwendet. Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen.</p>'+
- (!s.MehrereEmpfaenger?'<p class="notice">Für mehrere Empfänger bitte Code.gs 1.13.7 in der bestehenden Bereitstellung aktualisieren.</p>':'')+
+ '<p class="small muted">Mehrere Adressen mit Komma trennen (höchstens 20 je Bereich). Doppelte Adressen werden nur einmal verwendet. Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen. Wenn sich Empfänger ändern, werden bisherige Bestätigungslinks dieser Versandart ungültig; bei Bedarf neue Links senden.</p>'+
+ (!s.MailBestaetigungen?'<p class="notice">Zeugkammer-Mails und Bestätigungsbuttons benötigen Code.gs 1.13.8 in der bestehenden Bereitstellung.</p>':'')+
+ (!s.MehrereEmpfaenger?'<p class="notice">Für mehrere Empfänger bitte Code.gs 1.13.8 in der bestehenden Bereitstellung aktualisieren.</p>':'')+
  '<button class="primary" type="submit">Empfänger speichern</button></form></section>'+
  (!s.TriggerAktiv?'<div class="notice">Der automatische Versandtrigger ist noch nicht aktiv. Empfänger speichern oder im bestehenden Google Sheet unter Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten einmalig ausführen und Berechtigungen erlauben.</div>':'')+
  '<section class="panel"><h3>So werden die Mails versendet</h3><p><strong>Transponder:</strong> Bei der Aufnahme eines GAB-Mitglieds „Transponder für Zugang erforderlich“ anhaken. Standesbuchnummer und Telefonnummer sind dafür erforderlich. Der Punkt bleibt offen, bis die Ausgabe unter Checklisten bestätigt wird. Die Anforderung wird einmalig per Mail verschickt.</p>'+
+ '<p><strong>Zeugkammer:</strong> Neue Mitglieder mit offenen Zeugkammer-Punkten werden automatisch gemeldet. Die Mail enthält pro Mitglied getrennte Buttons für die tatsächlich offenen Aufgaben. Der Empfänger bestätigt die Ausgabe auf einer persönlichen Seite; erst dann wird der jeweilige Punkt erledigt. Das gilt auch für den Transponder. Links gelten 30 Tage und geben keinen allgemeinen App-Zugang.</p>'+
  '<p><strong>Block B:</strong> Unter Abschnittsmodule A & B die Ausbildung und den positiven Abschluss Truppmann samt Datum bestätigen. Pro Turnus und Abschlussdatum entsteht eine Sammelmail. Sie wird frühestens 5 Minuten nach dem letzten neuen positiven Abschluss versendet; die Prüfung läuft alle 5 Minuten. Nicht bestandene oder noch unbestätigte Teilnehmer werden nicht als Absolventen gemeldet. Später bestätigte Teilnehmer folgen in einer ergänzenden Meldung.</p>'+
  '<p><strong>Tätigkeitsberichte:</strong> Beim ersten vollständigen Abschluss eines Ausbildungstermins oder Speichern einer fertigen freien Tätigkeit wird das PDF automatisch vorgemerkt und bei der nächsten Versandprüfung als Anhang verschickt. Im PDF stehen die Standesbuchnummern direkt bei den Teilnehmernamen. Spätere Änderungen lösen keinen zweiten Versand aus.</p>'+
  '<p class="small muted">Normales Bearbeiten oder erneutes Speichern löst keinen zweiten Versand aus. Alle Mailtexte enthalten „Automatische Nachricht – bitte nicht antworten“.</p></section>'+
+ '<section class="panel"><h3>Zeugkammer-Mail für vorhandene Mitglieder</h3><p>Für bereits angelegte Mitglieder kannst du eine noch nicht versendete Zeugkammer-Anforderung gezielt starten.</p><form data-form="zeugkammerRequest"><label>Mitglied<select name="MitgliedID" required>'+option((STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),name)+'</select></label><button class="primary" type="submit" '+(!s.MailBestaetigungen?'disabled':'')+'>Zeugkammer-Anforderung senden</button></form></section>'+
  '<section class="panel"><h3>Versandstatus</h3><p class="small muted">Die letzten 40 vorgemerkten oder bearbeiteten Meldungen. Fehler werden nicht automatisch erneut versendet.</p>'+ (rows||'<p class="muted">Noch keine Verwaltungs-Mails vorgemerkt.</p>')+'</section>';
 }
 function gaTransponderFields(edit){
@@ -555,4 +560,11 @@ gaApp?.addEventListener('click',async e=>{
  if(!confirm(active?'„'+point.Titel+'“ wiederherstellen? Bestehende Erledigungen bleiben erhalten.':'„'+point.Titel+'“ aus den aktiven Checklisten entfernen? Der Punkt zählt danach nicht mehr als offene Aufgabe. Alle Erledigungen und Notizen bleiben im Archiv erhalten.'))return;
  b.disabled=true;try{const result=await api('setChecklistItemActive',{ID:point.ID,Aktiv:active?'JA':'NEIN'});GA_CHECK_ITEM_EDIT='';tip(result.message);await reload();}
  catch(error){tip(error.message||'Checklistenpunkt konnte nicht geändert werden.',true);}finally{b.disabled=false;}
+});
+
+gaApp?.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-renew-checklist-mail]');if(!button||role()!=='Administrator'||GA_ROLE_PREVIEW)return;
+ if(!confirm('Eine neue Mail mit persönlichen Bestätigungslinks an die aktuell hinterlegten Empfänger senden? Alte Links dieser Mail werden dadurch ungültig. Bereits erledigte Aufgaben werden nicht zurückgesetzt.'))return;
+ button.disabled=true;try{const result=await api('renewChecklistMail',{ID:button.dataset.renewChecklistMail});tip(result.message);await reload();}
+ catch(error){tip(error.message||'Neue Links konnten nicht versendet werden.',true);}finally{button.disabled=false;}
 });

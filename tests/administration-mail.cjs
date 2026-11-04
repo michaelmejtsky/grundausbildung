@@ -43,7 +43,7 @@ const originals={quiz:JSON.stringify(tables.QuizVersuche),members:JSON.stringify
 // All messages and triggers stay in this isolated memory. No production mail is sent.
 let now=Date.UTC(2026,10,4,12),mailFail=false,statusFail=false,triggerFail=false;
 class ClockDate extends Date{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}}
-ctx.Date=ClockDate;
+ctx.Date=ClockDate;ctx.gaInviteDigest_=s=>require('node:crypto').createHash('sha256').update(String(s)).digest('base64url');
 const delivered=[],triggers=[];
 ctx.MailApp={sendEmail:mail=>{if(mailFail)throw Error('quota');delivered.push({...mail});}};
 ctx.ScriptApp={getProjectTriggers:()=>{if(triggerFail)throw Error('authorization');return triggers;},newTrigger:name=>({timeBased:()=>({everyMinutes:n=>({create:()=>{assert.equal(n,5);triggers.push({getHandlerFunction:()=>name});}})})})};

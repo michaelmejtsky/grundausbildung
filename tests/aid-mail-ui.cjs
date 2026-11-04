@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync(path.join(__dirname,'..','aid-ui.js'),'utf8');
+const member={ID:'m',Vorname:'Anna',Nachname:'Beispiel',Aktiv:'JA'},proof={ID:'p',MitgliedID:'m',Kursdatum:'2026-10-01',Stunden:'16',Dateiname:'Bescheinigung.pdf',Status:'Eingereicht',mailBestaetigung:{AbgelegtAm:'2026-11-04T12:00',FDISKBestaetigtAm:'2026-11-04T12:01',FDISKEintragDatum:'2026-11-04'}};
+const state={mitglieder:[member],meMember:member,turnusse:[],ersteHilfeNachweise:[proof],ersteHilfeMail:{Empfaenger:'office@example.test',Aktiv:true}};
+const ctx=vm.createContext({STATE:state,h:s=>String(s??'').replaceAll('<','&lt;').replaceAll('>','&gt;'),by:(a,id)=>(a||[]).find(x=>x.ID===id),name:m=>m?m.Vorname+' '+m.Nachname:'–',dt:x=>x,option:()=>'',gaShortDate:s=>String(s).split('-').reverse().join('.')});
+vm.runInContext(source,ctx);
+let html=ctx.aidPanel(true);assert(html.includes('type="email" multiple'));assert(html.includes('Zertifikat abgelegt'));assert(html.includes('In FDISK eingetragen · 04.11.2026'));assert(html.includes('Eingereicht'));assert(html.includes('Prüfung speichern'));
+state.ersteHilfeMail=null;html=ctx.aidPanel(false);assert(html.includes('Zertifikat abgelegt'));assert(!html.includes('office@example.test'));assert(!html.includes('Prüfung speichern'));
+proof.mailBestaetigung={};html=ctx.aidPanel(false);assert(html.includes('Ablage noch nicht bestätigt'));assert(html.includes('FDISK-Erfassung noch nicht bestätigt'));
+console.log('First-aid UI: separate green administrative statuses, preserved pending course review, own-only proof display and legacy fallback passed.');

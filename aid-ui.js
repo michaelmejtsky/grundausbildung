@@ -2,11 +2,12 @@
 function aidPanel(admin){
  const cfg=STATE.ersteHilfeMail||{}, member=STATE.meMember;
  const settings=admin?'<section class="panel"><h2>Erste-Hilfe-Nachweise · E-Mail-Weiterleitung</h2>'+
- '<p class="muted">Lege eine Empfängeradresse fest. Nur wenn du die Weiterleitung aktivierst, werden neue Nachweise automatisch mit Mitgliedsdaten und PDF-Anhang weitergeleitet.</p>'+
+ '<p class="muted">Lege die Empfängeradressen fest (mehrere mit Komma trennen). Nur wenn du die Weiterleitung aktivierst, werden neue Nachweise automatisch mit Mitgliedsdaten und PDF-Anhang weitergeleitet.</p>'+
  '<form data-form="aidSettings"><label>Empfänger-E-Mail-Adresse</label>'+
- '<input type="email" name="Empfaenger" value="'+h(cfg.Empfaenger||'')+'" placeholder="Empfängeradresse eingeben">'+
+ '<input type="email" multiple maxlength="5000" name="Empfaenger" value="'+h(cfg.Empfaenger||'')+'" placeholder="Empfängeradresse eingeben">'+
  '<label class="inline-check"><input type="checkbox" name="Aktiv" value="JA" '+(cfg.Aktiv?'checked':'')+
  '> Neue Bescheinigungen automatisch per E-Mail mit PDF weiterleiten</label>'+
+ '<p class="small muted">Die Mail enthält pro Mitglied und Nachweis die Buttons „Zertifikat abgelegt“ und „In FDISK eingetragen“. Der tatsächliche FDISK-Eintrag wird mit Datum bestätigt; die fachliche Nachweisprüfung bleibt bei der Administration.</p>'+
  '<button class="primary" type="submit">Versandeinstellungen speichern</button></form></section>':'';
  const field=admin?'<div><label>Mitglied auswählen</label><select name="MitgliedID" required>'+
  option(STATE.mitglieder.filter(m=>m.Aktiv==='JA'),m=>name(m)+' · '+(by(STATE.turnusse,m.TurnusID)?.Bezeichnung||'Turnus'))+
@@ -31,13 +32,14 @@ function aidPanel(admin){
      '<option value="Abgelehnt" '+(p.Status==='Abgelehnt'?'selected':'')+'>Ablehnen</option></select></div>'+
      '<div><label>Prüfnotiz / Ablehnungsgrund</label><input name="Pruefnotiz" maxlength="500" value="'+h(p.Pruefnotiz||'')+'"></div></div>'+
      '<button class="smallbtn" type="submit">Prüfung speichern</button></form>':'';
+   const ack=p.mailBestaetigung||{},acknowledgements='<p><span class="tag '+(ack.AbgelegtAm?'ok':'warn')+'">'+(ack.AbgelegtAm?'Zertifikat abgelegt':'Ablage noch nicht bestätigt')+'</span> <span class="tag '+(ack.FDISKBestaetigtAm?'ok':'warn')+'">'+(ack.FDISKBestaetigtAm?'In FDISK eingetragen · '+h(gaShortDate(ack.FDISKEintragDatum)):'FDISK-Erfassung noch nicht bestätigt')+'</span></p>';
    const mail=admin?'<p class="small muted">E-Mail: '+h(p.EmailStatus||'Nicht gesendet')+(p.EmailGesendetAm?' · '+dt(p.EmailGesendetAm):'')+'</p>':'';
    const resend=admin&&cfg.Aktiv?'<button type="button" class="smallbtn" data-aid-resend="'+h(p.ID)+'">E-Mail erneut senden</button>':'';
    const correct=latest?'<button type="button" class="smallbtn" data-aid-correct="'+h(p.ID)+'">Angaben bearbeiten</button>':'';
    return '<div class="item"><b>'+label+'Erste Hilfe · '+h(p.Kursdatum)+'</b>'+
     '<div class="detail">'+h(p.Stunden)+' Stunden · '+h(p.Dateiname)+' · Hochgeladen: '+dt(p.EingereichtAm)+'</div>'+
     '<p><span class="tag '+tone+'">'+h(p.Status)+'</span></p>'+
-    (p.Pruefnotiz?'<p class="small muted">Prüfnotiz: '+h(p.Pruefnotiz)+'</p>':'')+mail+
+    (p.Pruefnotiz?'<p class="small muted">Prüfnotiz: '+h(p.Pruefnotiz)+'</p>':'')+acknowledgements+mail+
     '<div class="btnline"><button type="button" class="smallbtn" data-aid-pdf="'+h(p.ID)+'">PDF öffnen</button>'+correct+resend+'</div>'+
     verify+'</div>';
  }).join(''):'<div class="notice">Noch keine Erste-Hilfe-Bescheinigung hinterlegt.</div>';

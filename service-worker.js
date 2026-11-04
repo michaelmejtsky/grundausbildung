@@ -1,6 +1,6 @@
 // Nur statische GitHub-Dateien cachen, niemals Mitglieder- oder Anmeldedaten.
-const CACHE='ga-shell-v2.44';
-const CORE=['./','./index.html','./quiz-ui.js?v=abschluss-1','./bsw-quiz-vorlage.json','./aid-ui.js','./admin-ui.js?v=verwaltungsmails-2','./training-report-ui.js?v=kurs-planung-1','./free-activity-ui.js','./organizer-ui.js?v=abschluss-1','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
+const CACHE='ga-shell-v2.45';
+const CORE=['./','./index.html','./quiz-ui.js?v=abschluss-1','./bsw-quiz-vorlage.json','./aid-ui.js?v=mailbestaetigung-1','./admin-ui.js?v=verwaltungsmails-3','./training-report-ui.js?v=kurs-planung-1','./free-activity-ui.js','./organizer-ui.js?v=abschluss-1','./admin-ui.css','./config.js','./manifest.webmanifest','./feuerwehrauto-safe-v2-512.png','./feuerwehrauto-safe-v2-192.png'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     // Fehlende Offline-Dateien dürfen die Installation des Push-Dienstes nicht blockieren.
@@ -20,6 +20,9 @@ self.addEventListener('activate',event=>{
 });
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;
+  if(new URL(event.request.url).pathname.endsWith('/checkliste-bestaetigen.html')){
+    event.respondWith(fetch(event.request,{cache:'no-store'}).catch(()=>new Response('Für eine Ausgabe-Bestätigung ist eine Internetverbindung erforderlich. Bitte den Link aus der E-Mail online erneut öffnen.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}})));return;
+  }
   if(event.request.mode==='navigate'){
     event.respondWith(fetch(event.request,{cache:'no-cache'}).catch(()=>caches.match('./index.html')));
     return;
