@@ -322,7 +322,7 @@ function qualifications(){
 function gaAdminMailPage(){
  if(role()!=='Administrator')return '';
  const s=STATE.verwaltungsMails;
- if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.6 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
+ if(!s)return '<section class="panel"><h2>Verwaltungs-Mails</h2><p>Bitte die vollständige Code.gs 1.13.7 in der bestehenden Apps-Script-Bereitstellung aktualisieren.</p></section>';
  const rows=(s.Verlauf||[]).map(r=>{
   const member=by(STATE.mitglieder,r.MitgliedID),turnus=by(STATE.turnusse,r.TurnusID),term=by(STATE.termine,r.BerichtID),reportTitle=r.Art==='ausbildungsbericht'?(by(STATE.kurse,term?.KursID)?.Titel||'Ausbildungsbericht'):r.Art==='freieTaetigkeit'?(by(STATE.freieTaetigkeiten,r.BerichtID)?.Titel||'Freie Tätigkeit'):'',retry=['Fehler','Versand läuft'].includes(r.Status);
   return '<div class="item"><div class="row between"><strong>'+h(r.Art==='transponder'?'Transponder für Zugang':r.Art==='blockB'?'Truppmann-Abschluss Block B':r.Art==='ausbildungsbericht'?'Ausbildungsbericht als PDF':r.Art==='freieTaetigkeit'?'Tätigkeitsbericht als PDF':'Verwaltungs-Mail')+'</strong>'+
@@ -335,10 +335,11 @@ function gaAdminMailPage(){
  }).join('');
  return '<div class="ga-page-heading"><div><h2>Verwaltungs-Mails</h2><p>Getrennte Empfänger für Transponder, Truppmann-Abschlussmeldungen und fertige Tätigkeitsberichte.</p></div></div>'+
  '<section class="panel"><h3>Empfänger hinterlegen</h3><form data-form="adminMailSettings"><div class="grid">'+
- '<label>Transponder für Zugang<input name="TransponderEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.TransponderEmpfaenger)+'"></label>'+
- '<label>Truppmann-Abschluss Block B<input name="BlockBEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.BlockBEmpfaenger)+'"></label>'+
- '<label>Fertige Tätigkeitsberichte als PDF<input name="BerichtEmpfaenger" type="email" maxlength="240" placeholder="Eine E-Mail-Adresse" value="'+h(s.BerichtEmpfaenger||'')+'"></label></div>'+
- '<p class="small muted">Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen.</p>'+
+ '<label>Transponder für Zugang<input name="TransponderEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.TransponderEmpfaenger)+'"></label>'+
+ '<label>Truppmann-Abschluss Block B<input name="BlockBEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BlockBEmpfaenger)+'"></label>'+
+ '<label>Fertige Tätigkeitsberichte als PDF<input name="BerichtEmpfaenger" type="email" multiple maxlength="5000" placeholder="adresse1@beispiel.at, adresse2@beispiel.at" value="'+h(s.BerichtEmpfaenger||'')+'"></label></div>'+
+ '<p class="small muted">Mehrere Adressen mit Komma trennen (höchstens 20 je Bereich). Doppelte Adressen werden nur einmal verwendet. Ein leeres Feld deaktiviert den jeweiligen Versand. Wartende Meldungen verwenden die aktuell gespeicherte Adresse. Das Speichern verschickt keine alten Abschlussmeldungen.</p>'+
+ (!s.MehrereEmpfaenger?'<p class="notice">Für mehrere Empfänger bitte Code.gs 1.13.7 in der bestehenden Bereitstellung aktualisieren.</p>':'')+
  '<button class="primary" type="submit">Empfänger speichern</button></form></section>'+
  (!s.TriggerAktiv?'<div class="notice">Der automatische Versandtrigger ist noch nicht aktiv. Empfänger speichern oder im bestehenden Google Sheet unter Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten einmalig ausführen und Berechtigungen erlauben.</div>':'')+
  '<section class="panel"><h3>So werden die Mails versendet</h3><p><strong>Transponder:</strong> Bei der Aufnahme eines GAB-Mitglieds „Transponder für Zugang erforderlich“ anhaken. Standesbuchnummer und Telefonnummer sind dafür erforderlich. Der Punkt bleibt offen, bis die Ausgabe unter Checklisten bestätigt wird. Die Anforderung wird einmalig per Mail verschickt.</p>'+

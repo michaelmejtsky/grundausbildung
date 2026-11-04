@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.6',
+  VERSION: '1.13.7',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -1079,9 +1079,12 @@ function gaAdminMailSettings_(){
  return {TransponderEmpfaenger:s.TransponderEmpfaenger||'',BlockBEmpfaenger:s.BlockBEmpfaenger||'',BerichtEmpfaenger:s.BerichtEmpfaenger||''};
 }
 function gaAdminMailAddress_(v){
- const address=String(v||'').trim().toLowerCase();
- if(address&&(address.length>240||!gaEmail_(address)||/[\s,;<>]/.test(address)))throw new Error('Bitte genau eine gültige Empfänger-E-Mail-Adresse je Feld eingeben.');
- return address;
+ const text=String(v||'').trim().toLowerCase();if(!text)return '';
+ const addresses=text.split(',').map(a=>a.trim());
+ if(text.length>5000||addresses.length>20)throw new Error('Bitte höchstens 20 Empfängeradressen je Feld mit Komma getrennt eingeben.');
+ if(addresses.some(a=>!a||a.length>240||!gaEmail_(a)||/[\s,;<>:()\[\]\\"]/.test(a)))
+  throw new Error('Bitte gültige Empfänger-E-Mail-Adressen mit Komma getrennt eingeben.');
+ return [...new Set(addresses)].join(',');
 }
 function gaAdminMailEnsureTrigger_(){
  if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='gaVerwaltungsMailJob_'))
@@ -1117,7 +1120,7 @@ function gaAdminMailState_(){
  const s=gaAdminMailSettings_();let trigger=false;
  try{trigger=typeof ScriptApp!=='undefined'&&ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='gaVerwaltungsMailJob_');}catch(e){console.warn('Verwaltungs-Mail-Trigger noch nicht autorisiert.');}
  let point=null,pointError='';try{point=gaTransponderItem_(false);}catch(e){pointError=String(e.message||e);}
- return {...s,Version:1,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
+ return {...s,Version:2,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
   Verlauf:gaAdminMailRows_().sort((a,b)=>Number(b.AktualisiertMillis||0)-Number(a.AktualisiertMillis||0)).slice(0,40)
    .map(r=>({ID:r.key,Art:r.Art,Status:r.Status,Hinweis:r.Hinweis||'',MitgliedID:r.MitgliedID||'',BerichtID:r.BerichtID||'',TurnusID:r.TurnusID||'',Datum:r.Datum||'',
     Anzahl:r.Anzahl||0,Name:r.Name||'',GesendetAm:r.GesendetAm||'',FaelligMillis:r.FaelligMillis||0}))};

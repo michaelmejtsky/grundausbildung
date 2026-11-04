@@ -54,7 +54,7 @@ const chain={setSpacingBefore(){return this;},setSpacingAfter(){return this;}};
 ctx.gaPdfStart_=()=>({});ctx.gaPdfStats_=ctx.gaPdfSection_=ctx.gaPdfSpace_=ctx.gaPdfFooter_=()=>{};
 ctx.gaPdfLine_=()=>chain;ctx.gaTrainingPdfTable_=(_body,head,rows)=>tablesWritten.push({head,rows});
 const call=(m,d={})=>ctx.gaApi(m,d,'token');
-call('saveAdminMailSettings',{TransponderEmpfaenger:'trans@example.test',BlockBEmpfaenger:'block@example.test',BerichtEmpfaenger:'reports@example.test'});
+call('saveAdminMailSettings',{TransponderEmpfaenger:'trans@example.test',BlockBEmpfaenger:'block@example.test',BerichtEmpfaenger:'reports@example.test,archive@example.test'});
 tables.Mitglieder[0].Standesbuchnummer='302';
 const beforeMembers=JSON.stringify(tables.Mitglieder),beforeQuiz=JSON.stringify(tables.QuizVersuche);
 call('saveAttendance',{TerminID:'t1',Anwesend:[{MitgliedID:'m1',Anwesend:true}],AusbilderIDs:['admin']});
@@ -63,7 +63,7 @@ assert.equal(ctx.gaAdminMailRead_(ctx.gaAdminMailKey_('ausbildungsbericht','t1')
 const data=ctx.gaTrainingPdfData_({TerminID:'t1'},admin);assert(data.participants[0].name.includes('302'));assert(data.details[0].present[0].name.includes('302'));
 // For valid complete saved data, generate the real template with test services and attach the PDF bytes.
 Object.assign(tables.Ausbildungsberichte.find(r=>r.TerminID==='t1'),{BeginnIst:'2026-11-04T08:00',EndeIst:'2026-11-04T10:00',DauerMinuten:'120'});
-ctx.gaVerwaltungsMailJob_();assert.equal(mails.length,1);const mail=mails[0];assert.equal(mail.to,'reports@example.test');assert.equal(mail.noReply,true);
+ctx.gaVerwaltungsMailJob_();assert.equal(mails.length,1);const mail=mails[0];assert.equal(mail.to,'reports@example.test,archive@example.test');assert.equal(mail.noReply,true);
 assert.equal(mail.attachments.length,1);assert.equal(mail.attachments[0].mime,'application/pdf');assert(mail.attachments[0].name.startsWith('FDISK_Design2_'));
 assert(Buffer.from(mail.attachments[0].bytes).toString().startsWith('%PDF'));
 for(const text of ['GAB Modul','Anhang','04.11.2026','Standesbuchnummern','Bitte nicht auf diese E-Mail antworten'])assert(mail.body.includes(text),text);

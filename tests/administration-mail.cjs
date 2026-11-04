@@ -55,8 +55,8 @@ const create=(first,extra={})=>{call('saveMember',data(first,extra));return tabl
 const key=(kind,id,date)=>ctx.gaAdminMailKey_(kind,id,date),record=(kind,id,date)=>ctx.gaAdminMailRead_(key(kind,id,date));
 const proof=(m,extra={})=>({MitgliedID:m.ID,KursID:'GAB-ABSCHNITT-BLOCK-B',Absolviert:'JA',Ausbildungsdatum:'2026-11-03',PruefungBestanden:'JA',Pruefungsdatum:'2026-11-04',...extra});
 // Invalid settings never create a trigger or alter config. Save config sends nothing.
-assert.throws(()=>settings('one@example.test,two@example.test'),/genau eine/);
-assert.throws(()=>settings('one@example.test\nBcc:evil@example.test'),/genau eine/);
+assert.throws(()=>settings('one@example.test,not-an-email'),/gültige/);
+assert.throws(()=>settings('one@example.test\nBcc:evil@example.test'),/gültige/);
 settings();settings();assert.equal(triggers.length,1);assert.equal(delivered.length,0);
 const read=call('state');assert(read.verwaltungsMails.TriggerAktiv);assert.equal(read.verwaltungsMails.TransponderEmpfaenger,'transponder@example.test');
 actor=participant;assert(!call('state').verwaltungsMails);assert.throws(()=>settings(),/Berechtigung/);
@@ -128,3 +128,16 @@ settings('new-transponder@example.test','new-blockb@example.test');now+=6*60000;
 triggerFail=true;assert.equal(call('state').verwaltungsMails.TriggerAktiv,false);assert.throws(()=>settings(),/authorization/);
 assert.equal(ctx.gaAdminMailSettings_().BlockBEmpfaenger,'new-blockb@example.test');triggerFail=false;
 console.log('Administration mail: optional checklist, privacy/rights, exact recipient/text, trigger setup, grouped positive Block B, debounce, corrections, duplicate protection and failure preservation passed.');
+
+// Multiple recipients apply to each category; existing single-address settings remain valid.
+actor=admin;
+assert.equal(ctx.gaAdminMailAddress_(' One@Example.Test , two@example.test,ONE@example.test '),'one@example.test,two@example.test');
+for(const bad of ['one@example.test,','one@example.test,,two@example.test','one@example.test,not-an-email','one@example.test,\nBcc:evil@example.test','Name <one@example.test>'])assert.throws(()=>ctx.gaAdminMailAddress_(bad),/gültige/);
+assert.throws(()=>ctx.gaAdminMailAddress_(Array.from({length:21},(_,i)=>'person'+i+'@example.test').join(',')),/höchstens 20/);
+settings('first@example.test,second@example.test','block1@example.test,block2@example.test');
+const multi=create('Greta',{TransponderErforderlich:'JA'});assert.equal(delivered.at(-1).to,'first@example.test,second@example.test');
+const multiCount=delivered.length;call('saveMember',{...data('Greta'),ID:multi.ID,TransponderErforderlich:'JA'});assert.equal(delivered.length,multiCount);
+call('saveAbschnittNachweis',proof(multi,{Pruefungsdatum:'2026-11-08'}));now+=6*60000;ctx.gaVerwaltungsMailJob_();assert.equal(delivered.at(-1).to,'block1@example.test,block2@example.test');
+assert.equal(call('state').verwaltungsMails.MehrereEmpfaenger,true);
+const oldSettings=JSON.stringify(ctx.gaAdminMailSettings_());assert.throws(()=>settings('valid@example.test,invalid'),/gültige/);assert.equal(JSON.stringify(ctx.gaAdminMailSettings_()),oldSettings);
+console.log('Multiple recipients: validation, normalization, deduplication, saved-settings preservation, transponder/Block B delivery and repeat protection passed.');
