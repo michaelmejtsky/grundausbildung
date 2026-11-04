@@ -87,11 +87,13 @@ function gaOrganizerMembers(){
  '<label>Telefon (optional)<input name="Telefon"></label>'+
  '<label>Standesbuchnummer (optional)<input name="Standesbuchnummer"></label>'+
  '<label>Turnus<select name="TurnusID" required><option value="">Turnus auswählen</option>'+opts+'</select></label></div>'+
+ gaTransponderFields(null)+gaPagerFields(null)+gaBlaulichtFields(null)+gaZeugkammerFields(null)+
  '<button type="submit" class="primary">Mitglied anlegen</button></form></section>'+
  '<section class="panel"><h3>Meine erweiterten Teilnehmer ('+members.length+')</h3>'+
  '<div class="ga-organizer-roster">'+members.map(m=>'<div><b>'+h(m.Nachname+', '+m.Vorname)+'</b>'+
  '<span class="tag '+(m.Ausbildungsweg==='GAB-Gast'?'blue':'ok')+'">'+(m.Ausbildungsweg==='GAB-Gast'?'GAB-Gast':'Erweiterte Ausbildung')+'</span>'+
- ((STATE.erweiterteAbschluesse||[]).some(a=>a.MitgliedID===m.ID&&!a.Fehler)?'<span class="tag ok">Ausbildung abgeschlossen</span>':'')+'</div>').join('')+
+ ((STATE.erweiterteAbschluesse||[]).some(a=>a.MitgliedID===m.ID&&!a.Fehler)?'<span class="tag ok">Ausbildung abgeschlossen</span>':'')+
+ (STATE.checks||[]).filter(c=>c.MitgliedID===m.ID).map(c=>'<span class="tag '+(c.Status==='Erledigt'?'ok':c.Status==='Nicht erforderlich'?'blue':'warn')+'">'+h(by(STATE.checklistenpunkte,c.PunktID)?.Titel||'Aufnahme')+': '+h(c.Status)+'</span>').join('')+'</div>').join('')+
  (members.length?'':'<p class="muted">Noch keine Teilnehmer zugeordnet.</p>')+'</div></section>';
 }
 function gaOrganizerInvite(){

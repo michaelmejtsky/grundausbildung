@@ -1,3 +1,10 @@
+'use strict';
+function gaReportMailField(completed){
+ const cfg=STATE.berichtMail;if(!cfg?.Auswahl)return '';
+ if(completed)return '<p class="small muted">Der Bericht ist bereits abgeschlossen. Korrekturen lösen keinen erneuten automatischen PDF-Mailversand aus.</p>';
+ return '<div data-report-mail-field><label class="inline-check"><input type="checkbox" name="BerichtMailSenden" value="JA" '+(cfg.Aktiv?'checked':'disabled')+'> Fertiges PDF beim Abschluss per E-Mail versenden</label>'+
+ '<p class="small muted">'+(cfg.Aktiv?'Versand an die zentral hinterlegte Verwaltungsadresse nach dem ersten Abschluss. Ohne Häkchen wird keine PDF-Mail vorgemerkt.':'Bitte die Administration um eine Empfängeradresse unter Verwaltungs-Mails bitten.')+'</p></div>';
+}
 /* Feuerwehr St. Pölten-Stadt – Ausbildungs-Tätigkeitsberichte / FDISK-Auszug V1.9.0 */
 'use strict';
 let GA_TRAINING_FILTER='';
@@ -100,7 +107,7 @@ function gaAttendancePage(){
  '<button class="secondary" type="button" data-training-vehicle-add>+ Weiteres Fahrzeug</button>'+
  '<p class="ga-training-count">Fahrzeugkilometer: <strong data-training-km-total>'+gaTrainingKm(vehicles.reduce((n,v)=>n+Number(v.Kilometer||0),0))+'</strong> km</p></div></section>'+
  '<details class="ga-subsection"><summary>Bemerkungen (optional)</summary><textarea name="Notiz" rows="3" maxlength="1500">'+h(report?.Notiz||'')+'</textarea></details>'+
- '<div class="ga-training-summary" data-training-summary></div><div class="ga-training-finish-buttons">'+
+ gaReportMailField(completed)+'<div class="ga-training-summary" data-training-summary></div><div class="ga-training-finish-buttons">'+
  '<button class="primary" type="submit">Ausbildung abschließen & speichern</button>'+
  '<button class="secondary" type="button" data-training-pdf-term="'+h(term.ID)+'">PDF-Tätigkeitsbericht</button></div>'+
  '<p class="small muted">'+(completed?'Du kannst den bestehenden Bericht hier korrigieren.':'PDF ist auch vor der Erfassung als deutlich vorläufig markierter Bericht verfügbar.')+
@@ -201,6 +208,7 @@ async function gaSaveTrainingAttendance(form,fd){
  const data={TerminID:term.ID,BeginnIst:begin,EndeIst:end,Notiz:fd.get('Notiz')||'',
   Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[],AusbilderIDs:teachers,
   Anwesend:members.map(m=>({MitgliedID:m.ID,Anwesend:present.has(m.ID)}))};
+ if(form.querySelector('[data-report-mail-field]'))data.BerichtMailSenden=fd.has('BerichtMailSenden')?'JA':'NEIN';
  if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte mindestens ein Fahrzeug erfassen.');
  if(!confirm('Ausbildung mit '+present.size+' anwesenden Teilnehmern, '+teachers.length+
   ' Ausbilder(n) und '+data.Fahrzeuge.length+' Fahrzeug(en) verbindlich dokumentieren?'))return;

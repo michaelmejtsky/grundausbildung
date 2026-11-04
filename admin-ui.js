@@ -359,53 +359,65 @@ function gaAdminMailPage(){
  '<section class="panel"><h3>Zeugkammer-Mail für vorhandene Mitglieder</h3><p>Für bereits angelegte Mitglieder kannst du eine noch nicht versendete Zeugkammer-Anforderung gezielt starten.</p><form data-form="zeugkammerRequest"><label>Mitglied<select name="MitgliedID" required>'+option((STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA'),name)+'</select></label><button class="primary" type="submit" '+(!s.MailBestaetigungen?'disabled':'')+'>Zeugkammer-Anforderung senden</button></form></section>'+
  '<section class="panel"><h3>Versandstatus</h3><p class="small muted">Die letzten 40 vorgemerkten oder bearbeiteten Meldungen. Fehler werden nicht automatisch erneut versendet.</p>'+ (rows||'<p class="muted">Noch keine Verwaltungs-Mails vorgemerkt.</p>')+'</section>';
 }
+function gaIntakeMailSettings(){
+ if(role()==='Administrator')return STATE.verwaltungsMails;
+ const s=STATE.aufnahmeMails;if(!s?.ErweiterteAufnahme)return null;
+ return {...s,TransponderEmpfaenger:!!s.TransponderKonfiguriert,PagerEmpfaenger:!!s.PagerKonfiguriert,BlaulichtEmpfaenger:!!s.BlaulichtKonfiguriert,ZeugkammerEmpfaenger:!!s.ZeugkammerKonfiguriert};
+}
 function gaTransponderFields(edit){
- if(role()!=='Administrator')return '';
- if(!STATE.verwaltungsMails)return '<p class="small muted">Transponder-Anforderungen nach Aktualisierung auf Code.gs 1.13.6 verfügbar.</p>';
- if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich!=='Grundausbildung')return '';
- const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===STATE.verwaltungsMails.TransponderPunktID||i.Titel==='Transponder für Zugang'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
- if(STATE.verwaltungsMails.TransponderPunktFehler)return '<p class="notice">'+h(STATE.verwaltungsMails.TransponderPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
- if(STATE.verwaltungsMails.TransponderPunktArchiviert)return '<p class="notice">Transponder-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Transponder anzufordern.</p>';
+ if(!['Administrator','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const cfg=gaIntakeMailSettings();
+ if(!cfg)return '<p class="small muted">Transponder-Anforderungen nach Aktualisierung auf Code.gs 1.13.6 verfügbar.</p>';
+ if(edit&&!['Grundausbildung','Erweiterte Ausbildung'].includes(by(STATE.turnusse,edit.TurnusID)?.Bereich))return '';
+ if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich==='Erweiterte Ausbildung'&&!cfg?.ErweiterteAufnahme)return '<p class="notice">Aufnahme-Häkchen für die erweiterte Ausbildung benötigen Code.gs 1.13.12.</p>';
+ const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===cfg.TransponderPunktID||i.Titel==='Transponder für Zugang'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
+ if(cfg.TransponderPunktFehler)return '<p class="notice">'+h(cfg.TransponderPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
+ if(cfg.TransponderPunktArchiviert)return '<p class="notice">Transponder-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Transponder anzufordern.</p>';
  if(check?.Status==='Erledigt')return '<p class="notice">Transponder für Zugang: bereits erledigt. Der bestätigte Checklistenpunkt bleibt erhalten.</p>';
  return '<div data-transponder-field><label class="inline-check"><input type="checkbox" name="TransponderErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Transponder für Zugang erforderlich</label>'+
- '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
- (!STATE.verwaltungsMails.TransponderEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Transponder-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
- '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+ '<p class="small muted">Für neue und bestehende Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
+ (!cfg.TransponderEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Transponder-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ (role()==='Administrator'?'<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button>':'<p class="small muted">Die Empfänger werden zentral durch die Administration hinterlegt.</p>')+'</div>';
 }
 function gaPagerFields(edit){
- if(role()!=='Administrator')return '';
- if(!STATE.verwaltungsMails?.PagerAuswahl)return '<p class="small muted">Pager-Anforderungen nach Aktualisierung auf Code.gs 1.13.11 verfügbar.</p>';
- if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich!=='Grundausbildung')return '';
- const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===STATE.verwaltungsMails.PagerPunktID||i.Titel==='Pager'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
- if(STATE.verwaltungsMails.PagerPunktFehler)return '<p class="notice">'+h(STATE.verwaltungsMails.PagerPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
- if(STATE.verwaltungsMails.PagerPunktArchiviert)return '<p class="notice">Pager-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Pager anzufordern.</p>';
+ if(!['Administrator','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const cfg=gaIntakeMailSettings();
+ if(!cfg?.PagerAuswahl)return '<p class="small muted">Pager-Anforderungen nach Aktualisierung auf Code.gs 1.13.11 verfügbar.</p>';
+ if(edit&&!['Grundausbildung','Erweiterte Ausbildung'].includes(by(STATE.turnusse,edit.TurnusID)?.Bereich))return '';
+ if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich==='Erweiterte Ausbildung'&&!cfg?.ErweiterteAufnahme)return '<p class="notice">Aufnahme-Häkchen für die erweiterte Ausbildung benötigen Code.gs 1.13.12.</p>';
+ const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===cfg.PagerPunktID||i.Titel==='Pager'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
+ if(cfg.PagerPunktFehler)return '<p class="notice">'+h(cfg.PagerPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
+ if(cfg.PagerPunktArchiviert)return '<p class="notice">Pager-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um neue Pager anzufordern.</p>';
  if(check?.Status==='Erledigt')return '<p class="notice">Pager: bereits erledigt. Der bestätigte Checklistenpunkt bleibt erhalten.</p>';
  return '<div data-pager-field><label class="inline-check"><input type="checkbox" name="PagerErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Pager erforderlich</label>'+
- '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
- (!STATE.verwaltungsMails.PagerEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Pager-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
- '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+ '<p class="small muted">Für neue und bestehende Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
+ (!cfg.PagerEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Pager-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ (role()==='Administrator'?'<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button>':'<p class="small muted">Die Empfänger werden zentral durch die Administration hinterlegt.</p>')+'</div>';
 }
 function gaBlaulichtFields(edit){
- if(role()!=='Administrator')return '';
- if(!STATE.verwaltungsMails?.BlaulichtSMSLea)return '<p class="small muted">Blaulicht SMS/Lea nach Aktualisierung auf Code.gs 1.13.9 verfügbar.</p>';
- if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich!=='Grundausbildung')return '';
- const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===STATE.verwaltungsMails.BlaulichtPunktID||i.Titel==='Blaulicht SMS/Lea'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
- if(STATE.verwaltungsMails.BlaulichtPunktFehler)return '<p class="notice">'+h(STATE.verwaltungsMails.BlaulichtPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
- if(STATE.verwaltungsMails.BlaulichtPunktArchiviert)return '<p class="notice">Blaulicht-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um eine Registrierung anzufordern.</p>';
+ if(!['Administrator','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const cfg=gaIntakeMailSettings();
+ if(!cfg?.BlaulichtSMSLea)return '<p class="small muted">Blaulicht SMS/Lea nach Aktualisierung auf Code.gs 1.13.9 verfügbar.</p>';
+ if(edit&&!['Grundausbildung','Erweiterte Ausbildung'].includes(by(STATE.turnusse,edit.TurnusID)?.Bereich))return '';
+ if(edit&&by(STATE.turnusse,edit.TurnusID)?.Bereich==='Erweiterte Ausbildung'&&!cfg?.ErweiterteAufnahme)return '<p class="notice">Aufnahme-Häkchen für die erweiterte Ausbildung benötigen Code.gs 1.13.12.</p>';
+ const item=(STATE.checklistenpunkte||[]).find(i=>i.ID===cfg.BlaulichtPunktID||i.Titel==='Blaulicht SMS/Lea'),check=item&&(STATE.checks||[]).find(c=>c.MitgliedID===edit?.ID&&c.PunktID===item.ID);
+ if(cfg.BlaulichtPunktFehler)return '<p class="notice">'+h(cfg.BlaulichtPunktFehler)+' Bitte unter Checklisten → Checklistenpunkte verwalten prüfen.</p>';
+ if(cfg.BlaulichtPunktArchiviert)return '<p class="notice">Blaulicht-Checklistenpunkt archiviert. Unter Checklisten → Checklistenpunkte verwalten wiederherstellen, um eine Registrierung anzufordern.</p>';
  if(check?.Status==='Erledigt')return '<p class="notice">Blaulicht SMS/Lea: bereits registriert und zugeordnet. Der bestätigte Checklistenpunkt bleibt erhalten.</p>';
  return '<div data-blaulicht-field><label class="inline-check"><input type="checkbox" name="BlaulichtErforderlich" value="JA" '+(check?.Status==='Offen'?'checked':'')+'> Blaulicht SMS/Lea: Registrierung und Zuordnung erforderlich</label>'+
- '<p class="small muted">Für neue GAB-Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
- (!STATE.verwaltungsMails.BlaulichtEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Blaulicht-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
- '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+ '<p class="small muted">Für neue und bestehende Mitglieder: erstellt einen offenen Checklistenpunkt und meldet Name, Standesbuchnummer und Kontaktdaten an den hinterlegten Empfänger. Kein erneuter Versand bei späterem Speichern.</p>'+
+ (!cfg.BlaulichtEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Blaulicht-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ (role()==='Administrator'?'<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button>':'<p class="small muted">Die Empfänger werden zentral durch die Administration hinterlegt.</p>')+'</div>';
 }
 function gaZeugkammerFields(edit){
- if(role()!=='Administrator')return '';
- const settings=STATE.verwaltungsMails;
+ if(!['Administrator','Organisator Erweiterte Ausbildung'].includes(role()))return '';
+ const cfg=gaIntakeMailSettings();
+ const settings=cfg;
  if(!settings?.ZeugkammerAuswahl)return '<p class="small muted">Zeugkammer-Auswahl beim Mitglied nach Aktualisierung auf Code.gs 1.13.10 verfügbar.</p>';
  return '<div data-zeugkammer-field><label class="inline-check"><input type="checkbox" name="ZeugkammerAnfordern" value="JA"> Zeugkammer-Ausstattung anfordern (E-Mail)</label>'+
  '<p class="small muted">Beim Speichern eine Anforderungsmail für die offenen Zeugkammer-Punkte senden, z. B. Dienstbekleidung und Einsatzbekleidung. Die vorhandenen Checklistenpunkte und Erledigungen bleiben erhalten. Bereits versendete Anforderungen werden nicht wiederholt.</p>'+
  (!settings.ZeugkammerEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Zeugkammer-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
- '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+ (role()==='Administrator'?'<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button>':'<p class="small muted">Die Empfänger werden zentral durch die Administration hinterlegt.</p>')+'</div>';
 }
 function gaMemberForm(edit){
  const options=(STATE.turnusse||[]).filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(edit?.TurnusID===t.ID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');

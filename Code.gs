@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.11',
+  VERSION: '1.13.12',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -386,6 +386,8 @@ function gaAdvancedOrganizerState_(u){
  const terms=gaRows_('Termine').filter(t=>courseIDs.has(t.KursID)&&turnIDs.has(t.TurnusID)),termIDs=new Set(terms.map(x=>x.ID));
  const assignments=gaAdvAssignments_().filter(x=>turnIDs.has(x.TurnusID));
  const native=allMembers.filter(m=>turnIDs.has(m.TurnusID));
+ const intakeItems=gaRows_('Checklistenpunkte').filter(i=>gaBool_(i.Aktiv)&&(gaIsOptionalIntakeItem_(i)||i.Zustaendig==='Zeugkammer')&&(i.Bereich==='Alle'||i.Bereich===GA_ADV_AREA||gaIsOptionalIntakeItem_(i)));
+ const intakeChecks=gaRows_('MitgliedChecks').filter(c=>native.some(m=>m.ID===c.MitgliedID&&gaChecklistInScope_(intakeItems.find(i=>i.ID===c.PunktID),m,allTurns)));
  const guestIDs=new Set(assignments.map(x=>x.MitgliedID));
  const guests=allMembers.filter(m=>guestIDs.has(m.ID)&&!native.some(n=>n.ID===m.ID))
   .map(m=>({ID:m.ID,Vorname:m.Vorname,Nachname:m.Nachname,TurnusID:assignments.find(a=>a.MitgliedID===m.ID).TurnusID,Aktiv:m.Aktiv,Ausbildungsweg:'GAB-Gast'}));
@@ -427,7 +429,8 @@ function gaAdvancedOrganizerState_(u){
   freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
   meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
   nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
-  meMember:null,checklistenpunkte:[],checks:[],eigeneBewertungen:[],offeneBewertungen:[],
+  meMember:null,aufnahmeMails:gaIntakeMailState_(),berichtMail:gaReportMailState_(),
+  checklistenpunkte:intakeItems,checks:intakeChecks,eigeneBewertungen:[],offeneBewertungen:[],
   ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
   direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse().map(x=>{
    const sender=gaFind_('Benutzer',x.VonBenutzerID);
@@ -825,6 +828,7 @@ function gaBaseState_(u){
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
   ...(admin?{verwaltungsMails:gaAdminMailState_()}:{}),
+  ...(admin||trainer?{berichtMail:gaReportMailState_()}:{}),
   turnusse:visibleTurns,
   // Das Ausbildungsteam erhält den Katalog mit Unterlagen. Teilnehmer erhalten
   // ausschließlich eigene Kursinformationen ohne Präsentations- oder Dokumentenlinks.
@@ -1102,9 +1106,33 @@ function gaZeugkammerChecks_(member){
  const turns=gaRows_('Turnusse'),items=gaRows_('Checklistenpunkte');
  return gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===member.ID&&c.Status==='Offen'&&items.some(i=>i.ID===c.PunktID&&i.Zustaendig==='Zeugkammer'&&gaChecklistInScope_(i,member,turns)));
 }
+function gaIntakeRights_(u,d,turnus){
+ gaRequire_(u,['Administrator',GA_ADV_ROLE]);
+ if(!turnus||!GA.AREAS.includes(turnus.Bereich))throw new Error('Ungültiger Ausbildungsbereich.');
+ if(gaIsAdvOrg_(u)){
+  if(turnus.Bereich!==GA_ADV_AREA)throw new Error('Keine Berechtigung für GAB-Aufnahmeanforderungen.');
+  if(d.ID&&gaFind_('Turnusse',gaFind_('Mitglieder',d.ID)?.TurnusID)?.Bereich!==GA_ADV_AREA)
+   throw new Error('Keine Berechtigung zum Bearbeiten persönlicher GAB-Aufnahmepunkte.');
+ }
+}
+function gaIntakeMailState_(){
+ const s=gaAdminMailSettings_(),out={ErweiterteAufnahme:true,ZeugkammerAuswahl:true,BlaulichtSMSLea:true,PagerAuswahl:true};
+ for(const kind of ['Transponder','Pager','Blaulicht','Zeugkammer'])out[kind+'Konfiguriert']=!!s[kind+'Empfaenger'];
+ for(const [kind,find] of [['Transponder',gaTransponderItem_],['Pager',gaPagerItem_],['Blaulicht',gaBlaulichtItem_]]){
+  try{const item=find(false);out[kind+'PunktID']=item?.ID||'';out[kind+'PunktArchiviert']=!!item&&!gaBool_(item.Aktiv);}
+  catch(e){out[kind+'PunktFehler']=String(e.message||e);}
+ }
+ return out;
+}
+function gaReportMailInput_(d){
+ if(!Object.prototype.hasOwnProperty.call(d,'BerichtMailSenden'))return true;
+ if(![true,false,'JA','NEIN'].includes(d.BerichtMailSenden))throw new Error('Ungültige PDF-Mail-Auswahl.');
+ return d.BerichtMailSenden===true||d.BerichtMailSenden==='JA';
+}
+function gaReportMailState_(){return {Auswahl:true,Aktiv:!!gaAdminMailSettings_().BerichtEmpfaenger};}
 function gaZeugkammerInput_(u,d,member,turnus){
  if(!Object.prototype.hasOwnProperty.call(d,'ZeugkammerAnfordern'))return false;
- gaRequire_(u,['Administrator']);
+ gaIntakeRights_(u,d,turnus);
  if(![true,false,'JA','NEIN'].includes(d.ZeugkammerAnfordern))throw new Error('Ungültige Zeugkammer-Auswahl.');
  const requested=d.ZeugkammerAnfordern===true||d.ZeugkammerAnfordern==='JA';if(!requested)return false;
  // Ein erneutes Speichern darf eine bereits versendete Anforderung nicht wiederholen.
@@ -1284,27 +1312,30 @@ function gaAdminMailState_(){
  let point=null,pointError='';try{point=gaTransponderItem_(false);}catch(e){pointError=String(e.message||e);}
  let blaulicht=null,blaulichtError='';try{blaulicht=gaBlaulichtItem_(false);}catch(e){blaulichtError=String(e.message||e);}
  let pager=null,pagerError='';try{pager=gaPagerItem_(false);}catch(e){pagerError=String(e.message||e);}
- return {...s,Version:6,PagerAuswahl:true,MailNichtErforderlich:true,PagerPunktID:pager?.ID||'',PagerPunktFehler:pagerError,PagerPunktArchiviert:!!pager&&!gaBool_(pager.Aktiv),ZeugkammerAuswahl:true,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
+ return {...s,Version:7,ErweiterteAufnahme:true,PagerAuswahl:true,MailNichtErforderlich:true,PagerPunktID:pager?.ID||'',PagerPunktFehler:pagerError,PagerPunktArchiviert:!!pager&&!gaBool_(pager.Aktiv),ZeugkammerAuswahl:true,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
   Verlauf:gaAdminMailRows_().sort((a,b)=>Number(b.AktualisiertMillis||0)-Number(a.AktualisiertMillis||0)).slice(0,40)
    .map(r=>({ID:r.key,Art:r.Art,Status:r.Status,Hinweis:r.Hinweis||'',MitgliedID:r.MitgliedID||'',BerichtID:r.BerichtID||'',TurnusID:r.TurnusID||'',Datum:r.Datum||'',
     Anzahl:r.Anzahl||0,Name:r.Name||'',GesendetAm:r.GesendetAm||'',FaelligMillis:r.FaelligMillis||0}))};
 }
 function gaTransponderItem_(create){
  const item=gaChecklistNamedItem_(GA_TRANSPONDER_TITLE,'GA_TRANSPONDER_CHECK_ID_V1');
- if(item||!create)return item;
- const value={ID:gaId_(),Titel:GA_TRANSPONDER_TITLE,Bereich:'Grundausbildung',Zustaendig:'Administration',Aktiv:'JA',ErstelltAm:gaNow_()};
+ if(item||!create){
+  if(item&&create&&item.Bereich!=='Alle'){gaReplace_('Checklistenpunkte',item.ID,{Bereich:'Alle'});return {...item,Bereich:'Alle'};}
+  return item;
+ }
+ const value={ID:gaId_(),Titel:GA_TRANSPONDER_TITLE,Bereich:'Alle',Zustaendig:'Administration',Aktiv:'JA',ErstelltAm:gaNow_()};
  gaAppend_('Checklistenpunkte',value);gaChecklistRememberIdentity_(value);return value;
 }
 function gaTransponderInput_(u,d,m,turnus){
  if(!Object.prototype.hasOwnProperty.call(d,'TransponderErforderlich'))return null; // Alte Formulare verändern diese Auswahl nicht.
- gaRequire_(u,['Administrator']);
+ gaIntakeRights_(u,d,turnus);
  const required=d.TransponderErforderlich===true||d.TransponderErforderlich==='JA';
  const item=gaTransponderItem_(false),checks=item?gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===d.ID&&c.PunktID===item.ID):[];
  if(checks.length>1)throw new Error('Mehrere Transponder-Checklisten für dieses Mitglied. Bitte Administration prüfen lassen.');
  if(checks[0]?.Status==='Erledigt')return {required:true,complete:true};
  if(required){
   if(item&&!gaBool_(item.Aktiv))throw new Error('Der Transponder-Checklistenpunkt ist archiviert. Bitte unter Checklisten → Checklistenpunkte verwalten wiederherstellen.');
-  if(turnus.Bereich!=='Grundausbildung')throw new Error('Die Transponder-Aufnahmemeldung ist für die Grundausbildung vorgesehen.');
+  
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Für die Transponder-Anforderung bitte Standesbuchnummer und Telefonnummer ergänzen.');
   const sent=d.ID?gaAdminMailRead_(gaAdminMailKey_('transponder',d.ID)):null;
   if(sent?.Status!=='Gesendet'&&!gaAdminMailSettings_().TransponderEmpfaenger)
@@ -1330,20 +1361,23 @@ function gaTransponderApply_(u,m,input){
 }
 function gaPagerItem_(create){
  const item=gaChecklistNamedItem_(GA_PAGER_TITLE,'GA_PAGER_CHECK_ID_V1');
- if(item||!create)return item;
- const value={ID:gaId_(),Titel:GA_PAGER_TITLE,Bereich:'Grundausbildung',Zustaendig:'Administration',Aktiv:'JA',ErstelltAm:gaNow_()};
+ if(item||!create){
+  if(item&&create&&item.Bereich!=='Alle'){gaReplace_('Checklistenpunkte',item.ID,{Bereich:'Alle'});return {...item,Bereich:'Alle'};}
+  return item;
+ }
+ const value={ID:gaId_(),Titel:GA_PAGER_TITLE,Bereich:'Alle',Zustaendig:'Administration',Aktiv:'JA',ErstelltAm:gaNow_()};
  gaAppend_('Checklistenpunkte',value);gaChecklistRememberIdentity_(value);return value;
 }
 function gaPagerInput_(u,d,m,turnus){
  if(!Object.prototype.hasOwnProperty.call(d,'PagerErforderlich'))return null; // Alte Formulare verändern diese Auswahl nicht.
- gaRequire_(u,['Administrator']);
+ gaIntakeRights_(u,d,turnus);
  const required=d.PagerErforderlich===true||d.PagerErforderlich==='JA';
  const item=gaPagerItem_(false),checks=item?gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===d.ID&&c.PunktID===item.ID):[];
  if(checks.length>1)throw new Error('Mehrere Pager-Checklisten für dieses Mitglied. Bitte Administration prüfen lassen.');
  if(checks[0]?.Status==='Erledigt')return {required:true,complete:true};
  if(required){
   if(item&&!gaBool_(item.Aktiv))throw new Error('Der Pager-Checklistenpunkt ist archiviert. Bitte unter Checklisten → Checklistenpunkte verwalten wiederherstellen.');
-  if(turnus.Bereich!=='Grundausbildung')throw new Error('Die Pager-Aufnahmemeldung ist für die Grundausbildung vorgesehen.');
+  
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Für die Pager-Anforderung bitte Standesbuchnummer und Telefonnummer ergänzen.');
   const sent=d.ID?gaAdminMailRead_(gaAdminMailKey_('pager',d.ID)):null;
   if(sent?.Status!=='Gesendet'&&!gaAdminMailSettings_().PagerEmpfaenger)
@@ -1369,20 +1403,23 @@ function gaPagerApply_(u,m,input){
 }
 function gaBlaulichtItem_(create){
  const item=gaChecklistNamedItem_(GA_BLAULICHT_TITLE,'GA_BLAULICHT_CHECK_ID_V1');
- if(item||!create)return item;
- const value={ID:gaId_(),Titel:GA_BLAULICHT_TITLE,Bereich:'Grundausbildung',Zustaendig:'IT',Aktiv:'JA',ErstelltAm:gaNow_()};
+ if(item||!create){
+  if(item&&create&&item.Bereich!=='Alle'){gaReplace_('Checklistenpunkte',item.ID,{Bereich:'Alle'});return {...item,Bereich:'Alle'};}
+  return item;
+ }
+ const value={ID:gaId_(),Titel:GA_BLAULICHT_TITLE,Bereich:'Alle',Zustaendig:'IT',Aktiv:'JA',ErstelltAm:gaNow_()};
  gaAppend_('Checklistenpunkte',value);gaChecklistRememberIdentity_(value);return value;
 }
 function gaBlaulichtInput_(u,d,m,turnus){
  if(!Object.prototype.hasOwnProperty.call(d,'BlaulichtErforderlich'))return null; // Alte Formulare verändern diese Auswahl nicht.
- gaRequire_(u,['Administrator']);
+ gaIntakeRights_(u,d,turnus);
  const required=d.BlaulichtErforderlich===true||d.BlaulichtErforderlich==='JA';
  const item=gaBlaulichtItem_(false),checks=item?gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===d.ID&&c.PunktID===item.ID):[];
  if(checks.length>1)throw new Error('Mehrere Blaulicht-Checklisten für dieses Mitglied. Bitte Administration prüfen lassen.');
  if(checks[0]?.Status==='Erledigt')return {required:true,complete:true};
  if(required){
   if(item&&!gaBool_(item.Aktiv))throw new Error('Der Blaulicht-Checklistenpunkt ist archiviert. Bitte unter Checklisten → Checklistenpunkte verwalten wiederherstellen.');
-  if(turnus.Bereich!=='Grundausbildung')throw new Error('Die Blaulicht-Aufnahmemeldung ist für die Grundausbildung vorgesehen.');
+  
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Für die Blaulicht SMS/Lea-Anforderung bitte Standesbuchnummer und Telefonnummer ergänzen.');
   const sent=d.ID?gaAdminMailRead_(gaAdminMailKey_('blaulicht',d.ID)):null;
   if(sent?.Status!=='Gesendet'&&!gaAdminMailSettings_().BlaulichtEmpfaenger)
@@ -1419,8 +1456,8 @@ function gaQueueBlockBMail_(m,previous,next){
   return ' Block-B-Sammelmail vorgemerkt (5 Minuten nach dem letzten neuen Abschluss, Versandprüfung alle 5 Minuten).';
  }catch(e){console.warn('Block-B-Mail konnte nicht vorgemerkt werden:',String(e));return ' Abschluss gespeichert; die Block-B-Sammelmail konnte nicht vorgemerkt werden. Bitte Verwaltungs-Mails prüfen.';}
 }
-function gaQueueReportMail_(kind,id,isNewCompletion){
- if(!isNewCompletion)return '';
+function gaQueueReportMail_(kind,id,isNewCompletion,send=true){
+ if(!send||!isNewCompletion)return '';
  try{
   if(!gaAdminMailSettings_().BerichtEmpfaenger)return '';
   const key=gaAdminMailKey_(kind,id),old=gaAdminMailRead_(key);
@@ -1473,9 +1510,9 @@ function gaAdminMailDraft_(r,previewOnly=false){
  if(r.Art==='transponder'){
   if(!settings.TransponderEmpfaenger)return {pause:true};
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaTransponderItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
-  if(!m||!gaBool_(m.Aktiv)||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung'||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
+  if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die Grundausbildung aufgenommen und benötigt noch einen Transponder.','',
+  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und benötigt noch einen Transponder.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1484,9 +1521,9 @@ function gaAdminMailDraft_(r,previewOnly=false){
  if(r.Art==='pager'){
   if(!settings.PagerEmpfaenger)return {pause:true};
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaPagerItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
-  if(!m||!gaBool_(m.Aktiv)||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung'||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
+  if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die Grundausbildung aufgenommen und benötigt noch einen Pager.','',
+  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und benötigt noch einen Pager.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1495,9 +1532,9 @@ function gaAdminMailDraft_(r,previewOnly=false){
  if(r.Art==='blaulicht'){
   if(!settings.BlaulichtEmpfaenger)return {pause:true};
   const m=gaFind_('Mitglieder',r.MitgliedID),item=gaBlaulichtItem_(false),check=item&&gaRows_('MitgliedChecks').find(c=>c.MitgliedID===r.MitgliedID&&c.PunktID===item.ID);
-  if(!m||!gaBool_(m.Aktiv)||gaFind_('Turnusse',m.TurnusID)?.Bereich!=='Grundausbildung'||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
+  if(!m||!gaBool_(m.Aktiv)||!GA.AREAS.includes(gaFind_('Turnusse',m.TurnusID)?.Bereich)||!gaBool_(item?.Aktiv)||check?.Status!=='Offen')return {cancel:true};
   if(!m.Standesbuchnummer||!m.Telefon)throw new Error('Standesbuchnummer oder Telefonnummer fehlt.');
-  const body=['Dieses Mitglied wurde in die Grundausbildung aufgenommen und muss noch in Blaulicht SMS/Lea registriert und zugeordnet werden.','',
+  const body=['Dieses Mitglied wurde in die '+gaFind_('Turnusse',m.TurnusID).Bereich+' aufgenommen und muss noch in Blaulicht SMS/Lea registriert und zugeordnet werden.','',
    'Name: '+line(m.Vorname)+' '+line(m.Nachname),'Standesbuchnummer: '+line(m.Standesbuchnummer),
    'Telefonnummer: '+line(m.Telefon),'E-Mail-Adresse: '+(line(m.Email)||'nicht hinterlegt'),
    'Turnus: '+line(gaFind_('Turnusse',m.TurnusID)?.Bezeichnung),'',footer].join('\n');
@@ -1683,12 +1720,11 @@ function gaSaveChecklistItem_(u,d){
  if(d.ID&&!old)throw new Error('Checklistenpunkt nicht gefunden.');
  const val={Titel:gaNeed_(d.Titel,'Checklistenpunkt',160),Bereich:gaChoice_(d.Bereich,['Alle'].concat(GA.AREAS),'Bereich'),
   Zustaendig:gaNeed_(d.Zustaendig,'Zuständigkeit',100),Aktiv:old?old.Aktiv:'JA'};
- const reserved=old&&gaIsOptionalIntakeItem_(old)||[GA_TRANSPONDER_TITLE,GA_BLAULICHT_TITLE,GA_PAGER_TITLE].includes(val.Titel);
  if(val.Titel===GA_PAGER_TITLE){const current=gaPagerItem_(false);if(current&&current.ID!==old?.ID)throw new Error('Der optionale Pager-Checklistenpunkt besteht bereits, gegebenenfalls unter einer geänderten Bezeichnung.');}
  if(val.Titel===GA_BLAULICHT_TITLE){const current=gaBlaulichtItem_(false);if(current&&current.ID!==old?.ID)throw new Error('Der optionale Blaulicht SMS/Lea-Checklistenpunkt besteht bereits, gegebenenfalls unter einer geänderten Bezeichnung.');}
  if(val.Titel===GA_TRANSPONDER_TITLE){const current=gaTransponderItem_(false);if(current&&current.ID!==old?.ID)throw new Error('Der optionale Transponder-Checklistenpunkt besteht bereits, gegebenenfalls unter einer geänderten Bezeichnung.');}
  if(val.Titel==='Erste-Hilfe-Bescheinigung abgegeben'){const current=gaChecklistNamedItem_(val.Titel,'GA_EH_CHECK_ID_V1');if(current&&current.ID!==old?.ID)throw new Error('Der automatische Erste-Hilfe-Checklistenpunkt besteht bereits.');}
- if(reserved&&val.Bereich!=='Grundausbildung')throw new Error('Dieser optionale Aufnahme-Punkt gehört zur Grundausbildung.');
+ // Optionale Aufnahme-Punkte können in beiden Ausbildungsbereichen verwendet werden.
  if(val.Titel===GA_TRANSPONDER_TITLE&&gaRows_('Checklistenpunkte').some(i=>i.Titel===GA_TRANSPONDER_TITLE&&i.ID!==d.ID))
   throw new Error('Der optionale Transponder-Checklistenpunkt besteht bereits.');
  let id=old?.ID||gaId_();
@@ -2023,7 +2059,7 @@ function gaExportTrainingPdf_(u,d){
 
 /** Eigenständige Feuerwehrtätigkeiten ohne Kurs- und Terminpflicht – unabhängig von GAB. */
 function gaSaveFreeActivity_(u,d){
- gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
+ gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);const reportMail=gaReportMailInput_(d);
  if(!gaSheet_().getSheetByName('FreieTaetigkeiten'))
   throw new Error('Die Tabelle FreieTaetigkeiten fehlt. Bitte die neue Code.gs im bestehenden Apps Script aktualisieren und die Tabelle einmalig einrichten.');
  const Titel=gaNeed_(d.Titel,'Tätigkeitsbezeichnung',160);
@@ -2050,7 +2086,7 @@ function gaSaveFreeActivity_(u,d){
  gaLog_(u.ID,old?'FREIE_TAETIGKEIT_AKTUALISIEREN':'FREIE_TAETIGKEIT_ERFASSEN','FreieTaetigkeiten',id,
   {Kategorie,DauerMinuten:details.DauerMinuten,Teilnehmer:participants.length,Ausbilder:trainers.length,
    FahrzeugeJSON:details.FahrzeugeJSON});
- return {ok:true,ID:id,message:'Tätigkeit mit Personalstunden und Fahrzeugkilometern gespeichert.'+gaQueueReportMail_('freieTaetigkeit',id,!old||!(Number(old.DauerMinuten)>0))};
+ return {ok:true,ID:id,message:'Tätigkeit mit Personalstunden und Fahrzeugkilometern gespeichert.'+gaQueueReportMail_('freieTaetigkeit',id,!old||!(Number(old.DauerMinuten)>0),reportMail)};
 }
 
 function gaExportFreeActivityPdf_(u,d){
@@ -2111,7 +2147,7 @@ function gaExportFreeActivityPdf_(u,d){
 }
 
 
-function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
+function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);const reportMail=gaReportMailInput_(d);const term=gaFind_('Termine',d.TerminID);if(!term)throw new Error('Termin nicht gefunden.');
   if(!gaSheet_().getSheetByName('Ausbildungsberichte'))throw new Error('Tabelle Ausbildungsberichte fehlt. Im Google Sheet Grundausbildung → 7 · Tätigkeitsberichte einrichten ausführen.');
   const details=gaTrainingDetails_(d);
   const turnus=gaFind_('Turnusse',term.TurnusID);
@@ -2189,7 +2225,7 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
    });
   }
   try{gaPushQueue_(5);}catch(e){console.warn('Kurs-Push wartet:',String(e));}
-  return {ok:true,message:'Anwesenheit bestätigt.'+gaQueueReportMail_('ausbildungsbericht',term.ID,!saved||!(Number(saved.DauerMinuten)>0))+(noticeFailures?' '+noticeFailures+' Benachrichtigung(en) konnten nicht erstellt werden. Bitte die betroffenen Personen informieren.':'')};
+  return {ok:true,message:'Anwesenheit bestätigt.'+gaQueueReportMail_('ausbildungsbericht',term.ID,!saved||!(Number(saved.DauerMinuten)>0),reportMail)+(noticeFailures?' '+noticeFailures+' Benachrichtigung(en) konnten nicht erstellt werden. Bitte die betroffenen Personen informieren.':'')};
 }
 function gaSaveUser_(u,d){gaRequire_(u,['Administrator']);const name=gaNeed_(d.Name,'Name',140),email=gaText_(d.Email,240).toLowerCase(),pwd=String(d.Passwort||'');
   if(!gaEmail_(email)||pwd.length<12)throw new Error('Gültige E-Mail und Passwort mit mindestens 12 Zeichen erforderlich.');

@@ -87,3 +87,17 @@ ctx.gaExportTrainingPdf_(admin,{TerminID:'t1'});assert.equal(mails.length,3);
 assert.equal(JSON.stringify(tables.Mitglieder),beforeMembers);assert.equal(JSON.stringify(tables.QuizVersuche),beforeQuiz);
 assert(ctx.gaReportParticipantName_({Vorname:'Ohne',Nachname:'Nummer'}).includes('nicht hinterlegt'));
 console.log('Report PDF/mail: real report builders include stand numbers, complete reports only, exact PDF attachment/text, free activities, once-only delivery and failure preservation passed.');
+
+// The new choice works for both areas and both report kinds, with unchanged no-resend behavior.
+const beforeOpt=mails.length;
+tables.Termine.push({ID:'skip-adv',KursID:'adv',TurnusID:'e1',Beginn:'2026-11-04T08:00',Ende:'2026-11-04T10:00',Status:'Geplant'});
+actor=org;
+call('saveAttendance',{TerminID:'skip-adv',Anwesend:[{MitgliedID:'m1',Anwesend:true}],AusbilderIDs:['org'],BerichtMailSenden:'NEIN'});
+assert(!ctx.gaAdminMailRead_(ctx.gaAdminMailKey_('ausbildungsbericht','skip-adv')));assert.equal(tables.Termine.find(t=>t.ID==='skip-adv').Status,'Durchgeführt');
+const skipFree=call('saveFreeActivity',{...details,Titel:'Erweiterte Wartung ohne Mail',AusbilderIDs:['org'],BerichtMailSenden:'NEIN'});assert(!ctx.gaAdminMailRead_(ctx.gaAdminMailKey_('freieTaetigkeit',skipFree.ID)));assert.equal(tables.FreieTaetigkeiten.find(r=>r.ID===skipFree.ID).Bereich,'Erweiterte Ausbildung');
+ctx.gaVerwaltungsMailJob_();assert.equal(mails.length,beforeOpt);
+const includeFree=call('saveFreeActivity',{...details,Titel:'Erweiterte Wartung mit Mail',AusbilderIDs:['org'],BerichtMailSenden:'JA'});assert.equal(ctx.gaAdminMailRead_(ctx.gaAdminMailKey_('freieTaetigkeit',includeFree.ID)).Status,'Wartend');
+assert.throws(()=>call('saveFreeActivity',{...details,AusbilderIDs:['org'],BerichtMailSenden:'invalid'}),/PDF-Mail-Auswahl/);
+actor=admin;tables.Termine.push({ID:'skip-gab',KursID:'gab',TurnusID:'g1',Beginn:'2026-11-04T08:00',Ende:'2026-11-04T10:00',Status:'Geplant'});
+call('saveAttendance',{TerminID:'skip-gab',Anwesend:[{MitgliedID:'m1',Anwesend:true}],AusbilderIDs:['admin'],BerichtMailSenden:'NEIN'});assert(!ctx.gaAdminMailRead_(ctx.gaAdminMailKey_('ausbildungsbericht','skip-gab')));
+console.log('Report choice: GAB and advanced attendance/free-activity completion can opt out without losing reports; opt-in queues only the intended report.');

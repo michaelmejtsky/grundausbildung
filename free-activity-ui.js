@@ -48,7 +48,7 @@ function gaFreeActivityPage(){
  '<button class="secondary" type="button" data-training-vehicle-add>+ Fahrzeug</button>'+
  '<p>Fahrzeugkilometer: <strong data-training-km-total>0,0</strong> km</p></div></section>'+
  '<label>Bemerkungen<textarea name="Notiz" rows="3" maxlength="1500">'+h(item.Notiz||'')+'</textarea></label>'+
- '<div class="ga-training-summary" data-training-summary></div>'+
+ gaReportMailField(!!chosen&&Number(chosen.DauerMinuten)>0)+'<div class="ga-training-summary" data-training-summary></div>'+
  '<div class="ga-training-finish-buttons"><button class="primary" type="submit">Tätigkeit speichern</button>'+
  (chosen?'<button type="button" class="secondary" data-free-pdf="'+h(chosen.ID)+'">PDF herunterladen</button>':'')+'</div>'+
  '</form></section>';
@@ -58,6 +58,7 @@ async function gaSubmitFreeActivity(form,fd){
  BeginnIst:fd.get('BeginnIst'),EndeIst:fd.get('EndeIst'),Notiz:fd.get('Notiz'),
  TeilnehmerIDs:fd.getAll('participant'),AusbilderIDs:fd.getAll('trainer'),
  Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[]};
+ if(form.querySelector('[data-report-mail-field]'))data.BerichtMailSenden=fd.has('BerichtMailSenden')?'JA':'NEIN';
  if(!gaTrainingMin(data.BeginnIst,data.EndeIst))throw new Error('Bitte gültigen Beginn und ein späteres Ende eingeben.');
  if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte ein Fahrzeug erfassen.');
  if(!data.AusbilderIDs.length)throw new Error('Bitte mindestens einen Verantwortlichen auswählen.');

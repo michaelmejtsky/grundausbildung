@@ -51,3 +51,12 @@ state.checks.at(-1).Status='Erledigt';assert(!context.gaPagerFields(state.mitgli
 assert(context.gaAdminMailPage().includes('pager@example.test'));assert(html.includes("data.PagerErforderlich=fd.has('PagerErforderlich')?'JA':'NEIN'"));
 state.verwaltungsMails.PagerAuswahl=false;assert(!context.gaPagerFields(null).includes('name="PagerErforderlich"'));assert(context.gaPagerFields(null).includes('1.13.11'));
 state.user.Rolle='Ausbilder';assert.equal(context.gaPagerFields(null),'');state.user.Rolle='Administrator';
+
+state.user.Rolle='Organisator Erweiterte Ausbildung';state.turnusse.push({ID:'e',Bereich:'Erweiterte Ausbildung',Aktiv:'JA'});state.aufnahmeMails={ErweiterteAufnahme:true,PagerAuswahl:true,BlaulichtSMSLea:true,ZeugkammerAuswahl:true,TransponderKonfiguriert:true,PagerKonfiguriert:true,BlaulichtKonfiguriert:true,ZeugkammerKonfiguriert:true};
+for(const fn of ['gaTransponderFields','gaPagerFields','gaBlaulichtFields','gaZeugkammerFields'])assert(context[fn](null).includes('type="checkbox"'),fn);
+assert(!context.gaTransponderFields(null).includes('data-view="adminMails"'));assert.equal(context.gaAdminMailPage(),'');
+vm.runInContext(fs.readFileSync(path.join(root,'organizer-ui.js'),'utf8'),context,{filename:'organizer-ui.js'});
+const orgPage=context.gaOrganizerMembers();for(const field of ['TransponderErforderlich','PagerErforderlich','BlaulichtErforderlich','ZeugkammerAnfordern'])assert(orgPage.includes('name="'+field+'"'));
+assert(html.includes("['[data-pager-field]','PagerErforderlich']"));
+state.user.Rolle='Administrator';state.verwaltungsMails.ErweiterteAufnahme=true;state.verwaltungsMails.PagerAuswahl=true;state.verwaltungsMails.BlaulichtSMSLea=true;
+assert(context.gaTransponderFields({ID:'new',TurnusID:'e'}).includes('TransponderErforderlich'));state.user.Rolle='Administrator';

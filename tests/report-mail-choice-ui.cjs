@@ -1,0 +1,17 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),assert=require('node:assert/strict'),root=path.resolve(__dirname,'..');
+const calls=[],state={user:{ID:'org',Rolle:'Organisator Erweiterte Ausbildung'},berichtMail:{Auswahl:true,Aktiv:true},ausbildungsberichte:[],termine:[{ID:'term',TurnusID:'e'}],mitglieder:[{ID:'member',Aktiv:'JA',TurnusID:'e'}],erweiterteZuordnungen:[]};
+const ctx=vm.createContext({STATE:state,TERM:'term',document:{getElementById:()=>null},role:()=>state.user.Rolle,by:(rows,id)=>rows.find(r=>r.ID===id),confirm:()=>true,api:async(m,d)=>{calls.push({m,d});return {};},tip:()=>{},reload:async()=>{}});
+for(const file of ['training-report-ui.js','free-activity-ui.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),ctx,{filename:file});
+let view=ctx.gaReportMailField(false);assert(view.includes('name="BerichtMailSenden"'));assert(view.includes('checked'));assert(!ctx.gaReportMailField(true).includes('type="checkbox"'));
+state.berichtMail.Aktiv=false;view=ctx.gaReportMailField(false);assert(view.includes('disabled'));assert(!view.includes('checked'));state.berichtMail.Aktiv=true;
+const values={BeginnIst:'2026-11-04T08:00',EndeIst:'2026-11-04T10:00',FahrzeugeVerwendet:'NEIN',Titel:'Erweiterte Wartung',Kategorie:'Diensttätigkeit',Ort:'Feuerwehrhaus'};
+let checked=false,marker=true;const form={querySelector:()=>marker?{}:null},fd={get:key=>values[key]||'',getAll:key=>key==='trainer'?['org']:key==='member'||key==='participant'?['member']:[],has:key=>key==='BerichtMailSenden'&&checked};
+(async()=>{
+ await ctx.gaSaveTrainingAttendance(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'NEIN');assert.equal(calls.at(-1).m,'saveAttendance');
+ checked=true;await ctx.gaSaveTrainingAttendance(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'JA');
+ checked=false;await ctx.gaSubmitFreeActivity(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'NEIN');assert.equal(calls.at(-1).m,'saveFreeActivity');
+ checked=true;await ctx.gaSubmitFreeActivity(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'JA');
+ marker=false;await ctx.gaSaveTrainingAttendance(form,fd);assert(!Object.hasOwn(calls.at(-1).d,'BerichtMailSenden'),'Legacy/completed form has no new mail instruction');
+ console.log('Report-mail UI: checkbox enabled/configured state, no repeat request for corrections, and exact opted-in/out payload for attendance and free activities passed.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
