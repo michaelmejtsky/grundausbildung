@@ -78,7 +78,7 @@ call('setChecklistItemActive',{ID:dutyPoint.ID,Aktiv:'NEIN'});assert.throws(()=>
 member.Aktiv='NEIN';assert.throws(()=>call('previewMailAction',{LinkToken:current},''),/nicht mehr aktiv/);member.Aktiv='JA';
 const replace=ctx.gaReplace_;ctx.gaReplace_=()=>{throw Error('sheet unavailable');};assert.throws(()=>call('confirmMailAction',{LinkToken:current,Bestaetigt:true},''),/nicht vollständig/);ctx.gaReplace_=replace;assert.equal(duty.Status,'Offen');call('confirmMailAction',{LinkToken:current,Bestaetigt:true},'');assert.equal(duty.Status,'Erledigt');
 // New-member events create one transponder and one uniform mail, scoped to that member's own checklist.
-call('saveMember',{Vorname:'Neu',Nachname:'Mitglied',Email:'new@example.test',Telefon:'0670123456',Standesbuchnummer:'777',TurnusID:'g1',Ausbildungsweg:'Grundausbildung',TransponderErforderlich:'JA'});
+call('saveMember',{Vorname:'Neu',Nachname:'Mitglied',Email:'new@example.test',Telefon:'0670123456',Standesbuchnummer:'777',ZeugkammerAnfordern:'JA',TurnusID:'g1',Ausbildungsweg:'Grundausbildung',TransponderErforderlich:'JA'});
 const newMember=tables.Mitglieder.find(m=>m.Standesbuchnummer==='777'),keyMail=mails.find(m=>m.subject.includes('Transponder für Zugang benötigt')&&m.body.includes('777'));
 assert(keyMail);assert(mails.some(m=>m.subject.startsWith('Zeugkammer')&&m.body.includes('777')));const keyToken=rawTokens(keyMail)[0];assert(keyToken);
 const previousDutyStatus=duty.Status;call('confirmMailAction',{LinkToken:keyToken,Bestaetigt:true,MitgliedID:member.ID,CheckID:duty.ID},'');const trans=ctx.gaTransponderItem_(false);

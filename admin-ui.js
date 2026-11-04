@@ -349,7 +349,7 @@ function gaAdminMailPage(){
  (!s.TriggerAktiv?'<div class="notice">Der automatische Versandtrigger ist noch nicht aktiv. Empfänger speichern oder im bestehenden Google Sheet unter Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten einmalig ausführen und Berechtigungen erlauben.</div>':'')+
  '<section class="panel"><h3>So werden die Mails versendet</h3><p><strong>Transponder:</strong> Bei der Aufnahme eines GAB-Mitglieds „Transponder für Zugang erforderlich“ anhaken. Standesbuchnummer und Telefonnummer sind dafür erforderlich. Der Punkt bleibt offen, bis die Ausgabe unter Checklisten bestätigt wird. Die Anforderung wird einmalig per Mail verschickt.</p>'+
  '<p><strong>Blaulicht SMS/Lea:</strong> Beim GAB-Mitglied „Registrierung und Zuordnung erforderlich“ anhaken und speichern. Der hinterlegte Empfänger erhält Name, Standesbuchnummer, Telefon und E-Mail mit einem Bestätigungsbutton. Erst nach der tatsächlichen Registrierung und Zuordnung bestätigt er den Punkt als erledigt. Gewöhnliches Speichern versendet keine zweite Mail.</p>'+
- '<p><strong>Zeugkammer:</strong> Neue Mitglieder mit offenen Zeugkammer-Punkten werden automatisch gemeldet. Die Mail enthält pro Mitglied getrennte Buttons für die tatsächlich offenen Aufgaben. Der Empfänger bestätigt die Ausgabe auf einer persönlichen Seite; erst dann wird der jeweilige Punkt erledigt. Das gilt auch für den Transponder. Links gelten 30 Tage und geben keinen allgemeinen App-Zugang.</p>'+
+ '<p><strong>Zeugkammer:</strong> Beim neuen oder bestehenden Mitglied „Zeugkammer-Ausstattung anfordern (E-Mail)“ anhaken und speichern. Nur mit dieser Auswahl wird beim Speichern eine Anforderung verschickt; die bestehenden Bekleidungs-Checklistenpunkte bleiben erhalten. Die Mail enthält pro Mitglied getrennte Buttons für die tatsächlich offenen Aufgaben. Der Empfänger bestätigt die Ausgabe auf einer persönlichen Seite; erst dann wird der jeweilige Punkt erledigt. Das gilt auch für den Transponder. Links gelten 30 Tage und geben keinen allgemeinen App-Zugang.</p>'+
  '<p><strong>Block B:</strong> Unter Abschnittsmodule A & B die Ausbildung und den positiven Abschluss Truppmann samt Datum bestätigen. Pro Turnus und Abschlussdatum entsteht eine Sammelmail. Sie wird frühestens 5 Minuten nach dem letzten neuen positiven Abschluss versendet; die Prüfung läuft alle 5 Minuten. Nicht bestandene oder noch unbestätigte Teilnehmer werden nicht als Absolventen gemeldet. Später bestätigte Teilnehmer folgen in einer ergänzenden Meldung.</p>'+
  '<p><strong>Tätigkeitsberichte:</strong> Beim ersten vollständigen Abschluss eines Ausbildungstermins oder Speichern einer fertigen freien Tätigkeit wird das PDF automatisch vorgemerkt und bei der nächsten Versandprüfung als Anhang verschickt. Im PDF stehen die Standesbuchnummern direkt bei den Teilnehmernamen. Spätere Änderungen lösen keinen zweiten Versand aus.</p>'+
  '<p class="small muted">Normales Bearbeiten oder erneutes Speichern löst keinen zweiten Versand aus. Alle Mailtexte enthalten „Automatische Nachricht – bitte nicht antworten“.</p></section>'+
@@ -382,6 +382,15 @@ function gaBlaulichtFields(edit){
  (!STATE.verwaltungsMails.BlaulichtEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Blaulicht-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
  '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
 }
+function gaZeugkammerFields(edit){
+ if(role()!=='Administrator')return '';
+ const settings=STATE.verwaltungsMails;
+ if(!settings?.ZeugkammerAuswahl)return '<p class="small muted">Zeugkammer-Auswahl beim Mitglied nach Aktualisierung auf Code.gs 1.13.10 verfügbar.</p>';
+ return '<div data-zeugkammer-field><label class="inline-check"><input type="checkbox" name="ZeugkammerAnfordern" value="JA"> Zeugkammer-Ausstattung anfordern (E-Mail)</label>'+
+ '<p class="small muted">Beim Speichern eine Anforderungsmail für die offenen Zeugkammer-Punkte senden, z. B. Dienstbekleidung und Einsatzbekleidung. Die vorhandenen Checklistenpunkte und Erledigungen bleiben erhalten. Bereits versendete Anforderungen werden nicht wiederholt.</p>'+
+ (!settings.ZeugkammerEmpfaenger?'<p class="notice">Vor dem Anhaken bitte die Zeugkammer-Empfängeradresse unter Verwaltungs-Mails speichern.</p>':'')+
+ '<button type="button" class="smallbtn" data-view="adminMails">E-Mail-Einstellungen und Versandstatus</button></div>';
+}
 function gaMemberForm(edit){
  const options=(STATE.turnusse||[]).filter(t=>t.Aktiv==='JA').map(t=>'<option value="'+h(t.ID)+'" '+(edit?.TurnusID===t.ID?'selected':'')+'>'+h(t.Bezeichnung)+'</option>').join('');
  return '<section class="panel ga-member-form"><div class="row between"><h2>'+ (edit?'Mitglied bearbeiten':'Neues Mitglied aufnehmen')+'</h2><button type="button" class="secondary" data-ga-clear="member">Schließen</button></div>'+
@@ -397,7 +406,7 @@ function gaMemberForm(edit){
  '<option value="Grundausbildung" '+(edit?.Ausbildungsweg!=='Erweiterte Ausbildung'?'selected':'')+'>Grundausbildung</option>'+
  '<option value="Erweiterte Ausbildung" '+(edit?.Ausbildungsweg==='Erweiterte Ausbildung'?'selected':'')+'>Erweiterte Ausbildung</option></select></div>'+
  '<div><label>Turnus</label><select name="TurnusID" required><option value="">Bitte auswählen</option>'+options+'</select></div></div>'+
- gaTransponderFields(edit)+gaBlaulichtFields(edit)+
+ gaTransponderFields(edit)+gaBlaulichtFields(edit)+gaZeugkammerFields(edit)+
  (!edit?'<label class="inline-check"><input type="checkbox" name="SofortEinladen" value="JA"> Zugangs-Einladung per E-Mail senden</label>':'')+
  '<div class="btnline"><button class="primary" type="submit">'+(edit?'Änderungen speichern':'Mitglied aufnehmen')+'</button></div></form></section>';
 }

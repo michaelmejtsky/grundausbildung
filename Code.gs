@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.9',
+  VERSION: '1.13.10',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -1102,6 +1102,20 @@ function gaZeugkammerChecks_(member){
  const turns=gaRows_('Turnusse'),items=gaRows_('Checklistenpunkte');
  return gaRows_('MitgliedChecks').filter(c=>c.MitgliedID===member.ID&&c.Status==='Offen'&&items.some(i=>i.ID===c.PunktID&&i.Zustaendig==='Zeugkammer'&&gaChecklistInScope_(i,member,turns)));
 }
+function gaZeugkammerInput_(u,d,member,turnus){
+ if(!Object.prototype.hasOwnProperty.call(d,'ZeugkammerAnfordern'))return false;
+ gaRequire_(u,['Administrator']);
+ if(![true,false,'JA','NEIN'].includes(d.ZeugkammerAnfordern))throw new Error('Ungültige Zeugkammer-Auswahl.');
+ const requested=d.ZeugkammerAnfordern===true||d.ZeugkammerAnfordern==='JA';if(!requested)return false;
+ // Ein erneutes Speichern darf eine bereits versendete Anforderung nicht wiederholen.
+ const previous=d.ID?gaAdminMailRead_(gaAdminMailKey_('zeugkammer',d.ID)):null;
+ if(previous)return true;
+ if(!gaAdminMailSettings_().ZeugkammerEmpfaenger)throw new Error('Bitte zuerst unter Verwaltungs-Mails die Empfängeradresse der Zeugkammer hinterlegen.');
+ const items=gaRows_('Checklistenpunkte').filter(i=>i.Zustaendig==='Zeugkammer'&&gaChecklistInScope_(i,{...member,TurnusID:turnus.ID},[turnus]));
+ if(!items.length)throw new Error('Für diesen Ausbildungsbereich fehlen aktive Checklistenpunkte mit Zuständigkeit Zeugkammer. Bitte die bestehenden Bekleidungs-Punkte prüfen.');
+ if(d.ID&&!gaZeugkammerChecks_({...member,ID:d.ID}).length)throw new Error('Für dieses Mitglied bestehen keine offenen Zeugkammer-Aufgaben. Bereits erledigte Ausgaben bleiben erhalten.');
+ return true;
+}
 function gaSendZeugkammerRequest_(u,d){
  gaRequire_(u,['Administrator']);const member=gaFind_('Mitglieder',gaNeed_(d.MitgliedID,'Mitglied',100));
  if(!member||!gaBool_(member.Aktiv))throw new Error('Aktives Mitglied nicht gefunden.');
@@ -1264,7 +1278,7 @@ function gaAdminMailState_(){
  try{trigger=typeof ScriptApp!=='undefined'&&ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='gaVerwaltungsMailJob_');}catch(e){console.warn('Verwaltungs-Mail-Trigger noch nicht autorisiert.');}
  let point=null,pointError='';try{point=gaTransponderItem_(false);}catch(e){pointError=String(e.message||e);}
  let blaulicht=null,blaulichtError='';try{blaulicht=gaBlaulichtItem_(false);}catch(e){blaulichtError=String(e.message||e);}
- return {...s,Version:4,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
+ return {...s,Version:5,ZeugkammerAuswahl:true,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
   Verlauf:gaAdminMailRows_().sort((a,b)=>Number(b.AktualisiertMillis||0)-Number(a.AktualisiertMillis||0)).slice(0,40)
    .map(r=>({ID:r.key,Art:r.Art,Status:r.Status,Hinweis:r.Hinweis||'',MitgliedID:r.MitgliedID||'',BerichtID:r.BerichtID||'',TurnusID:r.TurnusID||'',Datum:r.Datum||'',
     Anzahl:r.Anzahl||0,Name:r.Name||'',GesendetAm:r.GesendetAm||'',FaelligMillis:r.FaelligMillis||0}))};
@@ -1489,7 +1503,7 @@ function gaSaveMember_(u,d){
   if(email&&!gaEmail_(email))throw new Error('E-Mail-Adresse ungültig.');
   const val={Vorname:gaNeed_(d.Vorname,'Vorname',100),Nachname:gaNeed_(d.Nachname,'Nachname',100),
     Email:email,Telefon:gaText_(d.Telefon,60),TurnusID:d.TurnusID,Aktiv:'JA',Geburtsdatum:gaDateOnly_(d.Geburtsdatum),Standesbuchnummer:gaText_(d.Standesbuchnummer,35),Ausbildungsweg:gaChoice_(d.Ausbildungsweg||turnus.Bereich,GA.AREAS,'Ausbildungsweg')};
-  const transponder=gaTransponderInput_(u,d,val,turnus),blaulicht=gaBlaulichtInput_(u,d,val,turnus);
+  const transponder=gaTransponderInput_(u,d,val,turnus),blaulicht=gaBlaulichtInput_(u,d,val,turnus),zeugkammer=gaZeugkammerInput_(u,d,val,turnus);
   const rows=gaRows_('Mitglieder');
   if(val.Standesbuchnummer&&rows.some(m=>m.ID!==d.ID&&m.Standesbuchnummer===val.Standesbuchnummer))throw new Error('Diese Standesbuchnummer wird bereits verwendet.');
   if(email&&rows.some(m=>m.ID!==d.ID&&m.Email.toLowerCase()===email))
@@ -1538,7 +1552,7 @@ function gaSaveMember_(u,d){
     gaLog_(u.ID,'BEARBEITEN','Mitglied',d.ID,{Vorher:existing.Vorname+' '+existing.Nachname,
       Nachher:val.Vorname+' '+val.Nachname,TurnusVorher:existing.TurnusID,TurnusNachher:val.TurnusID,
       EMailGeaendert:changedEmail,ZugangAktualisiert:!!user,EinladungenErsetzt:pending.length});
-    const transponderMessage=gaTransponderApply_(u,{...val,ID:d.ID},transponder)+gaBlaulichtApply_(u,{...val,ID:d.ID},blaulicht);
+    const transponderMessage=gaTransponderApply_(u,{...val,ID:d.ID},transponder)+gaBlaulichtApply_(u,{...val,ID:d.ID},blaulicht)+(zeugkammer?gaQueueZeugkammerMail_({...val,ID:d.ID}):'');
     return {ok:true,emailGeaendert:changedEmail,zugangAktualisiert:!!user,
       neueEinladungNoetig:pending.length>0,
       message:(changedEmail?
@@ -1554,7 +1568,7 @@ function gaSaveMember_(u,d){
   gaRows_('Benutzer').filter(x=>x.Rolle==='Fachverwaltung'&&gaBool_(x.Aktiv)&&candidates.some(i=>i.Zustaendig===x.Bereich)).forEach(x=>
     gaNotify_(x.ID,'Aufgabe','Neues Mitglied: '+val.Vorname+' '+val.Nachname,'Offene Checklistenpunkte prüfen.',val.ID));
   gaLog_(u.ID,'ANLEGEN','Mitglied',val.ID,{Vorname:val.Vorname,Nachname:val.Nachname,TurnusID:val.TurnusID});
-  return {ok:true,message:'Mitglied aufgenommen.'+gaTransponderApply_(u,val,transponder)+gaBlaulichtApply_(u,val,blaulicht)+gaQueueZeugkammerMail_(val)};
+  return {ok:true,message:'Mitglied aufgenommen.'+gaTransponderApply_(u,val,transponder)+gaBlaulichtApply_(u,val,blaulicht)+(zeugkammer?gaQueueZeugkammerMail_(val):'')};
 }
 function gaRemoveMember_(u,d){
   gaRequire_(u,['Administrator']);

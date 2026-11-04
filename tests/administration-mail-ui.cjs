@@ -37,3 +37,9 @@ state.checks.at(-1).Status='Erledigt';leaForm=context.gaBlaulichtFields(state.mi
 assert(context.gaAdminMailPage().includes('lea@example.test'));assert(html.includes("data.BlaulichtErforderlich=fd.has('BlaulichtErforderlich')?'JA':'NEIN'"));
 state.verwaltungsMails.BlaulichtSMSLea=false;assert(!context.gaBlaulichtFields(null).includes('name="BlaulichtErforderlich"'));assert(context.gaBlaulichtFields(null).includes('1.13.9'));
 state.user.Rolle='Ausbilder';assert.equal(context.gaBlaulichtFields(null),'');state.user.Rolle='Administrator';
+
+state.user.Rolle='Administrator';state.verwaltungsMails.ZeugkammerAuswahl=true;state.verwaltungsMails.ZeugkammerEmpfaenger='uniform@example.test';
+let uniform=context.gaZeugkammerFields(state.mitglieder[0]);assert(uniform.includes('name="ZeugkammerAnfordern"'));assert(!uniform.includes('checked'));assert(context.gaMemberForm(null).includes('Zeugkammer-Ausstattung anfordern'));
+assert(html.includes("data.ZeugkammerAnfordern=fd.has('ZeugkammerAnfordern')?'JA':'NEIN'"));
+state.verwaltungsMails.ZeugkammerAuswahl=false;assert(!context.gaZeugkammerFields(null).includes('name="ZeugkammerAnfordern"'));assert(context.gaZeugkammerFields(null).includes('1.13.10'));
+state.user.Rolle='Ausbilder';assert.equal(context.gaZeugkammerFields(null),'');state.user.Rolle='Administrator';

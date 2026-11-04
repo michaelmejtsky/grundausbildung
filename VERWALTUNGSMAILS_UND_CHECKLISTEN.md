@@ -1,13 +1,13 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.9
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.10
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.9 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.10 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.9, der statische Cache heißt ga-shell-v2.46.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.10, der statische Cache heißt ga-shell-v2.47.
 5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
@@ -65,7 +65,7 @@ Empfänger und Versanddaten sind nur für die Administration sichtbar. Ausbilder
 
 ## Mail-Buttons für Zeugkammer, Transponder und Erste Hilfe
 
-Unter **Verwaltungs-Mails** gibt es zusätzlich die **Zeugkammer-Empfänger** (auch mehrere Adressen mit Komma). Bei neuen Mitgliedern mit offenen, aktuell gültigen Zeugkammer-Punkten wird eine Mail pro Mitglied erstellt. Sie enthält getrennte Buttons beispielsweise für **Dienstbekleidung erhalten** und **Einsatzbekleidung erhalten**. Jeder Button bestätigt nur den konkreten Punkt dieser Person.
+Unter **Verwaltungs-Mails** gibt es zusätzlich die **Zeugkammer-Empfänger** (auch mehrere Adressen mit Komma). Beim neuen oder bestehenden Mitglied **Zeugkammer-Ausstattung anfordern (E-Mail)** anhaken und speichern, um eine Mail pro Mitglied mit offenen, aktuell gültigen Zeugkammer-Punkten anzufordern. Ohne Häkchen wird beim Speichern keine Zeugkammer-Mail verschickt. Sie enthält getrennte Buttons beispielsweise für **Dienstbekleidung erhalten** und **Einsatzbekleidung erhalten**. Jeder Button bestätigt nur den konkreten Punkt dieser Person.
 
 Für bereits vorhandene Mitglieder kann die Administration unter **Verwaltungs-Mails → Zeugkammer-Mail für vorhandene Mitglieder** eine noch nicht versendete Anforderung gezielt starten. Bei bereits versendeten Anforderungen steht im Verlauf **Offene Bestätigungslinks neu senden** zur Verfügung. Das ersetzt die bisherigen Links und setzt keine bereits erledigten Punkte zurück. Normales Bearbeiten eines Mitglieds versendet keine zusätzliche Zeugkammer-Mail.
 
@@ -87,3 +87,11 @@ Die Links sind 30 Tage gültig, eng auf die jeweilige Aufgabe begrenzt und nach 
 Alte, bereits vor dieser Version versendete Mails erhalten keine Buttons nachträglich. Bei Bedarf eine neue Ausgabe-Mail über den Verlauf anstoßen oder beim Erste-Hilfe-PDF **E-Mail erneut senden** verwenden. Dafür muss die neue Code.gs in der bestehenden Bereitstellung laufen; die neue Bestätigungsseite wird mit GitHub Pages veröffentlicht. Am Cloudflare Worker ist keine Änderung nötig, da die Aktionen über die vorhandene API-Weiterleitung laufen.
 
 Die Link-Prüfung ist lesend. Erst die ausdrückliche Bestätigung verwendet einen einmaligen, serverseitig gehashten Berechtigungsnachweis. Der Prüf- und Bestätigungsaufruf liefert keinen allgemeinen Mitglieder-, Konto- oder Dokumentenzugriff. Abgelaufene Link-Berechtigungen werden bereinigt; vorhandene Ausbildungs- und Checklistennachweise bleiben erhalten. Bestätigungen werden als E-Mail-Link-Aktion mit Zeitpunkt protokolliert, ohne eine Anmeldung einer bestimmten Person vorzutäuschen.
+
+## Zeugkammer-Auswahl beim Mitglied (1.13.10)
+
+Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** befindet sich neben den optionalen Transponder- und Blaulicht-Anforderungen das Häkchen **Zeugkammer-Ausstattung anfordern (E-Mail)**. Es löst beim Speichern gezielt die Anforderungsmail aus. Die bestehenden Punkte für Dienstbekleidung, Einsatzbekleidung und andere Aufgaben mit Zuständigkeit Zeugkammer werden wiederverwendet. Bereits erledigte Punkte und Notizen bleiben erhalten; nur offene Punkte erhalten Mailbuttons.
+
+Das Häkchen ist ein Versandauftrag für diesen Speichervorgang und beim erneuten Öffnen wieder leer. Es steuert weder den Ausbildungsstand noch die Gültigkeit bestehender Bekleidungs-Checklisten. Ohne Häkchen entsteht keine neue Anforderungsmail; offene Aufgaben bleiben offen. Bereits versendete Mails werden auch bei erneutem Anhaken nicht automatisch wiederholt. Versandstatus und gezieltes Erneuern abgelaufener Links stehen weiterhin unter **Verwaltungs-Mails** zur Verfügung.
+
+Empfänger sowie aktive Zeugkammer-Punkte müssen vor der Anforderung vorhanden sein. Das gilt für neue und bestehende Mitglieder beider Ausbildungsbereiche. Die Auswahl steht ausschließlich der Administration zur Verfügung. Ältere Oberflächen ohne Auswahl lösen beim Speichern ebenfalls keine automatische Zeugkammer-Mail mehr aus. Bisher vorgemerkte und bereits versendete Anforderungen sowie ihre gültigen Bestätigungslinks bleiben erhalten.
