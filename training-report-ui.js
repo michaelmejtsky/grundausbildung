@@ -26,7 +26,7 @@ function gaVehicleSuggestions(){
  return [...labels].sort((a,b)=>a.localeCompare(b,'de'));
 }
 function gaTrainingTrainerChoice(user,selected,report){
- const numbers=report?.AusbilderStandesbuchnummern||{},number=Object.prototype.hasOwnProperty.call(numbers,user.ID)?numbers[user.ID]:user.Standesbuchnummer||'';
+ const numbers=report?.AusbilderStandesbuchnummern||{},number=numbers[user.ID]||user.Standesbuchnummer||'';
  return '<div class="ga-report-trainer-row"><label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(user.ID)+'" '+(selected?'checked':'')+'><span>'+h(user.Name||'Ausbilder')+(user.ID===STATE.user.ID?' · Du':'')+(user.Aktiv!=='JA'?' · Einladung offen':'')+'</span></label>'+
  '<label class="ga-report-trainer-number">Stb.-Nr.<input type="text" maxlength="35" data-trainer-number="'+h(user.ID)+'" value="'+h(number)+'" placeholder="Nummer" '+(!STATE.berichtDetails?'disabled':'')+'></label></div>';
 }

@@ -20,7 +20,7 @@ function gaMenuHtml(tabs){
   ['Organisation',['rights','reports','messages','adminMails','pushadmin']]
  ]:organizer?[
   ['Start',['advOverview','notifications']],
-  ['Erweiterte Ausbildung',['advReady','advMembers','advInvite','advChecks','courses','projects','quizzes','terms','turnus','advQual']],
+  ['Erweiterte Ausbildung',['advReady','advMembers','advAccess','advInvite','advChecks','courses','projects','quizzes','terms','turnus','advQual']],
   ['Durchführung & FDISK',['attendance','trainingReports','freeActivities']],
   ['Auswertung & Kommunikation',['questionnaires','reviews','messages','reports']]
  ]:trainer?[
@@ -521,23 +521,26 @@ function gaUserRoleSelect(current,attr){
  return '<select '+attr+'>'+['Teilnehmer','Ausbilder','Fachverwaltung','Organisator Erweiterte Ausbildung','Administrator'].map(r=>
   '<option value="'+r+'" '+(r===current?'selected':'')+'>'+r+'</option>').join('')+'</select>';
 }
+function gaAccountForm(u){
+ if(!STATE.kontoBearbeitung)return '<p class="notice">Für Name, E-Mail, Standesbuchnummer und Zugangssperre zuerst Code.gs 1.13.15 aktualisieren.</p>';
+ const member=(STATE.mitglieder||[]).find(m=>m.ID===u.MitgliedID||String(m.Email||'').toLowerCase()===String(u.Email||'').toLowerCase()),participant=u.Rolle==='Teilnehmer';
+ return '<form data-form="accountEdit"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'"><div class="grid">'+
+ (participant?'<label>Vorname<input name="Vorname" required maxlength="100" value="'+h(member?.Vorname||'')+'"></label><label>Nachname<input name="Nachname" required maxlength="100" value="'+h(member?.Nachname||'')+'"></label>':'<label>Name<input name="Name" required maxlength="140" value="'+h(u.Name)+'"></label>')+
+ '<label>E-Mail / Login<input name="Email" required type="email" maxlength="240" value="'+h(u.Email)+'"></label>'+
+ (!participant?'<label>Dauerhafte Standesbuchnummer<input name="Standesbuchnummer" maxlength="35" value="'+h(u.Standesbuchnummer||'')+'" placeholder="Stb.-Nr. für Tätigkeitsberichte"></label>':'')+
+ '<label>Zugangsstatus<select name="Aktiv"><option value="JA" '+(u.Aktiv==='JA'?'selected':'')+' '+(u.Aktiv!=='JA'&&!u.KannAktiviertWerden?'disabled':'')+'>Aktiv</option><option value="NEIN" '+(u.Aktiv!=='JA'?'selected':'')+'>Inaktiv / gesperrt</option></select></label></div>'+
+ '<p class="small muted">E-Mail-Änderungen werden bei einem eindeutig verknüpften Mitglied mitgeführt. Passwort, ursprünglicher Turnus, Kurse, Quiz und Nachweise bleiben erhalten. Deaktivieren sperrt nur den Zugang.</p>'+
+ (u.Aktiv!=='JA'&&!u.KannAktiviertWerden?'<p class="notice">Dieser Zugang muss zuerst über einen Einladungslink aktiviert werden.</p>':'')+
+ '<button type="submit" class="primary">Zugangsdaten speichern</button></form>';
+}
 function gaUserEdit(u){
- const roles=['Zeugkammer','Administration','IT','Ausbildungsleitung'];
- return '<section class="panel ga-person-detail"><div class="row between"><div><p class="ga-eyebrow">BESTEHENDER ZUGANG</p>'+
- '<h2>'+h(u.Name)+'</h2><p class="muted">'+h(u.Email)+'</p></div>'+
- '<button type="button" class="secondary" data-ga-close-user="1">Schließen</button></div>'+
- '<p class="small muted">Du änderst nur die Benutzerrolle. Passwort, Login-Adresse, Mitgliedsprofil und Ausbildungsnachweise bleiben erhalten.</p>'+
- '<form data-form="roleChange"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'">'+
- '<div class="grid"><div><label>Hauptrolle</label>'+gaUserRoleSelect(u.Rolle,'name="Rolle" data-ga-user-role="1"')+'</div>'+
- '<div><label>Zuständigkeit für Fachverwaltung</label><select name="Bereich">'+
- '<option value="">Keine</option>'+roles.map(r=>'<option '+(r===u.Bereich?'selected':'')+'>'+r+'</option>').join('')+'</select>'+
- '<p class="small muted">Nur für Fachverwaltung erforderlich; z. B. Zeugkammer oder IT.</p></div></div>'+
- '<div class="ga-alert">Ein Rollenwechsel gilt für die bestehenden Anmeldungen und wird protokolliert. Ausbildungsnachweise werden nicht gelöscht.</div>'+
- '<div class="btnline"><button class="primary" type="submit">Rolle und Fachbereich speichern</button></div></form>'+
- '<div class="ga-account-reset"><h3>Passwort</h3><p class="muted small">Wenn das Passwort vergessen wurde, sende einen einmaligen Reset-Link. Der Benutzer legt sein neues Passwort selbst fest (30 Minuten gültig).</p>'+
- '<button type="button" class="secondary" data-reset-password="'+h(u.ID)+'">Passwort-Reset per E-Mail senden</button></div>'+
- (u.Rolle==='Ausbilder'?'<div class="ga-account-reset"><h3>Ausbilderrechte</h3><p class="small muted">Berechtigungen zum Anlegen, Freigeben und Bearbeiten von Kursen legst du separat fest.</p>'+
- '<button type="button" class="secondary" data-go-rights="'+h(u.ID)+'">Ausbilderrechte für diese Person öffnen</button></div>':'')+'</section>';
+ const roles=['Zeugkammer','Administration','IT','Ausbildungsleitung'],admin=role()==='Administrator';
+ return '<section class="panel ga-person-detail"><div class="row between"><div><p class="ga-eyebrow">BESTEHENDER ZUGANG</p><h2>'+h(u.Name)+'</h2><p class="muted">'+h(u.Email)+'</p></div>'+
+ '<button type="button" class="secondary" '+(admin?'data-ga-close-user="1"':'data-adv-account-close')+'>Schließen</button></div>'+gaAccountForm(u)+
+ (admin?'<details class="ga-member-fold"><summary>Rolle und Fachbereich ändern</summary><div class="ga-fold-body"><form data-form="roleChange"><input type="hidden" name="BenutzerID" value="'+h(u.ID)+'">'+
+ '<div class="grid"><div><label>Hauptrolle</label>'+gaUserRoleSelect(u.Rolle,'name="Rolle" data-ga-user-role="1"')+'</div><div><label>Zuständigkeit für Fachverwaltung</label><select name="Bereich"><option value="">Keine</option>'+roles.map(r=>'<option '+(r===u.Bereich?'selected':'')+'>'+r+'</option>').join('')+'</select></div></div><button type="submit" class="primary">Rolle und Fachbereich speichern</button></form></div></details>':'')+
+ (u.Aktiv==='JA'?'<div class="ga-account-reset"><h3>Passwort</h3><p class="muted small">Einmaligen Reset-Link an die hinterlegte E-Mail-Adresse senden.</p><button type="button" class="secondary" data-reset-password="'+h(u.ID)+'">Passwort-Reset per E-Mail senden</button></div>':!u.KannAktiviertWerden?'<div class="ga-account-reset"><button type="button" class="secondary" data-account-invite="'+h(u.ID)+'">Einladungslink erneut senden</button></div>':'')+
+ (admin&&u.Rolle==='Ausbilder'?'<div class="ga-account-reset"><button type="button" class="secondary" data-go-rights="'+h(u.ID)+'">Ausbilderrechte öffnen</button></div>':'')+'</section>';
 }
 function users(){
  const all=STATE.benutzer||[],members=STATE.mitglieder||[];
@@ -637,4 +640,12 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  if(role()!=='Administrator'||GA_ROLE_PREVIEW)return tip('Nur der Oberadmin kann Verwaltungsrechte zurückholen.',true);
  if(!confirm('Die erweiterte Mitgliedsverwaltung zurückholen? Kurszuordnungen und Ausbildungsnachweise bleiben erhalten.'))return;
  b.disabled=true;try{const r=await api('revokeAdvancedTransfer',{MitgliedID:b.dataset.revokeAdvTransfer,Bestaetigt:true});tip(r.message);await reload();}catch(e){tip(e.message,true);}finally{b.disabled=false;}
+});
+
+document.getElementById('app')?.addEventListener('click',async event=>{
+ const b=event.target.closest('[data-account-invite]');if(!b)return;
+ if(GA_ROLE_PREVIEW)return tip('Die Rollenvorschau ist schreibgeschützt.',true);
+ const u=(role()==='Administrator'?STATE.benutzer:STATE.verwalteteZugaenge||[]).find(u=>u.ID===b.dataset.accountInvite);if(!u)return;
+ if(!confirm('Einladungslink an '+u.Email+' senden?'))return;
+ b.disabled=true;try{const d=role()==='Administrator'?{Name:u.Name,Email:u.Email,Rolle:u.Rolle,Bereich:u.Bereich}:{MitgliedID:u.MitgliedID,Rolle:'Teilnehmer'};const r=await api('inviteUser',d);tip(r.message||'Einladung versendet.');await reload();}catch(e){tip(e.message,true);}finally{b.disabled=false;}
 });

@@ -1,7 +1,7 @@
 /* Organisator Erweiterte Ausbildung – getrennte Verwaltungsansichten V1.11 */
 'use strict';
 const GA_ORG_ROLE='Organisator Erweiterte Ausbildung';
-let GA_ORG_MEMBER_EDIT='';
+let GA_ORG_MEMBER_EDIT='',GA_ORG_ACCOUNT_EDIT='';
 function gaOrganizerOverview(now=Date.now()){
  const members=(STATE.mitglieder||[]).filter(m=>m.Aktiv==='JA');
  const readyKnown=Array.isArray(STATE.gabAbgeschlossen);
@@ -104,6 +104,13 @@ function gaOrganizerMembers(){
  '<button type="button" class="smallbtn" data-adv-edit="'+h(m.ID)+'">Bearbeiten</button>'+
  (m.ZugangAktiv?'<span class="tag ok">Zugang aktiv</span><button type="button" class="smallbtn" data-adv-reset="'+h(m.ID)+'">Passwort-Reset senden</button>':'<button type="button" class="smallbtn" data-adv-invite="'+h(m.ID)+'">Einladungslink senden</button>')+'</div>':'<p class="small muted">GAB-Stammdaten bleiben gesperrt. Teilnahme, Anwesenheit und Ergebnisse der erweiterten Module werden diesem Mitglied angerechnet.</p>')+'</div>').join('')+
  (members.length?'':'<p class="muted">Noch keine Teilnehmer zugeordnet.</p>')+'</div></section>';
+}
+function gaOrganizerAccounts(){
+ if(role()!=='Organisator Erweiterte Ausbildung')return '';
+ if(!STATE.kontoBearbeitung)return '<section class="panel"><h2>Eigene Zugänge</h2><p>Bitte zuerst Code.gs 1.13.15 aktualisieren.</p></section>';
+ const accounts=STATE.verwalteteZugaenge||[],selected=accounts.find(a=>a.ID===GA_ORG_ACCOUNT_EDIT);
+ return '<div class="ga-page-heading"><div><h2>Eigene Teilnehmerzugänge</h2><p>Nur direkt angelegte oder vom Oberadmin zur Verwaltung überstellte Teilnehmer. GAB-Gäste und andere Rollen bleiben geschützt.</p></div></div>'+
+ (selected?gaUserEdit(selected):'')+'<section class="panel"><div class="ga-person-list">'+accounts.map(u=>'<button type="button" class="ga-admin-person" data-adv-account="'+h(u.ID)+'"><span><strong>'+h(u.Name)+'</strong><small>'+h(u.Email)+'</small></span><span class="tag '+(u.Aktiv==='JA'?'ok':'warn')+'">'+(u.Aktiv==='JA'?'Aktiv':'Inaktiv')+'</span><span>›</span></button>').join('')+(accounts.length?'':'<p>Noch keine eigenen Teilnehmerzugänge vorhanden. Unter Teilnehmer einladen kannst du einen Zugang anlegen.</p>')+'</div></section>';
 }
 function gaOrganizerInvite(){
  const members=(STATE.mitglieder||[]).filter(x=>x.Aktiv==='JA');
@@ -234,4 +241,11 @@ document.getElementById('app')?.addEventListener('click',async event=>{
  if(!confirm((b.dataset.advReset?'Passwort-Reset':'Einladungslink')+' an die hinterlegte Adresse von '+name(m)+' senden?'))return;
  b.disabled=true;try{const r=await api(b.dataset.advReset?'resetPassword':'inviteUser',b.dataset.advReset?{BenutzerID:m.ZugangBenutzerID}:{MitgliedID:m.ID,Rolle:'Teilnehmer'});tip(r.message||'Link versendet.');await reload();}
  catch(e){tip(e.message,true);}finally{b.disabled=false;}
+});
+
+document.getElementById('app')?.addEventListener('click',event=>{
+ const b=event.target.closest('[data-adv-account],[data-adv-account-close]');if(!b)return;
+ if(b.hasAttribute('data-adv-account-close'))GA_ORG_ACCOUNT_EDIT='';
+ else if((STATE.verwalteteZugaenge||[]).some(u=>u.ID===b.dataset.advAccount))GA_ORG_ACCOUNT_EDIT=b.dataset.advAccount;
+ render();
 });

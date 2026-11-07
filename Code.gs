@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.14',
+  VERSION: '1.13.15',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -229,7 +229,7 @@ function gaSession_(token){
   }
  }
  const user=userId&&gaFind_('Benutzer',userId);
- if(!user||!gaBool_(user.Aktiv)||!user.Hash||fp!==user.Hash.slice(0,24))
+ if(!user||!gaBool_(user.Aktiv)||!user.Hash||fp!==gaSessionFingerprint_(user))
    throw new Error('Sitzung abgelaufen. Bitte erneut anmelden.');
  return user;
 }
@@ -250,9 +250,9 @@ function gaLogin(email,password,remember){
  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,'');
  const expires=Date.now()+(persistent?30*86400000:21600000);
  const key=gaTokenKey_(token);
- if(persistent)gaAppend_('Sitzungen',{ID:gaId_(),BenutzerID:u.ID,TokenHash:key,HashPrefix:u.Hash.slice(0,24),
+ if(persistent)gaAppend_('Sitzungen',{ID:gaId_(),BenutzerID:u.ID,TokenHash:key,HashPrefix:gaSessionFingerprint_(u),
   AblaufMillis:String(expires),WiderrufenAm:'',ErstelltAm:gaNow_()});
- cache.put(key,u.ID+'|'+u.Hash.slice(0,24)+'|'+expires,21600);
+ cache.put(key,u.ID+'|'+gaSessionFingerprint_(u)+'|'+expires,21600);
  gaLog_(u.ID,'LOGIN','Benutzer',u.ID,{AngemeldetBleiben:persistent});
  return {token,user:gaPublicUser_(u),version:GA.VERSION,rememberUntil:persistent?expires:null};
 }
@@ -456,7 +456,8 @@ function gaAdvancedOrganizerState_(u){
  const rights={KurseGestalten:true,KurseFreigeben:true,KurseBearbeiten:true,TerminePlanen:true,
   FrageboegenBearbeiten:true,BewertungenAnsehen:true,MeldungenBearbeiten:true};
  return {
-  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,mitgliederVerwaltenErweitert:true,
+  version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,organisatorErweitert:true,mitgliederVerwaltenErweitert:true,kontoBearbeitung:true,
+  verwalteteZugaenge:gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&gaEmail_(String(x.Email||'').trim())&&managedRaw.some(m=>String(m.Email||'').trim().toLowerCase()===String(x.Email||'').trim().toLowerCase())).map(x=>gaAccountVisible_(x,allMembers)),
   kurse:courses,turnusse,termine:terms,mitglieder:native.concat(guests),gabNamen,gabAbgeschlossen,
   erweiterteAbschluesse:gaAdvCompletionVisible_(native.concat(guests)),
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
@@ -712,7 +713,7 @@ function gaApi(method,data,token){
   gaOrganizerGuard_(u,method,d);
   const locked=fn=>gaLock_(()=>{if(u.Rolle==='Ausbilder'){u=gaTrainerContext_(u,u._gaTrainerArea);gaTrainerGuard_(u,method,d);}return fn();});
   if(gaIsAdvOrg_(u)&&!['state','logout','saveTurnus','setValidity','saveCourse','saveTermin','saveMember','inviteUser',
-   'saveAdvancedEnrollment','setCheck','saveChecklistItem','setChecklistItemActive','resetPassword','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
+   'saveAdvancedEnrollment','setCheck','saveChecklistItem','setChecklistItemActive','resetPassword','saveAccount','completeAdvancedTraining','saveProject','submitProject','reviewProject','getQuizEdit','saveQuiz','unlockQuiz','saveQuestionnaire',
    'saveAttendance','exportTrainingPdf','pdfTemplateInfo','saveFreeActivity','exportFreeActivityPdf',
    'sendMessage','sendDirect','readDirect','submitReport','setReportStatus','readNotification','registerPush','removePush','setPushRule','testPush'].includes(method))
     throw new Error('Keine Berechtigung außerhalb der erweiterten Ausbildung.');
@@ -744,6 +745,7 @@ function gaApi(method,data,token){
   if(method==='unlockQuiz')return locked(()=>gaUnlockQuiz_(u,d));
   if(method==='saveQuestionnaire')return locked(()=>gaSaveQuestionnaire_(u,d));
   if(method==='saveTermin')return locked(()=>gaSaveTermin_(u,d));
+  if(method==='saveAccount')return locked(()=>gaSaveAccount_(u,d));
   if(method==='saveMember')return locked(()=>gaSaveMember_(u,d));
   if(method==='removeMember')return locked(()=>gaRemoveMember_(u,d));
   if(method==='saveQualification')return locked(()=>gaSaveQualification_(u,d));
@@ -880,7 +882,7 @@ function gaBaseState_(u){
  const direktnachrichten=gaOptionalRows_('Direktnachrichten').filter(n=>n.VonBenutzerID===u.ID||n.AnBenutzerID===u.ID).slice(-200).reverse();
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
-  ...(admin?{verwaltungsMails:gaAdminMailState_(),erweiterteUeberstellungen:gaAdvTransferList_()}:{}),
+  ...(admin?{kontoBearbeitung:true,verwaltungsMails:gaAdminMailState_(),erweiterteUeberstellungen:gaAdvTransferList_()}:{}),
   ...(admin||trainer?{berichtMail:gaReportMailState_(),berichtDetails:{Version:1}}:{}),
   turnusse:visibleTurns,
   // Das Ausbildungsteam erhält den Katalog mit Unterlagen. Teilnehmer erhalten
@@ -900,7 +902,7 @@ function gaBaseState_(u){
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-  benutzer:admin?users.map(x=>({...gaPublicUser_(x),...(['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle)?{Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)}:{}),...(x.Rolle==='Ausbilder'?{Ausbildungsbereiche:gaTrainerAreas_(x)}:{})})):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)})):[],
+  benutzer:admin?users.map(x=>({...gaAccountVisible_(x,allMembers),...(['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle)?{Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)}:{}),...(x.Rolle==='Ausbilder'?{Ausbildungsbereiche:gaTrainerAreas_(x)}:{})})):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)})):[],
   kursProjekte:visibleProjects,
   ...(admin||trainer?{kursPlanung:gaCoursePlanVisible_(visibleCourses,visibleProjects)}:{}),
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows),Ausbildungsbereiche:gaTrainerAreas_(x)})):[],
@@ -1678,15 +1680,16 @@ function gaSaveMember_(u,d){
     // Das Mitglied bleibt über seine unveränderte ID mit sämtlichen Kursen, Nachweisen
     // und Checklisten verbunden. Bei vorhandenem Zugang wird die Login-Mail mitgeändert.
     // Offene Einladungen und Passwort-Reset-Links auf die alte Adresse werden ungültig.
-    const user=changedEmail?linked[0]:null;
-    const pending=user?gaOptionalRows_('Einladungen').filter(i=>i.BenutzerID===user.ID&&
+    const syncName=linked.length===1&&linked[0].Rolle==='Teilnehmer'&&linked[0].Name!==val.Vorname+' '+val.Nachname;
+    const user=changedEmail||syncName?linked[0]:null;
+    const pending=changedEmail&&user?gaOptionalRows_('Einladungen').filter(i=>i.BenutzerID===user.ID&&
       ['Offen','Passwortreset'].includes(i.Status)):[];
     const replaced=[];
     try{
       gaReplace_('Mitglieder',d.ID,val);
       replaced.push({sheet:'Mitglieder',id:d.ID,previous:existing});
       if(user){
-        gaReplace_('Benutzer',user.ID,{Email:email});
+        gaReplace_('Benutzer',user.ID,{Email:email,...(user.Rolle==='Teilnehmer'?{Name:val.Vorname+' '+val.Nachname}:{})});
         replaced.push({sheet:'Benutzer',id:user.ID,previous:user});
       }
       pending.forEach(i=>{
@@ -1850,13 +1853,14 @@ function gaReportRows_(kind,rows){const all=PropertiesService.getScriptPropertie
 function gaReportLocation_(report,term){return Object.prototype.hasOwnProperty.call(report||{},'Ort')?String(report.Ort||''):String(term?.Ort||'');}
 function gaReportTrainerNumber_(user,members){
  if(!user)return '';
+ const saved=PropertiesService.getScriptProperties().getProperty(GA_STAFF_NUMBER_PREFIX+encodeURIComponent(user.ID));if(saved!==null)return saved;
  if(user.Standesbuchnummer)return String(user.Standesbuchnummer);
  const email=String(user.Email||'').trim().toLowerCase(),matched=email?(members||gaRows_('Mitglieder')).filter(m=>String(m.Email||'').trim().toLowerCase()===email):[];
  return matched.length===1?String(matched[0].Standesbuchnummer||''):'';
 }
 function gaReportTrainerName_(user,members,numbers){
  if(!user)return '[Benutzer nicht gefunden · Stb.-Nr. nicht hinterlegt]';
- const number=Object.prototype.hasOwnProperty.call(numbers||{},user.ID)?numbers[user.ID]:gaReportTrainerNumber_(user,members);
+ const number=numbers?.[user.ID]||gaReportTrainerNumber_(user,members);
  return user.Name+' · Stb.-Nr. '+(number||'nicht hinterlegt');
 }
 function gaReportVehicleTable_(body,vehicles,aggregate=false){
@@ -2437,6 +2441,65 @@ function gaInviteUser_(actor,d) {
 }
 
 /** Eine Person, ein Zugang: Rollenwechsel statt doppeltem Benutzer. */
+// Kontaktdaten und Zugangssperre getrennt von Rolle und Ausbildungsnachweisen.
+const GA_STAFF_NUMBER_PREFIX='GA_STAFF_NUMBER_V1_',GA_ACCOUNT_SESSION_PREFIX='GA_ACCOUNT_SESSION_EPOCH_V1_';
+function gaSessionFingerprint_(user){const epoch=PropertiesService.getScriptProperties().getProperty(GA_ACCOUNT_SESSION_PREFIX+encodeURIComponent(user.ID));return user.Hash.slice(0,24)+(epoch?'@'+epoch:'');}
+function gaAccountVisible_(u,members){
+ const matches=gaEmail_(String(u.Email||'').trim())?(members||gaRows_('Mitglieder')).filter(m=>String(m.Email||'').trim().toLowerCase()===String(u.Email||'').trim().toLowerCase()):[];
+ return {...gaPublicUser_(u),MitgliedID:matches.length===1?matches[0].ID:'',KannAktiviertWerden:!!(u.Hash&&u.Salt),
+  ...(u.Rolle!=='Teilnehmer'?{Standesbuchnummer:gaReportTrainerNumber_(u,members)}:{})};
+}
+function gaSaveAccount_(actor,d){
+ gaRequire_(actor,['Administrator',GA_ADV_ROLE]);
+ const user=gaFind_('Benutzer',gaNeed_(d.BenutzerID,'Benutzer',100));if(!user)throw new Error('Zugang nicht gefunden.');
+ const members=gaRows_('Mitglieder'),emailOld=String(user.Email||'').trim().toLowerCase(),linked=gaEmail_(emailOld)?members.filter(m=>String(m.Email||'').trim().toLowerCase()===emailOld):[];
+ if(linked.length>1)throw new Error('Die bisherige E-Mail ist mehreren Mitgliedern zugeordnet. Bitte zunächst die Zuordnung klären.');
+ const member=linked[0];
+ if(gaIsAdvOrg_(actor)&&(user.Rolle!=='Teilnehmer'||!member||!gaAdvManaged_(member)))throw new Error('Nur eigene, zur Verwaltung freigegebene Teilnehmerzugänge bearbeiten.');
+ if(user.Rolle==='Teilnehmer'&&!member)throw new Error('Für diesen Teilnehmer fehlt die eindeutige Mitgliedszuordnung. Bitte zuerst in der Mitgliederverwaltung klären.');
+ if(d.Rolle&&d.Rolle!==user.Rolle)throw new Error('Rollen dürfen über diese Funktion nicht geändert werden.');
+ const email=gaText_(d.Email,240).toLowerCase();if(!gaEmail_(email))throw new Error('Bitte eine gültige E-Mail-Adresse angeben.');
+ const allUsers=gaRows_('Benutzer');if(allUsers.some(u=>u.ID!==user.ID&&String(u.Email||'').trim().toLowerCase()===email))throw new Error('Diese E-Mail wird bereits für einen anderen Zugang verwendet.');
+ if(members.some(m=>m.ID!==member?.ID&&String(m.Email||'').trim().toLowerCase()===email))throw new Error('Diese E-Mail ist bereits einem anderen Mitglied zugeordnet.');
+ const active=gaChoice_(d.Aktiv,['JA','NEIN'],'Zugangsstatus'),deactivate=gaBool_(user.Aktiv)&&active==='NEIN';
+ if(user.ID===actor.ID&&active==='NEIN')throw new Error('Den eigenen angemeldeten Zugang kannst du nicht selbst deaktivieren.');
+ if(user.Rolle==='Administrator'&&active==='NEIN'&&!allUsers.some(u=>u.ID!==user.ID&&u.Rolle==='Administrator'&&gaBool_(u.Aktiv)))throw new Error('Mindestens ein aktiver Administrator muss erhalten bleiben.');
+ if(active==='JA'&&!gaBool_(user.Aktiv)&&(!user.Hash||!user.Salt))throw new Error('Der Zugang wurde noch nicht aktiviert. Bitte einen Einladungslink senden.');
+ if(active==='JA'&&user.Rolle==='Teilnehmer'&&!gaBool_(member.Aktiv))throw new Error('Bitte zuerst das Mitglied wieder aktivieren.');
+ const memberChange=member&&email!==emailOld?{Email:email}:{};
+ let name;
+ if(user.Rolle==='Teilnehmer'){
+  const first=gaNeed_(d.Vorname??member.Vorname,'Vorname',100),last=gaNeed_(d.Nachname??member.Nachname,'Nachname',100);name=first+' '+last;
+  if(d.Name&&d.Name!==name)throw new Error('Teilnehmernamen bitte über Vorname und Nachname ändern.');
+  Object.assign(memberChange,{Vorname:first,Nachname:last});
+ }else name=gaNeed_(d.Name,'Name',140);
+ const props=PropertiesService.getScriptProperties(),propertyChanges=[];
+ if(Object.prototype.hasOwnProperty.call(d,'Standesbuchnummer')){
+  if(user.Rolle==='Teilnehmer')throw new Error('Die Standesbuchnummer des Teilnehmers wird in der Mitgliederverwaltung geführt.');
+  const number=String(d.Standesbuchnummer??'').trim();if(number.length>35||/[\r\n\t]/.test(number))throw new Error('Bitte eine gültige Standesbuchnummer mit höchstens 35 Zeichen angeben.');
+  propertyChanges.push({key:GA_STAFF_NUMBER_PREFIX+encodeURIComponent(user.ID),value:number});
+ }
+ if(deactivate||!gaBool_(user.Aktiv)&&active==='JA')propertyChanges.push({key:GA_ACCOUNT_SESSION_PREFIX+encodeURIComponent(user.ID),value:gaId_()});
+ const updates=[{sheet:'Benutzer',row:user,change:{Name:name,Email:email,Aktiv:active}}];
+ if(member&&Object.keys(memberChange).length)updates.push({sheet:'Mitglieder',row:member,change:memberChange});
+ if(email!==emailOld||deactivate)gaOptionalRows_('Einladungen').filter(i=>i.BenutzerID===user.ID&&['Offen','Passwortreset'].includes(i.Status)).forEach(row=>updates.push({sheet:'Einladungen',row,change:{Status:'Ersetzt'}}));
+ if(deactivate){
+  gaOptionalRows_('Sitzungen').filter(r=>r.BenutzerID===user.ID&&!r.WiderrufenAm).forEach(row=>updates.push({sheet:'Sitzungen',row,change:{WiderrufenAm:gaNow_()}}));
+  gaOptionalRows_('PushGeraete').filter(r=>r.BenutzerID===user.ID&&gaBool_(r.Aktiv)).forEach(row=>updates.push({sheet:'PushGeraete',row,change:{Aktiv:'NEIN',AktualisiertAm:gaNow_()}}));
+ }
+ const applied=[],written=[];
+ try{
+  for(const item of updates){gaReplace_(item.sheet,item.row.ID,item.change);applied.push(item);}
+  for(const item of propertyChanges){const old=props.getProperty(item.key);props.setProperty(item.key,item.value);written.push({...item,old});}
+ }catch(e){
+  for(const item of written.reverse())try{if(item.old===null)props.deleteProperty(item.key);else props.setProperty(item.key,item.old);}catch(err){console.warn('Zugangs-Zusatzdaten konnten nicht zurückgesetzt werden.');}
+  for(const item of applied.reverse())try{gaReplace_(item.sheet,item.row.ID,item.row);}catch(err){console.warn('Zugangsänderung konnte nicht vollständig zurückgesetzt werden.');}
+  throw new Error('Änderung konnte nicht vollständig gespeichert werden: '+String(e.message||e));
+ }
+ try{gaLog_(actor.ID,'ZUGANG_BEARBEITEN','Benutzer',user.ID,{EmailGeaendert:email!==emailOld,Aktiv:active,NameGeaendert:name!==user.Name,StandesbuchnummerGeaendert:propertyChanges.some(p=>p.key.startsWith(GA_STAFF_NUMBER_PREFIX))});}catch(e){console.warn('Zugang gespeichert; Protokoll konnte nicht geschrieben werden.');}
+ return {ok:true,message:deactivate?'Zugang deaktiviert. Anmeldungen und offene Links sind ungültig; Ausbildungsnachweise bleiben erhalten.':'Zugang gespeichert. Bestehendes Passwort und Ausbildungsnachweise bleiben erhalten.',emailGeaendert:email!==emailOld,neueEinladungNoetig:email!==emailOld&&!gaBool_(user.Aktiv)};
+}
+
 function gaChangeUserRole_(actor,d){
  gaRequire_(actor,['Administrator']);
  const id=gaNeed_(d.BenutzerID,'Benutzer-ID',100);
