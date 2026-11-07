@@ -25,10 +25,18 @@ function gaVehicleSuggestions(){
  (STATE.ausbildungsberichte||[]).forEach(r=>gaReportVehicles(r).forEach(v=>{if(v.Fahrzeug)labels.add(String(v.Fahrzeug));}));
  return [...labels].sort((a,b)=>a.localeCompare(b,'de'));
 }
+function gaTrainingTrainerChoice(user,selected,report){
+ const numbers=report?.AusbilderStandesbuchnummern||{},number=Object.prototype.hasOwnProperty.call(numbers,user.ID)?numbers[user.ID]:user.Standesbuchnummer||'';
+ return '<div class="ga-report-trainer-row"><label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(user.ID)+'" '+(selected?'checked':'')+'><span>'+h(user.Name||'Ausbilder')+(user.ID===STATE.user.ID?' · Du':'')+(user.Aktiv!=='JA'?' · Einladung offen':'')+'</span></label>'+
+ '<label class="ga-report-trainer-number">Stb.-Nr.<input type="text" maxlength="35" data-trainer-number="'+h(user.ID)+'" value="'+h(number)+'" placeholder="Nummer" '+(!STATE.berichtDetails?'disabled':'')+'></label></div>';
+}
+function gaTrainingTrainerNumbers(form,ids){
+ const numbers={};for(const input of form.querySelectorAll('[data-trainer-number]')){const id=input.getAttribute('data-trainer-number');if(ids.includes(id))numbers[id]=input.value.trim();}return numbers;
+}
 function gaVehicleRow(vehicle={},index=0){
  return '<div class="ga-vehicle-row" data-vehicle-row>'+
   '<label>Fahrzeug / Funkrufname<input data-vehicle-name list="gaVehicleNames" maxlength="80" placeholder="z. B. HLF 2 St. Pölten" value="'+h(vehicle.Fahrzeug||'')+'"></label>'+
-  '<label>Gefahrene Kilometer<input type="text" inputmode="decimal" data-vehicle-km maxlength="10" placeholder="z. B. 12,5" value="'+h(vehicle.Kilometer===undefined?'':String(vehicle.Kilometer).replace('.',','))+'"></label>'+
+  '<label>Gefahrene Kilometer (falls vorhanden)<input type="text" inputmode="decimal" data-vehicle-km maxlength="10" placeholder="z. B. 12,5" value="'+h(vehicle.Kilometer===undefined?'':String(vehicle.Kilometer).replace('.',','))+'"></label>'+
   '<button type="button" class="secondary ga-vehicle-remove" data-training-vehicle-remove aria-label="Fahrzeug entfernen" title="Fahrzeug entfernen">×</button>'+
   '</div>';
 }
@@ -69,9 +77,7 @@ function gaAttendancePage(){
  if(!trainers.some(u=>u.ID===STATE.user.ID))trainers.unshift({ID:STATE.user.ID,Name:STATE.user.Name,Rolle:STATE.user.Rolle,Aktiv:'JA'});
  const list=members.map(m=>'<label class="ga-attendance-choice"><input type="checkbox" name="member" value="'+h(m.ID)+'" '+
    (previous.find(x=>x.MitgliedID===m.ID)?.Anwesend==='JA'?'checked':'')+'><span>'+h(name(m))+'</span></label>').join('');
- const teacherOptions=trainers.map(u=>'<label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(u.ID)+'" '+
-  (chosen.includes(u.ID)?'checked':'')+'><span>'+h(u.Name||'Ausbilder')+(u.ID===STATE.user.ID?' · Du':'')+
-  (u.Aktiv!=='JA'?' · Einladung offen':'')+'</span></label>').join('');
+ const teacherOptions=trainers.map(u=>gaTrainingTrainerChoice(u,chosen.includes(u.ID),report)).join('');
  const links=safeLinks(c?.Links),vehicles=gaReportVehicles(report);
  const startTime=String(report?.BeginnIst||term.Beginn||'').slice(0,16),
   endTime=String(report?.EndeIst||term.Ende||'').slice(0,16);
@@ -91,6 +97,7 @@ function gaAttendancePage(){
  '<details class="ga-course-section" id="gaFinishTraining" '+(completed?'':'')+'><summary><span class="ga-course-section-icon">2</span>'+
  '<span><strong>Ausbildung abschließen</strong><small>Anwesende, Ist-Zeiten, Ausbilder und Fahrzeuge</small></span></summary>'+
  '<div class="ga-course-section-body"><form data-form="attendance" class="ga-training-form">'+
+ '<section class="ga-training-fieldset"><label>Örtlichkeit der Schulung<input name="Ort" maxlength="160" placeholder="z. B. Lehrsaal, Übungsplatz oder Adresse" value="'+h(Object.prototype.hasOwnProperty.call(report||{},'Ort')?report.Ort:term.Ort||'')+'" '+(!STATE.berichtDetails?'disabled':'')+'></label>'+(!STATE.berichtDetails?'<p class="notice">Für Örtlichkeit und Ausbildernummern zuerst Code.gs 1.13.14 aktualisieren.</p>':'')+'</section>'+
  '<section class="ga-training-fieldset"><h3>Beginn und Ende</h3><div class="ga-training-time-grid">'+
  '<label>Beginn<div class="ga-training-time-entry"><input type="datetime-local" name="BeginnIst" required value="'+h(startTime)+'"><button type="button" class="secondary" data-training-now="begin">Jetzt</button></div></label>'+
  '<label>Ende<div class="ga-training-time-entry"><input type="datetime-local" name="EndeIst" required value="'+h(endTime)+'"><button type="button" class="secondary" data-training-now="end">Jetzt</button></div></label></div>'+
@@ -190,9 +197,9 @@ function gaTrainingVehiclesFromForm(form){
   const Fahrzeug=String(row.querySelector('[data-vehicle-name]')?.value||'').trim();
   const Kilometer=String(row.querySelector('[data-vehicle-km]')?.value||'').trim();
   if(!Fahrzeug&&!Kilometer)return null;
-  if(!Fahrzeug||!Kilometer)throw new Error('Fahrzeug '+(i+1)+': Bitte Fahrzeugname und Kilometer vollständig angeben.');
-  if(!/^\d+(?:[,.]\d{1,2})?$/.test(Kilometer))throw new Error('Fahrzeug '+(i+1)+': Kilometer als Zahl angeben (z. B. 12,5).');
-  return {Fahrzeug,Kilometer};
+  if(!Fahrzeug)throw new Error('Fahrzeug '+(i+1)+': Bitte Fahrzeugname angeben.');
+  if(Kilometer&&!/^\d+(?:[,.]\d{1,2})?$/.test(Kilometer))throw new Error('Fahrzeug '+(i+1)+': Kilometer als Zahl angeben (z. B. 12,5).');
+  return {Fahrzeug,Kilometer:Kilometer||'0'};
  }).filter(Boolean);
 }
 async function gaSaveTrainingAttendance(form,fd){
@@ -208,6 +215,7 @@ async function gaSaveTrainingAttendance(form,fd){
  const data={TerminID:term.ID,BeginnIst:begin,EndeIst:end,Notiz:fd.get('Notiz')||'',
   Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[],AusbilderIDs:teachers,
   Anwesend:members.map(m=>({MitgliedID:m.ID,Anwesend:present.has(m.ID)}))};
+ if(STATE.berichtDetails){data.Ort=String(fd.get('Ort')||'').trim();data.AusbilderStandesbuchnummern=gaTrainingTrainerNumbers(form,teachers);}
  if(form.querySelector('[data-report-mail-field]'))data.BerichtMailSenden=fd.has('BerichtMailSenden')?'JA':'NEIN';
  if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte mindestens ein Fahrzeug erfassen.');
  if(!confirm('Ausbildung mit '+present.size+' anwesenden Teilnehmern, '+teachers.length+

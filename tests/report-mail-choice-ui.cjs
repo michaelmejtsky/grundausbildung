@@ -13,5 +13,9 @@ let checked=false,marker=true;const form={querySelector:()=>marker?{}:null},fd={
  checked=false;await ctx.gaSubmitFreeActivity(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'NEIN');assert.equal(calls.at(-1).m,'saveFreeActivity');
  checked=true;await ctx.gaSubmitFreeActivity(form,fd);assert.equal(calls.at(-1).d.BerichtMailSenden,'JA');
  marker=false;await ctx.gaSaveTrainingAttendance(form,fd);assert(!Object.hasOwn(calls.at(-1).d,'BerichtMailSenden'),'Legacy/completed form has no new mail instruction');
+ state.berichtDetails={Version:1};ctx.h=s=>String(s??'');values.Ort='Übungshof';form.querySelectorAll=()=>[{getAttribute:()=> 'org',value:'0012'},{getAttribute:()=> 'other',value:'PRIVATE'}];
+ marker=true;await ctx.gaSaveTrainingAttendance(form,fd);assert.equal(calls.at(-1).d.Ort,'Übungshof');assert.equal(calls.at(-1).d.AusbilderStandesbuchnummern.org,'0012');assert(!calls.at(-1).d.AusbilderStandesbuchnummern.other);
+ await ctx.gaSubmitFreeActivity(form,fd);assert.equal(calls.at(-1).d.AusbilderStandesbuchnummern.org,'0012');
+ const choice=ctx.gaTrainingTrainerChoice({ID:'org',Name:'Ausbilder',Standesbuchnummer:'0018'},true,{AusbilderStandesbuchnummern:{org:'0045'}});assert(choice.includes('value="0045"'));assert(choice.includes('data-trainer-number="org"'));
  console.log('Report-mail UI: checkbox enabled/configured state, no repeat request for corrections, and exact opted-in/out payload for attendance and free activities passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

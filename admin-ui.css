@@ -523,3 +523,6 @@
 .ga-self-check-grid>span{display:block;background:#f2f7fc;border:1px solid #deebf4;border-radius:9px;padding:9px 11px;font-size:12px}
 #gaParticipantCheckFeedback{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65;margin-top:12px}
 @media(max-width:600px){.ga-self-check-grid{grid-template-columns:1fr}}
+
+/* Stb.-Nr. direkt neben dem dokumentierten Ausbilder. */
+.ga-report-trainer-row{display:grid;grid-template-columns:minmax(0,1fr) 125px;gap:12px;align-items:center}.ga-report-trainer-number{font-size:.85rem;margin:0}.ga-report-trainer-number input{margin-top:4px}.ga-report-trainer-row .ga-attendance-choice{margin:0}@media(max-width:480px){.ga-report-trainer-row{grid-template-columns:minmax(0,1fr) 95px;gap:8px}}

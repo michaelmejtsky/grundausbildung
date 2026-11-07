@@ -30,7 +30,7 @@ function gaFreeActivityPage(){
  '<form data-form="freeActivity"><input type="hidden" name="ID" value="'+h(chosen?.ID||'')+'">'+
  '<div class="ga-training-time-grid"><label>Bezeichnung<input required maxlength="160" name="Titel" placeholder="z. B. Gerätewartung, Übungsdienst" value="'+h(item.Titel||'')+'"></label>'+
  '<label>Art der Tätigkeit<select name="Kategorie">'+['Ausbildung','Übung','Diensttätigkeit','Sonstige'].map(k=>'<option value="'+k+'" '+((item.Kategorie||'Übung')===k?'selected':'')+'>'+k+'</option>').join('')+'</select></label></div>'+
- '<label>Ort<input name="Ort" maxlength="160" value="'+h(item.Ort||'')+'" placeholder="z. B. Feuerwehrhaus"></label>'+
+ '<label>Örtlichkeit der Tätigkeit<input name="Ort" maxlength="160" value="'+h(item.Ort||'')+'" placeholder="z. B. Feuerwehrhaus"></label>'+
  '<div class="ga-training-time-grid">'+
  '<label>Beginn (tatsächlich)<div class="ga-training-time-entry"><input type="datetime-local" name="BeginnIst" required value="'+h(String(item.BeginnIst||'').slice(0,16))+'"><button type="button" class="secondary" data-training-now="begin">Jetzt</button></div></label>'+
  '<label>Ende (tatsächlich)<div class="ga-training-time-entry"><input type="datetime-local" name="EndeIst" required value="'+h(String(item.EndeIst||'').slice(0,16))+'"><button type="button" class="secondary" data-training-now="end">Jetzt</button></div></label></div>'+
@@ -38,8 +38,7 @@ function gaFreeActivityPage(){
  '<details class="ga-subsection"><summary>Beteiligte Mitglieder <span class="ga-inline-count" data-training-present-count>'+pIds.filter(Boolean).length+'</span></summary>'+
  '<div class="ga-attendance-list">'+members.map(m=>'<label class="ga-attendance-choice"><input type="checkbox" name="participant" value="'+h(m.ID)+'" '+(pIds.includes(m.ID)?'checked':'')+'><span>'+h(name(m))+'</span></label>').join('')+'</div></details>'+
  '<details class="ga-subsection"><summary>Mitwirkende Ausbilder / Verantwortliche</summary><div class="ga-attendance-list">'+
- trainers.map(u=>'<label class="ga-attendance-choice"><input type="checkbox" name="trainer" value="'+h(u.ID)+'" '+(tIds.includes(u.ID)?'checked':'')+'><span>'+h(u.Name)+
- (u.Aktiv!=='JA'?' · Einladung offen':'')+'</span></label>').join('')+'</div></details>'+
+ trainers.map(u=>gaTrainingTrainerChoice(u,tIds.includes(u.ID),item)).join('')+'</div></details>'+
  '<section class="ga-training-fieldset"><h3>Fahrzeuge verwendet?</h3><div class="ga-training-vehicle-choice">'+
  '<label><input type="radio" name="FahrzeugeVerwendet" value="NEIN" '+(!used?'checked':'')+'> Nein</label>'+
  '<label><input type="radio" name="FahrzeugeVerwendet" value="JA" '+(used?'checked':'')+'> Ja</label></div>'+
@@ -58,6 +57,7 @@ async function gaSubmitFreeActivity(form,fd){
  BeginnIst:fd.get('BeginnIst'),EndeIst:fd.get('EndeIst'),Notiz:fd.get('Notiz'),
  TeilnehmerIDs:fd.getAll('participant'),AusbilderIDs:fd.getAll('trainer'),
  Fahrzeuge:fd.get('FahrzeugeVerwendet')==='JA'?gaTrainingVehiclesFromForm(form):[]};
+ if(STATE.berichtDetails)data.AusbilderStandesbuchnummern=gaTrainingTrainerNumbers(form,data.AusbilderIDs);
  if(form.querySelector('[data-report-mail-field]'))data.BerichtMailSenden=fd.has('BerichtMailSenden')?'JA':'NEIN';
  if(!gaTrainingMin(data.BeginnIst,data.EndeIst))throw new Error('Bitte gültigen Beginn und ein späteres Ende eingeben.');
  if(fd.get('FahrzeugeVerwendet')==='JA'&&!data.Fahrzeuge.length)throw new Error('Bitte ein Fahrzeug erfassen.');

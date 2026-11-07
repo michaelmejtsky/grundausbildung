@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.13',
+  VERSION: '1.13.14',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -461,7 +461,7 @@ function gaAdvancedOrganizerState_(u){
   erweiterteAbschluesse:gaAdvCompletionVisible_(native.concat(guests)),
   erweiterteZuordnungen:assignments.map(x=>({MitgliedID:x.MitgliedID,TurnusID:x.TurnusID})),
   teilnahmen:attend,benutzer:gaRows_('Benutzer').filter(x=>['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle))
-   .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})),
+   .map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)})),
   kursProjekte:projects,
   kursPlanung:gaCoursePlanVisible_(courses,projects),
   gueltigkeit:gaValidityVisible_(validity,turnusse,courses,projects),
@@ -475,11 +475,11 @@ function gaAdvancedOrganizerState_(u){
   qualifikationen:native.filter(x=>gaBool_(x.Aktiv)).map(m=>gaQualificationStatus_(m,
    gaOptionalRows_('QualifikationMitglieder'),gaOptionalRows_('KursAnforderungen'),courses,terms,attend,
    turnusse,cfg,attempts,[],assignments,{},validity)).map(q=>({MitgliedID:q.MitgliedID,Name:q.Name,TurnusID:q.TurnusID,Ausbildungsweg:GA_ADV_AREA,Fortschritt:q.Fortschritt,PflichtGesamt:q.PflichtGesamt,PflichtAbsolviert:q.PflichtAbsolviert})),
-  ausbildungsberichte:gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID)),
-  freieTaetigkeiten:gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA),
+  ausbildungsberichte:gaReportRows_('ausbildungsbericht',gaOptionalRows_('Ausbildungsberichte').filter(x=>termIDs.has(x.TerminID))),
+  freieTaetigkeiten:gaReportRows_('freieTaetigkeit',gaOptionalRows_('FreieTaetigkeiten').filter(x=>x.Bereich===GA_ADV_AREA)),
   meldungen:gaOptionalRows_('Meldungen').filter(x=>x.KursID&&courseIDs.has(x.KursID)||x.ErstelltVon===u.ID),
   nachrichten:gaRows_('Nachrichten').filter(x=>x.VonBenutzerID===u.ID),
-  meMember:null,aufnahmeMails:gaIntakeMailState_(),berichtMail:gaReportMailState_(),
+  meMember:null,aufnahmeMails:gaIntakeMailState_(),berichtMail:gaReportMailState_(),berichtDetails:{Version:1},
   checklistenpunkte:intakeItems,checks:intakeChecks.filter(c=>gaBool_(intakeItems.find(i=>i.ID===c.PunktID)?.Aktiv)),checkArchiv:intakeChecks.filter(c=>!gaBool_(intakeItems.find(i=>i.ID===c.PunktID)?.Aktiv)),eigeneBewertungen:[],offeneBewertungen:[],
   ersteHilfeNachweise:[],abschnittNachweise:[],kursAnforderungen:[],berechtigungen:[],
   direktnachrichten:gaOptionalRows_('Direktnachrichten').filter(x=>x.VonBenutzerID===u.ID||x.AnBenutzerID===u.ID).slice(-100).reverse().map(x=>{
@@ -675,7 +675,8 @@ function gaTrainerState_(u){
  // Ausbilder verwalten keine persönlichen GAB-Qualifikationen ihrer erweiterten Gäste.
  s.qualifikationen=s.qualifikationen.filter(q=>s.meMember&&q.MitgliedID===s.meMember.ID);s.erweiterteAbschluesse=s.erweiterteAbschluesse.filter(q=>s.meMember&&q.MitgliedID===s.meMember.ID);
  const users=gaRows_('Benutzer');
- s.benutzer=users.filter(x=>gaStaffAreaAllowed_(x,area)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Ausbildungsbereiche:x.Rolle==='Ausbilder'?gaTrainerAreas_(x):[]}));
+ const staffMembers=gaRows_('Mitglieder');
+ s.benutzer=users.filter(x=>gaStaffAreaAllowed_(x,area)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Standesbuchnummer:gaReportTrainerNumber_(x,staffMembers),Ausbildungsbereiche:x.Rolle==='Ausbilder'?gaTrainerAreas_(x):[]}));
  s.nachrichtenEmpfaenger=s.nachrichtenEmpfaenger.filter(x=>x.Rolle!=='Teilnehmer'||(()=>{const m=gaOwnMember_(x);return !!m&&memberIds.has(m.ID);})()).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv}));
  s.kursPlanung=gaCoursePlanVisible_(s.kurse,s.kursProjekte);
  s.gueltigkeit=gaValidityVisible_(gaValidityConfig_(),s.turnusse,s.kurse,s.kursProjekte);
@@ -859,8 +860,8 @@ function gaBaseState_(u){
  const qrows=gaOptionalRows_('QualifikationMitglieder'),reqs=gaOptionalRows_('KursAnforderungen');
  const quizCfg=gaOptionalRows_('QuizKurse'),quizAttempts=gaOptionalRows_('QuizVersuche'),quizUnlocks=gaOptionalRows_('QuizFreigaben');
  const abschnitt=gaOptionalRows_('AbschnittNachweise');
- const trainingReports=admin||trainer?gaOptionalRows_('Ausbildungsberichte'):[];
- const freeActivities=admin||trainer?gaOptionalRows_('FreieTaetigkeiten'):[];
+ const trainingReports=admin||trainer?gaReportRows_('ausbildungsbericht',gaOptionalRows_('Ausbildungsberichte')):[];
+ const freeActivities=admin||trainer?gaReportRows_('freieTaetigkeit',gaOptionalRows_('FreieTaetigkeiten')):[];
  const predecessors=gaCoursePredecessors_();
  const validity=gaValidityConfig_();
  const personalScope=gaPersonalCourseScope_(own,assignments,allTermine,ownAttendance,quizAttempts,abschnitt);
@@ -880,7 +881,7 @@ function gaBaseState_(u){
  return {
   version:GA.VERSION,user:gaPublicUser_(u),rechte:rights,
   ...(admin?{verwaltungsMails:gaAdminMailState_(),erweiterteUeberstellungen:gaAdvTransferList_()}:{}),
-  ...(admin||trainer?{berichtMail:gaReportMailState_()}:{}),
+  ...(admin||trainer?{berichtMail:gaReportMailState_(),berichtDetails:{Version:1}}:{}),
   turnusse:visibleTurns,
   // Das Ausbildungsteam erhält den Katalog mit Unterlagen. Teilnehmer erhalten
   // ausschließlich eigene Kursinformationen ohne Präsentations- oder Dokumentenlinks.
@@ -899,7 +900,7 @@ function gaBaseState_(u){
   pushGeraeteAnzahl:devices.filter(x=>x.BenutzerID===u.ID&&gaBool_(x.Aktiv)).length,
   pushRegeln:admin?users.filter(x=>gaBool_(x.Aktiv)).map(x=>({BenutzerID:x.ID,Name:x.Name,Rolle:x.Rolle,...gaPushRule_(x.ID,pushRulesRows),
    Geraete:devices.filter(d=>d.BenutzerID===x.ID&&gaBool_(d.Aktiv)).length})):[],
-  benutzer:admin?users.map(x=>({...gaPublicUser_(x),...(x.Rolle==='Ausbilder'?{Ausbildungsbereiche:gaTrainerAreas_(x)}:{})})):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv})):[],
+  benutzer:admin?users.map(x=>({...gaPublicUser_(x),...(['Administrator','Ausbilder',GA_ADV_ROLE].includes(x.Rolle)?{Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)}:{}),...(x.Rolle==='Ausbilder'?{Ausbildungsbereiche:gaTrainerAreas_(x)}:{})})):trainer?users.filter(x=>['Ausbilder','Administrator',GA_ADV_ROLE].includes(x.Rolle)).map(x=>({ID:x.ID,Name:x.Name,Rolle:x.Rolle,Aktiv:x.Aktiv,Standesbuchnummer:gaReportTrainerNumber_(x,allMembers)})):[],
   kursProjekte:visibleProjects,
   ...(admin||trainer?{kursPlanung:gaCoursePlanVisible_(visibleCourses,visibleProjects)}:{}),
   berechtigungen:admin?users.filter(x=>x.Rolle==='Ausbilder').map(x=>({BenutzerID:x.ID,Name:x.Name,...gaPermissions_(x,rightsRows),Ausbildungsbereiche:gaTrainerAreas_(x)})):[],
@@ -1529,7 +1530,7 @@ function gaReportMailDraft_(r,settings,footer){
   course=term?gaFind_('Kurse',term.KursID):null;
  if(!report||isTraining&&(!term||term.Status!=='Durchgeführt'))return {cancel:true};
  if(!(Number(report.DauerMinuten)>0)||!report.BeginnIst||!report.EndeIst)throw new Error('Der Tätigkeitsbericht ist noch nicht vollständig abgeschlossen.');
- const title=course?.Titel||report.Titel||'Tätigkeit',location=term?.Ort||report.Ort||'nicht hinterlegt',
+ const title=course?.Titel||report.Titel||'Tätigkeit',location=(isTraining?gaReportLocation_(gaReportAttach_('ausbildungsbericht',report),term):report.Ort)||'',
   participantIds=isTraining?gaRows_('Teilnahmen').filter(x=>x.TerminID===term.ID&&gaBool_(x.Anwesend)).map(x=>x.MitgliedID):String(report.TeilnehmerIDs||'').split(',').filter(Boolean),
   trainers=String(report.AusbilderIDs||'').split(',').filter(Boolean),line=gaAdminMailLine_;
  const result=isTraining?gaExportTrainingPdf_({ID:'SYSTEM',Rolle:'Administrator'},{TerminID:term.ID}):
@@ -1539,11 +1540,11 @@ function gaReportMailDraft_(r,settings,footer){
  const body=['Ein Tätigkeitsbericht wurde in der Ausbildungsplattform abgeschlossen. Das vollständige PDF zur Dokumentation und Übertragung nach FDISK befindet sich im Anhang.','',
   'Bericht: '+line(title),'Art: '+(isTraining?'Ausbildung / Kurstermin':line(report.Kategorie||'Freie Tätigkeit')),
   ...(term?['Turnus: '+line(gaFind_('Turnusse',term.TurnusID)?.Bezeichnung)]:[]),
-  'Ort: '+line(location),'Beginn: '+gaTrainingDate_(report.BeginnIst),'Ende: '+gaTrainingDate_(report.EndeIst),
+  ...(location?['Örtlichkeit: '+line(location)]:[]),'Beginn: '+gaTrainingDate_(report.BeginnIst),'Ende: '+gaTrainingDate_(report.EndeIst),
   'Dauer: '+gaTrainingHours_(report.DauerMinuten)+' Stunden','Anwesende Teilnehmer: '+participantIds.length,
   'Mitwirkende Ausbilder / Verantwortliche: '+trainers.length,
   'PDF-Datei: '+line(result.dateiname),'',
-  'Das PDF enthält Teilnehmernamen mit Standesbuchnummern, dokumentierte Zeiten, Personenstunden und die erfassten Fahrzeuge samt Kilometern.','',footer].join('\n');
+  'Das PDF enthält Teilnehmer und Ausbilder mit Standesbuchnummern, dokumentierte Zeiten und Personenstunden.'+(gaTrainingVehicles_(report).length?' Eingesetzte Fahrzeuge'+(gaTrainingVehicles_(report).some(v=>Number(v.Kilometer)>0)?' und gefahrene Kilometer':'')+' sind ebenfalls aufgeführt.':''),'',footer].join('\n');
  return {to:gaAdminMailAddress_(settings.BerichtEmpfaenger),subject:'Tätigkeitsbericht abgeschlossen – '+line(title)+' – '+gaAdminMailDate_(String(report.BeginnIst).slice(0,10)),body,
   attachments:[attachment],memberIds:[...new Set(participantIds)]};
 }
@@ -1818,6 +1819,54 @@ function gaSetCheck_(u,d){gaRequire_(u,['Administrator','Fachverwaltung',GA_ADV_
   gaReplace_('MitgliedChecks',ch.ID,val);gaLog_(u.ID,'STATUS','MitgliedCheck',ch.ID,{von:ch.Status,auf:val.Status});
   const member=gaFind_('Mitglieder',ch.MitgliedID);
   gaRows_('Benutzer').filter(x=>x.Rolle==='Teilnehmer'&&member&&x.Email.toLowerCase()===member.Email.toLowerCase()&&gaBool_(x.Aktiv)).forEach(x=>gaNotify_(x.ID,'Checkliste','Checkliste aktualisiert',item.Titel+': '+val.Status,ch.ID));return {ok:true};}
+// Zusatzangaben pro Bericht; keine Tabellenmigration und keine Änderungen an Mitglieder-/Benutzerkonten.
+const GA_REPORT_META_PREFIX='GA_REPORT_META_V1_';
+function gaReportMetaKey_(kind,id){return GA_REPORT_META_PREFIX+kind+'_'+encodeURIComponent(id);}
+function gaReportMeta_(kind,id,all){
+ const raw=all?all[gaReportMetaKey_(kind,id)]:PropertiesService.getScriptProperties().getProperty(gaReportMetaKey_(kind,id));
+ if(!raw)return {};try{return JSON.parse(raw)||{};}catch(e){throw new Error('Zusatzangaben des Tätigkeitsberichts sind beschädigt. Bitte Administration informieren.');}
+}
+function gaReportMetaInput_(kind,id,d,trainers){
+ const previous=gaReportMeta_(kind,id),next={...previous};
+ if(kind==='ausbildungsbericht'&&Object.prototype.hasOwnProperty.call(d,'Ort'))next.Ort=gaText_(d.Ort,160);
+ if(Object.prototype.hasOwnProperty.call(d,'AusbilderStandesbuchnummern')){
+  const numbers=d.AusbilderStandesbuchnummern;
+  if(!numbers||typeof numbers!=='object'||Array.isArray(numbers)||Object.keys(numbers).some(k=>!trainers.includes(k)))throw new Error('Standesbuchnummern nur für ausgewählte Ausbilder erfassen.');
+  next.AusbilderStandesbuchnummern={...previous.AusbilderStandesbuchnummern};
+  for(const [key,value] of Object.entries(numbers)){
+   const text=String(value??'').trim();if(text.length>35||/[\r\n\t]/.test(text))throw new Error('Bitte gültige Standesbuchnummern mit höchstens 35 Zeichen angeben.');
+   next.AusbilderStandesbuchnummern[key]=text;
+  }
+ }
+ return next;
+}
+function gaReportMetaSave_(kind,id,next,save){
+ const props=PropertiesService.getScriptProperties(),key=gaReportMetaKey_(kind,id),old=props.getProperty(key);
+ if(JSON.stringify(next)===JSON.stringify(old?JSON.parse(old):{}))return save();
+ props.setProperty(key,JSON.stringify(next));try{return save();}catch(e){if(old===null)props.deleteProperty(key);else props.setProperty(key,old);throw e;}
+}
+function gaReportAttach_(kind,row,all){return {...row,...gaReportMeta_(kind,kind==='ausbildungsbericht'?row.TerminID:row.ID,all)};}
+function gaReportRows_(kind,rows){const all=PropertiesService.getScriptProperties().getProperties();return rows.map(r=>gaReportAttach_(kind,r,all));}
+function gaReportLocation_(report,term){return Object.prototype.hasOwnProperty.call(report||{},'Ort')?String(report.Ort||''):String(term?.Ort||'');}
+function gaReportTrainerNumber_(user,members){
+ if(!user)return '';
+ if(user.Standesbuchnummer)return String(user.Standesbuchnummer);
+ const email=String(user.Email||'').trim().toLowerCase(),matched=email?(members||gaRows_('Mitglieder')).filter(m=>String(m.Email||'').trim().toLowerCase()===email):[];
+ return matched.length===1?String(matched[0].Standesbuchnummer||''):'';
+}
+function gaReportTrainerName_(user,members,numbers){
+ if(!user)return '[Benutzer nicht gefunden · Stb.-Nr. nicht hinterlegt]';
+ const number=Object.prototype.hasOwnProperty.call(numbers||{},user.ID)?numbers[user.ID]:gaReportTrainerNumber_(user,members);
+ return user.Name+' · Stb.-Nr. '+(number||'nicht hinterlegt');
+}
+function gaReportVehicleTable_(body,vehicles,aggregate=false){
+ if(!vehicles.length)return;
+ const withKm=vehicles.some(v=>Number(aggregate?v.kilometers:v.Kilometer)>0);
+ gaTrainingPdfTable_(body,['Fahrzeug',...(aggregate?['Verwendungen']:[]),...(withKm?['Kilometer']:[])],vehicles.map(v=>[
+  String(aggregate?v.name:v.Fahrzeug),...(aggregate?[String(v.usages)]:[]),...(withKm?[Number(aggregate?v.kilometers:v.Kilometer)>0?gaPdfKm_(aggregate?v.kilometers:v.Kilometer)+' km':'']:[])
+ ]));
+}
+
 /** Form data for practical training and subsequent FDISK reporting. */
 function gaTrainingDetails_(d){
  const begin=gaDateTime_(d.BeginnIst),end=gaDateTime_(d.EndeIst);
@@ -1827,7 +1876,7 @@ function gaTrainingDetails_(d){
  const names=new Set();
  const fahrzeuge=d.Fahrzeuge.map((raw,index)=>{
   const Fahrzeug=gaNeed_(raw.Fahrzeug,'Fahrzeug '+(index+1),80);
-  const val=String(raw.Kilometer??'').trim().replace(',','.');
+  const val=String(raw.Kilometer??'').trim().replace(',','.')||'0';
   if(!/^\d+(?:\.\d{1,2})?$/.test(val))throw new Error('Kilometer für '+Fahrzeug+' als Zahl eingeben (z. B. 12,5).');
   const Kilometer=Number(val);
   if(!Number.isFinite(Kilometer)||Kilometer>9999)throw new Error('Kilometer für '+Fahrzeug+' müssen zwischen 0 und 9999 liegen.');
@@ -1857,14 +1906,14 @@ function gaTrainingPdfData_(d,u){
  // darf deren personenbezogene GAB-Daten nicht im Modulgesamtbericht sehen.
  const selected=(gaIsAdvOrg_(u)||u._gaTrainerArea)?matching.filter(t=>{const a=gaFind_('Turnusse',t.TurnusID)?.Bereich;return a===(u._gaTrainerArea||GA_ADV_AREA)||u.Rolle==='Ausbilder'&&gaTrainerMixedAllowed_(u)&&a==='Grundausbildung';}):matching;
  if(!selected.length)throw new Error('Keine berechtigten Termine für diese Auswahl gefunden.');
- const reportRows=gaOptionalRows_('Ausbildungsberichte'),att=gaRows_('Teilnahmen');
+ const reportRows=gaReportRows_('ausbildungsbericht',gaOptionalRows_('Ausbildungsberichte')),att=gaRows_('Teilnahmen');
  const members=gaRows_('Mitglieder'),accounts=gaRows_('Benutzer');
  const course=allCourses.find(c=>c.ID===(courseId||selected[0].KursID));
  if(!course)throw new Error('Ausbildungsmodul nicht gefunden.');
  const details=[],participants=new Map(),trainers=new Map(),cars=new Map();
  let minutes=0,participantMinutes=0,trainerMinutes=0,kilometers=0,pending=0;
  const nameMember=id=>gaReportParticipantName_(members.find(x=>x.ID===id));
- const nameTrainer=id=>{const m=accounts.find(x=>x.ID===id);return m?m.Name:'[nicht mehr vorhandener Benutzer]';};
+ const nameTrainer=(id,numbers)=>gaReportTrainerName_(accounts.find(x=>x.ID===id),members,numbers);
  selected.sort((a,b)=>String(a.Beginn).localeCompare(String(b.Beginn))).forEach(t=>{
   const report=reportRows.find(r=>r.TerminID===t.ID);
   if(!report){pending++;return;}
@@ -1872,7 +1921,7 @@ function gaTrainingPdfData_(d,u){
   if(duration<=0)return;
   const present=att.filter(x=>x.TerminID===t.ID&&x.Anwesend==='JA').map(x=>({id:x.MitgliedID,name:nameMember(x.MitgliedID)}));
   const trainersIds=String(report.AusbilderIDs||'').split(',').map(v=>v.trim()).filter(Boolean);
-  const teacherList=trainersIds.map(id=>({id,name:nameTrainer(id)}));
+  const teacherList=trainersIds.map(id=>({id,name:nameTrainer(id,report.AusbilderStandesbuchnummern)}));
   const vehicleList=gaTrainingVehicles_(report);
   const km=vehicleList.reduce((sum,x)=>sum+Number(x.Kilometer||0),0);
   details.push({term:t,report,minutes:duration,present,teacherList,vehicleList,kilometers:km});
@@ -1972,15 +2021,15 @@ function gaPdfStart_(doc,type,title,subtitle,metadata){
  return body;
 }
 function gaPdfStats_(body,stats){
- const groups=[];
- for(let i=0;i<stats.length;i+=2){
+ const groups=stats.length===3?[stats.map(a=>String(a[0])+'\n'+String(a[1]))]:[];
+ for(let i=0;stats.length!==3&&i<stats.length;i+=2){
   const a=stats[i],b=stats[i+1]||['',''];
   groups.push([String(a[0])+'\n'+String(a[1]),String(b[0])+'\n'+String(b[1])]);
  }
  const table=body.appendTable(groups);
  table.setBorderWidth(0);
  for(let r=0;r<groups.length;r++){
-  for(let c=0;c<2;c++){
+  for(let c=0;c<groups[r].length;c++){
    const cell=table.getCell(r,c),value=String(groups[r][c]).split('\n')[0];
    cell.setBackgroundColor(GA_PDF.ice).setPaddingTop(11).setPaddingBottom(10)
     .setPaddingLeft(14).setPaddingRight(12);
@@ -2041,7 +2090,8 @@ function gaExportTrainingPdf_(u,d){
     ['BERICHTSTYP',report.isSingle?'Einzeltermin':'Modulauswertung'],
     ['ERSTELLT',date(gaNow_())],
     ['DOKUMENTIERT',report.details.length+' von '+(report.details.length+report.pending)+' Termin(en)'],
-    ['STATUS',incomplete?'UNVOLLSTÄNDIG':'Vollständig dokumentiert']
+    ['STATUS',incomplete?'UNVOLLSTÄNDIG':'Vollständig dokumentiert'],
+    ...(report.isSingle&&report.details[0]&&gaReportLocation_(report.details[0].report,report.details[0].term)?[['ÖRTLICHKEIT',gaReportLocation_(report.details[0].report,report.details[0].term)]]:[])
    ]);
   if(incomplete)gaPdfWarning_(body,
    'VORLÄUFIGER DATENAUSZUG – '+report.pending+' Termin(e) ohne vollständige Ist-Zeiten. Nicht dokumentierte Zeiten/Kilometer sind unbekannt und in den Summen nicht berücksichtigt.');
@@ -2049,16 +2099,14 @@ function gaExportTrainingPdf_(u,d){
     [h(report.minutes)+' h','AUSBILDUNGSDAUER'],
     [h(report.participantMinutes)+' h','TEILNEHMERSTUNDEN'],
     [h(report.trainerMinutes)+' h','AUSBILDERSTUNDEN'],
-    [km(report.kilometers)+' km','FAHRZEUGKILOMETER']
+    ...(report.kilometers>0?[[km(report.kilometers)+' km','FAHRZEUGKILOMETER']]:[])
   ]);
   gaPdfSection_(body,1,'Termine im Überblick','Nur dokumentierte Ist-Zeiten zählen in der FDISK-Summe.');
   if(report.details.length){
-   gaTrainingPdfTable_(body,['Datum','Ist-Zeit','Dauer','Teiln.','km'],
-     report.details.map(x=>[
-       date(x.report.BeginnIst).slice(0,10),
-       date(x.report.BeginnIst).slice(11)+' – '+date(x.report.EndeIst).slice(11),
-       h(x.minutes)+' h',String(x.present.length),km(x.kilometers)
-     ]));
+   const withOrt=report.details.some(x=>gaReportLocation_(x.report,x.term)),withKm=report.kilometers>0;
+   gaTrainingPdfTable_(body,['Datum',...(withOrt?['Örtlichkeit']:[]),'Ist-Zeit','Dauer','Teiln.',...(withKm?['km']:[])],
+     report.details.map(x=>[date(x.report.BeginnIst).slice(0,10),...(withOrt?[safe(gaReportLocation_(x.report,x.term))]:[]),
+       date(x.report.BeginnIst).slice(11)+' – '+date(x.report.EndeIst).slice(11),h(x.minutes)+' h',String(x.present.length),...(withKm?[x.kilometers>0?km(x.kilometers):'']:[])]));
   }else{
    gaPdfLine_(body,'Für diese Auswahl sind noch keine abgeschlossenen Tätigkeitsberichte mit Ist-Zeiten vorhanden.',10,GA_PDF.muted,false);
   }
@@ -2085,13 +2133,11 @@ function gaExportTrainingPdf_(u,d){
    gaTrainingPdfTable_(body,['Ausbilder','Termine','Stunden'],
     report.trainers.map(x=>[safe(x.name),String(x.terminCount),h(x.minutes)+' h']));
    gaPdfSpace_(body,7);
-   gaPdfSection_(body,3,'Fahrzeuge und Kilometer');
-   gaTrainingPdfTable_(body,['Fahrzeug','Verwendungen','Gesamtkilometer'],
-    report.vehicles.map(x=>[safe(x.name),String(x.usages),km(x.kilometers)+' km']));
+   if(report.vehicles.length){gaPdfSection_(body,3,report.kilometers>0?'Fahrzeuge und Kilometer':'Eingesetzte Fahrzeuge');gaReportVehicleTable_(body,report.vehicles,true);}
    gaPdfSpace_(body,9);
-   gaPdfSection_(body,4,'Details der einzelnen Termine','Einzeln nachvollziehbar für die spätere FDISK-Dokumentation.');
+   gaPdfSection_(body,report.vehicles.length?4:3,'Details der einzelnen Termine','Einzeln nachvollziehbar für die spätere FDISK-Dokumentation.');
    report.details.forEach((x,i)=>{
-    gaPdfLine_(body,(i+1)+'.  '+date(x.report.BeginnIst).slice(0,10)+'  |  '+safe(x.term.Ort||'Ohne Ortsangabe'),
+    gaPdfLine_(body,(i+1)+'.  '+date(x.report.BeginnIst).slice(0,10)+(gaReportLocation_(x.report,x.term)?'  |  '+safe(gaReportLocation_(x.report,x.term)):''),
       12,GA_PDF.navy,true).setSpacingBefore(i?14:3);
     gaTrainingPdfTable_(body,['Tatsächlicher Beginn','Tatsächliches Ende','Dauer'],
       [[date(x.report.BeginnIst),date(x.report.EndeIst),h(x.minutes)+' h']]);
@@ -2101,9 +2147,7 @@ function gaExportTrainingPdf_(u,d){
     gaPdfLine_(body,'Mitwirkende Ausbilder ('+x.teacherList.length+')',9,GA_PDF.blue,true).setSpacingBefore(6);
     gaTrainingPdfTable_(body,['Name','Stunden'],
      x.teacherList.map(p=>[safe(p.name),h(x.minutes)+' h']));
-    gaPdfLine_(body,'Fahrzeuge ('+x.vehicleList.length+')',9,GA_PDF.blue,true).setSpacingBefore(6);
-    gaTrainingPdfTable_(body,['Fahrzeug','Kilometer'],
-     x.vehicleList.map(v=>[safe(v.Fahrzeug),km(v.Kilometer)+' km']));
+    if(x.vehicleList.length){gaPdfLine_(body,'Fahrzeuge ('+x.vehicleList.length+')',9,GA_PDF.blue,true).setSpacingBefore(6);gaReportVehicleTable_(body,x.vehicleList);}
     if(x.report.Notiz){
      gaPdfLine_(body,'Bemerkung',9,GA_PDF.blue,true).setSpacingBefore(6);
      gaPdfLine_(body,String(x.report.Notiz),9,GA_PDF.ink,false);
@@ -2146,8 +2190,8 @@ function gaSaveFreeActivity_(u,d){
  if(old){
   if(u.Rolle!=='Administrator'&&old.ErfasstVon!==u.ID)
    throw new Error('Du kannst nur eigene Tätigkeitsberichte ändern.');
-  gaReplace_('FreieTaetigkeiten',id,change);
- }else{id=gaId_();gaAppend_('FreieTaetigkeiten',{ID:id,...change});}
+  const meta=gaReportMetaInput_('freieTaetigkeit',id,d,trainers);gaReportMetaSave_('freieTaetigkeit',id,meta,()=>gaReplace_('FreieTaetigkeiten',id,change));
+ }else{id=gaId_();const meta=gaReportMetaInput_('freieTaetigkeit',id,d,trainers);gaReportMetaSave_('freieTaetigkeit',id,meta,()=>gaAppend_('FreieTaetigkeiten',{ID:id,...change}));}
  gaLog_(u.ID,old?'FREIE_TAETIGKEIT_AKTUALISIEREN':'FREIE_TAETIGKEIT_ERFASSEN','FreieTaetigkeiten',id,
   {Kategorie,DauerMinuten:details.DauerMinuten,Teilnehmer:participants.length,Ausbilder:trainers.length,
    FahrzeugeJSON:details.FahrzeugeJSON});
@@ -2156,13 +2200,13 @@ function gaSaveFreeActivity_(u,d){
 
 function gaExportFreeActivityPdf_(u,d){
  gaRequire_(u,['Administrator','Ausbilder',GA_ADV_ROLE]);
- const entry=gaFind_('FreieTaetigkeiten',gaText_(d?.ID,100));
+ const rawEntry=gaFind_('FreieTaetigkeiten',gaText_(d?.ID,100)),entry=rawEntry?gaReportAttach_('freieTaetigkeit',rawEntry):null;
  if(!entry)throw new Error('Tätigkeitsbericht nicht gefunden.');
  const memberRows=gaRows_('Mitglieder'),userRows=gaRows_('Benutzer');
  const members=String(entry.TeilnehmerIDs||'').split(',').filter(Boolean)
   .map(id=>memberRows.find(m=>m.ID===id)).map(gaReportParticipantName_);
  const trainers=String(entry.AusbilderIDs||'').split(',').filter(Boolean)
-  .map(id=>userRows.find(x=>x.ID===id)).map(x=>x?x.Name:'[Benutzer nicht gefunden]');
+  .map(id=>userRows.find(x=>x.ID===id)).map(x=>gaReportTrainerName_(x,memberRows,entry.AusbilderStandesbuchnummern));
  const vehicles=gaTrainingVehicles_(entry),mins=Number(entry.DauerMinuten)||0;
  const hours=gaTrainingHours_,date=gaTrainingDate_,km=gaPdfKm_;
  const totalKm=vehicles.reduce((n,v)=>n+Number(v.Kilometer||0),0);
@@ -2175,7 +2219,7 @@ function gaExportFreeActivityPdf_(u,d){
   const body=gaPdfStart_(doc,'DIENSTTÄTIGKEIT / FDISK-AUSZUG','Tätigkeitsbericht',
    String(entry.Titel||''),[
     ['KATEGORIE',String(entry.Kategorie||'Sonstige')],
-    ['ORT',String(entry.Ort||'–')],
+    ...(entry.Ort?[['ÖRTLICHKEIT',String(entry.Ort)]]:[]),
     ['DATUM',date(entry.BeginnIst).slice(0,10)],
     ['ERSTELLT',date(gaNow_())]
    ]);
@@ -2183,7 +2227,7 @@ function gaExportFreeActivityPdf_(u,d){
     [hours(mins)+' h','TÄTIGKEITSDAUER'],
     [hours(mins*members.length)+' h','MITGLIEDERSTUNDEN'],
     [hours(mins*trainers.length)+' h','VERANTWORTLICHENSTUNDEN'],
-    [km(totalKm)+' km','FAHRZEUGKILOMETER']
+    ...(totalKm>0?[[km(totalKm)+' km','FAHRZEUGKILOMETER']]:[])
   ]);
   gaPdfSection_(body,1,'Zeit und Tätigkeit');
   gaTrainingPdfTable_(body,['Tatsächlicher Beginn','Tatsächliches Ende','Dauer'],
@@ -2198,8 +2242,7 @@ function gaExportFreeActivityPdf_(u,d){
   gaPdfSection_(body,3,'Mitwirkende Ausbilder und Verantwortliche');
   gaTrainingPdfTable_(body,['Name','Anrechenbare Stunden'],trainers.map(n=>[n,hours(mins)+' h']));
   gaPdfSpace_(body,8);
-  gaPdfSection_(body,4,'Eingesetzte Fahrzeuge');
-  gaTrainingPdfTable_(body,['Fahrzeug','Kilometer'],vehicles.map(v=>[String(v.Fahrzeug),km(v.Kilometer)+' km']));
+  if(vehicles.length){gaPdfSection_(body,4,'Eingesetzte Fahrzeuge');gaReportVehicleTable_(body,vehicles);}
   gaPdfFooter_(body,gaNow_());
   doc.saveAndClose();
   const bytes=DriveApp.getFileById(docId).getAs(MimeType.PDF).setName(filename).getBytes();
@@ -2231,8 +2274,8 @@ function gaSaveAttendance_(u,d){gaRequire_(u,['Administrator','Ausbilder',GA_ADV
   const previous=gaRows_('Teilnahmen').map(a=>({...a}));
   const saved=gaOptionalRows_('Ausbildungsberichte').find(r=>r.TerminID===term.ID);
   const report={...details,AusbilderIDs:trainerIds.join(','),ErfasstVon:u.ID,AktualisiertAm:gaNow_()};
-  if(saved)gaReplace_('Ausbildungsberichte',saved.ID,report);
-  else gaAppend_('Ausbildungsberichte',{ID:gaId_(),TerminID:term.ID,...report});
+  const meta=gaReportMetaInput_('ausbildungsbericht',term.ID,d,trainerIds);
+  gaReportMetaSave_('ausbildungsbericht',term.ID,meta,()=>saved?gaReplace_('Ausbildungsberichte',saved.ID,report):gaAppend_('Ausbildungsberichte',{ID:gaId_(),TerminID:term.ID,...report}));
   members.forEach(m=>{
     const existing=previous.find(x=>x.TerminID===term.ID&&x.MitgliedID===m.ID);
     const entry={Anwesend:answers.get(m.ID)?'JA':'NEIN',AusbilderIDs:trainerIds.join(','),BestaetigtVon:u.ID,BestaetigtAm:gaNow_()};
