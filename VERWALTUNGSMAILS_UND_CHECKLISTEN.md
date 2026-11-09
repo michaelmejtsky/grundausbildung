@@ -1,13 +1,13 @@
-# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.15
+# Verwaltungs-Mails, Tätigkeitsberichte und Checklisten – 1.13.16
 
 ## Bestehendes System aktualisieren
 
-Die vollständige Code.gs 1.13.15 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
+Die vollständige Code.gs 1.13.16 enthält den bisherigen Stand einschließlich Ausbilder-Bereichsauswahl, Quiz-Anrechnung, Gültigkeitsdaten, E-Mail-Änderung, GAB- und erweiterten Abschlussnachrichten. Keine neue Datenbank, keine geänderten Mitgliedsnummern und keine neue Web-App-Adresse verwenden.
 
 1. Code.gs im bestehenden Apps-Script-Projekt vollständig ersetzen und speichern.
 2. Einmal **gaVerwaltungsMailEinrichten** ausführen und die erforderlichen Berechtigungen zulassen. Alternativ das bestehende Google Sheet neu öffnen und **Grundausbildung → 9 · Verwaltungs-Mail-Trigger einrichten** wählen. Das richtet ausschließlich die Versandprüfung ein; es verschickt selbst keine Nachricht und legt keine neuen Datenbanktabellen oder Prüfdaten an.
 3. **Bereitstellen → Bereitstellungen verwalten → bestehende Web-App bearbeiten → Neue Version → Bereitstellen**. Die vorhandene `/exec`-Adresse beibehalten.
-4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.15, der statische Cache heißt ga-shell-v2.52.
+4. App neu laden beziehungsweise die installierte PWA schließen und erneut öffnen. Die Oberfläche zeigt V1.13.16, der statische Cache heißt ga-shell-v2.53.
 5. Als Administrator unter **Verwaltungs-Mails** die Empfänger für die Kategorien hinterlegen und speichern. Jede Kategorie kann eine oder mehrere Adressen haben. Mehrere Adressen mit Komma trennen, beispielsweise `ausbildung@example.test, verwaltung@example.test`. Pro Kategorie sind bis zu 20 Adressen möglich; doppelte Adressen werden innerhalb der Liste entfernt. Bereits gespeicherte Einzeladressen bleiben unverändert gültig. Ein leeres Feld deaktiviert diese Kategorie. Beim Speichern wird ein fehlender Versandtrigger ebenfalls eingerichtet; vorherige Autorisierung über Schritt 2 vermeidet Berechtigungsfehler.
 
 GitHub Pages aktualisiert nur die Oberfläche und die veröffentlichte Backend-Quelldatei, nicht die laufende Apps-Script-Bereitstellung.
@@ -26,7 +26,7 @@ Das erstellt beziehungsweise verwendet den optionalen Checklistenpunkt **Blaulic
 
 Die Anforderung enthält Name, Standesbuchnummer, Telefonnummer, E-Mail, Turnus und den Button **In Blaulicht SMS/Lea registriert und zugeordnet bestätigen**. Der Empfänger führt die Registrierung und Zuordnung in Blaulicht SMS/Lea selbst durch und bestätigt anschließend auf der verlinkten Seite ohne App-Konto. Dann erscheint der zugehörige Punkt unter **Checklisten → Mitglied** als erledigt. Das ist eine Bestätigung der manuellen Erfassung, keine automatische Schnittstelle zu Blaulicht SMS/Lea.
 
-Gewöhnliches erneutes Speichern löst keinen weiteren Versand aus. Bei abgelaufenen Links unter **Verwaltungs-Mails → Versandverlauf → Offene Bestätigungslinks neu senden** gezielt eine neue Mail auslösen. Die gleichen Schutzregeln und 30 Tage Gültigkeit wie beim Transponder gelten.
+Gewöhnliches erneutes Speichern löst keinen weiteren Versand aus. Bei abgelaufenen Links unter **Verwaltungs-Mails → Versandverlauf → Offene Bestätigungslinks neu senden** gezielt eine neue Mail auslösen. Die gleichen Schutzregeln und 60 Tage Gültigkeit wie beim Transponder gelten.
 
 ## Sammelmail nach Block B
 
@@ -82,13 +82,13 @@ Ablage und FDISK-Eintrag erscheinen beim zugehörigen Erste-Hilfe-PDF getrennt g
 
 Der Mail-Button öffnet eine persönliche Bestätigungsseite. Sie zeigt nur die betreffende Person und Aufgabe. Mit **Als erledigt bestätigen** wird genau diese Aufgabe abgeschlossen; beim FDISK-Button muss vorher das tatsächliche Datum angegeben werden. Ein App-Konto ist dafür nicht erforderlich. Ein reines Öffnen des Mail-Links oder der Seite ändert keine Daten. Dadurch können automatische Mail-Linkprüfungen keine Ausgaben als erledigt markieren.
 
-Die Links sind 30 Tage gültig, eng auf die jeweilige Aufgabe begrenzt und nach Verwendung nicht für eine später erneut geöffnete Aufgabe wiederverwendbar. Änderungen an der Empfängergruppe oder ein erneuter Versand mit neuen Links machen bisherige Links ungültig. Archivierte bzw. nicht mehr erforderliche Punkte und ersetzte oder abgelehnte Erste-Hilfe-Nachweise können nicht über alte Links bestätigt werden. Links sollten nur den vorgesehenen Empfängern zugänglich sein.
+Die Links sind 60 Tage gültig, eng auf die jeweilige Aufgabe begrenzt und nach Verwendung nicht für eine später erneut geöffnete Aufgabe wiederverwendbar. Änderungen an der Empfängergruppe oder ein erneuter Versand mit neuen Links machen bisherige Links ungültig. Archivierte bzw. nicht mehr erforderliche Punkte und ersetzte oder abgelehnte Erste-Hilfe-Nachweise können nicht über alte Links bestätigt werden. Links sollten nur den vorgesehenen Empfängern zugänglich sein.
 
 Alte, bereits vor dieser Version versendete Mails erhalten keine Buttons nachträglich. Bei Bedarf eine neue Ausgabe-Mail über den Verlauf anstoßen oder beim Erste-Hilfe-PDF **E-Mail erneut senden** verwenden. Dafür muss die neue Code.gs in der bestehenden Bereitstellung laufen; die neue Bestätigungsseite wird mit GitHub Pages veröffentlicht. Am Cloudflare Worker ist keine Änderung nötig, da die Aktionen über die vorhandene API-Weiterleitung laufen.
 
 Die Link-Prüfung ist lesend. Erst die ausdrückliche Bestätigung verwendet einen einmaligen, serverseitig gehashten Berechtigungsnachweis. Der Prüf- und Bestätigungsaufruf liefert keinen allgemeinen Mitglieder-, Konto- oder Dokumentenzugriff. Abgelaufene Link-Berechtigungen werden bereinigt; vorhandene Ausbildungs- und Checklistennachweise bleiben erhalten. Bestätigungen werden als E-Mail-Link-Aktion mit Zeitpunkt protokolliert, ohne eine Anmeldung einer bestimmten Person vorzutäuschen.
 
-## Zeugkammer-Auswahl beim Mitglied (1.13.15)
+## Zeugkammer-Auswahl beim Mitglied (1.13.16)
 
 Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** befindet sich neben den optionalen Transponder- und Blaulicht-Anforderungen das Häkchen **Zeugkammer-Ausstattung anfordern (E-Mail)**. Es löst beim Speichern gezielt die Anforderungsmail aus. Die bestehenden Punkte für Dienstbekleidung, Einsatzbekleidung und andere Aufgaben mit Zuständigkeit Zeugkammer werden wiederverwendet. Bereits erledigte Punkte und Notizen bleiben erhalten; nur offene Punkte erhalten Mailbuttons.
 
@@ -96,7 +96,7 @@ Das Häkchen ist ein Versandauftrag für diesen Speichervorgang und beim erneute
 
 Empfänger sowie aktive Zeugkammer-Punkte müssen vor der Anforderung vorhanden sein. Das gilt für neue und bestehende Mitglieder beider Ausbildungsbereiche. Die Auswahl steht ausschließlich der Administration zur Verfügung. Ältere Oberflächen ohne Auswahl lösen beim Speichern ebenfalls keine automatische Zeugkammer-Mail mehr aus. Bisher vorgemerkte und bereits versendete Anforderungen sowie ihre gültigen Bestätigungslinks bleiben erhalten.
 
-## Pager und Transponder: ausgegeben oder nicht erforderlich (1.13.15)
+## Pager und Transponder: ausgegeben oder nicht erforderlich (1.13.16)
 
 Unter **Verwaltungs-Mails** gibt es eine eigene Empfängergruppe **Pager – Ausgabe** mit bis zu 20 kommagetrennten Adressen. Unter **Mitglieder → Mitglied aufnehmen/bearbeiten** kann die Administration für einen GAB-Teilnehmer **Pager erforderlich** anhaken. Standesbuchnummer und Telefonnummer sind erforderlich. Der optionale Checklistenpunkt **Pager** wird nur den ausgewählten Mitgliedern zugeordnet; ein vorhandener Punkt mit diesem Namen wird wiederverwendet. Ursprünglicher Turnus, Ausbildungsnachweise, bestehende Erledigungen und Notizen bleiben erhalten.
 
@@ -104,9 +104,9 @@ Neue Pager-Mails enthalten pro Mitglied zwei Buttons: **Pager ausgegeben bestät
 
 Die erste Bestätigung setzt nur den passenden Punkt dieses Mitglieds auf **Erledigt** beziehungsweise **Nicht erforderlich**. Nicht erforderlich dokumentiert keine erfolgte Ausgabe und zählt nicht als offene Aufgabe. Der andere Button zeigt anschließend das tatsächliche Ergebnis, ohne die Entscheidung zu überschreiben oder eine zweite Benachrichtigung auszulösen. Wird der Punkt durch die Administration später wieder geöffnet, können beide alten Links keine neue Entscheidung treffen; über **Offene Bestätigungslinks neu senden** wird eine neue Mail benötigt.
 
-Gewöhnliches Speichern verschickt keine zweite Anforderung, und bereits dokumentierte Ausgaben werden durch die optionale Mitgliedsauswahl nicht zurückgesetzt. Alte empfangene Mails erhalten keine zusätzlichen Buttons: Für noch offene Transponder-Anforderungen nach dem GS-Update gezielt neue Bestätigungslinks senden. Die 30 Tage Gültigkeit, Empfängerbindung und Rollenbegrenzung bleiben bestehen. Für diese Änderungen ist kein neuer Cloudflare-Worker und keine neue Web-App-Adresse erforderlich.
+Gewöhnliches Speichern verschickt keine zweite Anforderung, und bereits dokumentierte Ausgaben werden durch die optionale Mitgliedsauswahl nicht zurückgesetzt. Alte empfangene Mails erhalten keine zusätzlichen Buttons: Für noch offene Transponder-Anforderungen nach dem GS-Update gezielt neue Bestätigungslinks senden. Die 60 Tage Gültigkeit, Empfängerbindung und Rollenbegrenzung bleiben bestehen. Für diese Änderungen ist kein neuer Cloudflare-Worker und keine neue Web-App-Adresse erforderlich.
 
-## Aufnahme in die erweiterte Ausbildung und PDF-Mail-Auswahl (1.13.15)
+## Aufnahme in die erweiterte Ausbildung und PDF-Mail-Auswahl (1.13.16)
 
 Die vier Aufnahme-Häkchen **Transponder für Zugang**, **Pager**, **Blaulicht SMS/Lea** und **Zeugkammer-Ausstattung anfordern** stehen jetzt auch für Mitglieder mit ursprünglichem Turnus in der erweiterten Ausbildung zur Verfügung: in der normalen administrativen Mitgliedsverwaltung und unter **Erweiterte Ausbildung → Teilnehmer & Gäste → Neues Mitglied nur für die erweiterte Ausbildung anlegen**. Der Organisator darf diese Anforderungen für direkt angelegte erweiterte Mitglieder auslösen; bestehende persönliche GAB-Mitgliedsdaten von Gästen bleiben geschützt.
 
@@ -118,7 +118,7 @@ Bereits vorhandene optionale Systempunkte werden unter unveränderter ID für be
 
 Alle früheren Funktionen einschließlich der zwei Mailentscheidungen für Pager/Transponder, Erste-Hilfe-/FDISK-Bestätigungen und der GAB-Ausbildungslogik bleiben enthalten. Code.gs vollständig ersetzen und die bestehende Web-App-Bereitstellung auf eine neue Version aktualisieren. Weder eine neue Datenbank noch eine neue Web-App-Adresse oder ein neuer Cloudflare-Worker sind erforderlich. Die GitHub-Seitenveröffentlichung muss erfolgreich abgeschlossen sein, damit die neuen Häkchen sichtbar werden.
 
-## Verwaltungsübergabe und Bereichsrechte (1.13.15)
+## Verwaltungsübergabe und Bereichsrechte (1.13.16)
 
 **Oberadmin:** Die bestehende Rolle Administrator behält Vollzugriff, Rollenverwaltung und Rollenvorschau. Nur der Oberadmin darf nach dem offiziellen GAB-Abschluss ein Mitglied zur vollständigen Verwaltung an die erweiterte Ausbildung überstellen. In **Qualifikationen → Mitglied** befindet sich dazu **In die erweiterte Verwaltung überstellen** mit Auswahl eines aktiven erweiterten Turnus. Der GAB-Abschluss muss vorab offiziell bestätigt und dokumentiert sein; die Überstellung ersetzt keine GAB-Abschlussprüfung.
 
@@ -132,9 +132,9 @@ Unter **Erweiterte Checklisten** kann der Organisator Punkte seines Bereichs anl
 
 **Freigabe zurückholen:** Der Oberadmin kann unter der Mitgliedsqualifikation **Verwaltung zurückholen** wählen. Das beendet ausschließlich die erweiterten Stammdatenrechte. Die Person bleibt als Kursgast zugeordnet; alle Nachweise und bisherigen Einträge bleiben erhalten. Beide Vorgänge werden mit verantwortlichem Benutzer und Zeitpunkt protokolliert. Die erweiterte Leitung erhält bei erstmaliger Überstellung eine Mitteilung; erneutes Speichern derselben Freigabe erzeugt keine weitere.
 
-**Bereitstellung:** Die vollständige Code.gs 1.13.15 enthält sämtliche vorherigen Änderungen. Im bestehenden Projekt ersetzen und die bestehende Web-App-Bereitstellung auf eine neue Version aktualisieren. Dieselbe Datenbank und `/exec`-Adresse behalten. Die Oberfläche muss nach erfolgreicher GitHub-Pages-Veröffentlichung V1.13.15 anzeigen.
+**Bereitstellung:** Die vollständige Code.gs 1.13.16 enthält sämtliche vorherigen Änderungen. Im bestehenden Projekt ersetzen und die bestehende Web-App-Bereitstellung auf eine neue Version aktualisieren. Dieselbe Datenbank und `/exec`-Adresse behalten. Die Oberfläche muss nach erfolgreicher GitHub-Pages-Veröffentlichung V1.13.16 anzeigen.
 
-## Örtlichkeit, Ausbildernummern und kompakte PDFs (1.13.15)
+## Örtlichkeit, Ausbildernummern und kompakte PDFs (1.13.16)
 
 Beim Ausbildungsabschluss befindet sich vor den Ist-Zeiten das Feld **Örtlichkeit der Schulung**. Der geplante Terminort ist vorausgefüllt, kann aber für den tatsächlichen Bericht geändert oder geleert werden. Die tatsächliche Örtlichkeit wird separat pro Bericht gespeichert; der geplante Terminort bleibt unverändert. Ältere Berichte ohne gespeicherte tatsächliche Örtlichkeit verwenden weiterhin ihren vorhandenen Terminort. Freie Tätigkeiten behalten ihr eigenes Ortsfeld, nun mit der Beschriftung **Örtlichkeit der Tätigkeit**.
 
@@ -144,9 +144,9 @@ Nicht verwendete Fahrzeuge erzeugen im fertigen PDF keinen Fahrzeugabschnitt. Oh
 
 Die Zusatzangaben liegen pro Bericht in privaten Script Properties (`GA_REPORT_META_V1_`), bleiben beim Bearbeiten erhalten und benötigen keine neue Datenbank, kein neues Tabellenblatt und keine Spaltenänderung. Alte Oberflächen ohne diese Zusatzfelder überschreiben bereits gespeicherte Angaben nicht. Die Daten sind ausschließlich für berechtigte Berichtsersteller sichtbar und bleiben aus Teilnehmeransichten ausgeschlossen. Bestehende Berichte können nach dem Update erneut geöffnet, ergänzt und neu als PDF heruntergeladen werden. Das Bearbeiten verschickt keine zweite automatische Mail.
 
-Zur Aktivierung die vollständige Code.gs 1.13.15 im bestehenden Apps-Script-Projekt ersetzen und die bestehende Web-App-Bereitstellung auf **Neue Version** aktualisieren. App neu laden und das PDF neu erstellen. Bereits versendete PDF-Anhänge ändern sich dadurch nicht rückwirkend. Die Kennung des bestehenden Designs bleibt **FDISK-DESIGN-2**.
+Zur Aktivierung die vollständige Code.gs 1.13.16 im bestehenden Apps-Script-Projekt ersetzen und die bestehende Web-App-Bereitstellung auf **Neue Version** aktualisieren. App neu laden und das PDF neu erstellen. Bereits versendete PDF-Anhänge ändern sich dadurch nicht rückwirkend. Die Kennung des bestehenden Designs bleibt **FDISK-DESIGN-2**.
 
-## Zugangsdaten und dauerhafte Ausbildernummern (1.13.15)
+## Zugangsdaten und dauerhafte Ausbildernummern (1.13.16)
 
 Als Oberadmin unter **Zugänge → Person auswählen → Zugangsdaten speichern** lassen sich **Name**, **E-Mail/Login**, **dauerhafte Standesbuchnummer** für Ausbilder und andere Mitarbeiterkonten sowie **Aktiv/Inaktiv** bearbeiten. Rollen und Fachbereiche bleiben in ihrem getrennten Formular und können weiterhin nur vom Oberadmin geändert werden. Bei Teilnehmerkonten werden statt eines frei zerlegten Namens Vorname und Nachname aus dem eindeutig verknüpften Mitglied angeboten. Namens- und E-Mail-Änderungen bleiben zwischen Teilnehmerzugang und Mitglied konsistent, auch wenn die Bearbeitung über die Mitgliederverwaltung erfolgt.
 
@@ -160,4 +160,10 @@ Die dauerhafte Ausbildernummer ist am unveränderten Benutzerkonto hinterlegt un
 
 **Berichte in beiden Bereichen:** Dieselben dauerhaften Ausbildernummern und Ortsangaben werden für GAB- und erweiterte Ausbildungsberichte nach Terminen sowie für freie Tätigkeiten verwendet. Unbenutzte Fahrzeug-/Kilometerfelder bleiben ausgeblendet; positive Kilometerwerte und vorhandene persönliche Berichtsangaben bleiben erhalten. Der optionale PDF-Mailversand erfolgt weiterhin nur beim ersten Abschluss des jeweiligen Berichts. Änderungen an Zugängen lösen keinen zusätzlichen Berichtsversand aus.
 
-Die vollständige Code.gs 1.13.15 enthält alle bisherigen Funktionen. Im bestehenden Projekt ersetzen und die bestehende Web-App-Bereitstellung auf **Neue Version** aktualisieren; danach App neu laden. Keine neue Datenbank, kein neues Tabellenblatt und keine neue `/exec`-Adresse erforderlich. Die neuen kontobezogenen Zusatzdaten liegen in privaten Script Properties (`GA_STAFF_NUMBER_V1_`, `GA_ACCOUNT_SESSION_EPOCH_V1_`). Änderungen werden protokolliert; bei Speicherfehlern wird die zusammengehörige Änderung bestmöglich zurückgesetzt.
+Die vollständige Code.gs 1.13.16 enthält alle bisherigen Funktionen. Im bestehenden Projekt ersetzen und die bestehende Web-App-Bereitstellung auf **Neue Version** aktualisieren; danach App neu laden. Keine neue Datenbank, kein neues Tabellenblatt und keine neue `/exec`-Adresse erforderlich. Die neuen kontobezogenen Zusatzdaten liegen in privaten Script Properties (`GA_STAFF_NUMBER_V1_`, `GA_ACCOUNT_SESSION_EPOCH_V1_`). Änderungen werden protokolliert; bei Speicherfehlern wird die zusammengehörige Änderung bestmöglich zurückgesetzt.
+
+## Gültigkeit der Checklisten-Maillinks (1.13.16)
+
+Neu ausgestellte Bestätigungslinks für Transponder, Pager, Blaulicht SMS/Lea, Zeugkammer und Erste-Hilfe-Nachweise sind 60 Tage gültig. Das gilt für beide Ausbildungsbereiche und für beide Pager-/Transponder-Entscheidungen. Öffentliche Links sind weiterhin auf die konkrete Aufgabe und Person begrenzt.
+
+Bereits versendete Mails und deren gespeichertes Ablaufdatum werden nicht verändert; vorhandene 30-Tage-Links gelten bis zu ihrem ursprünglichen Ablauf. Für neue Links bei Bedarf unter **Verwaltungs-Mails → Offene Bestätigungslinks neu senden** beziehungsweise beim Erste-Hilfe-Nachweis den erneuten Versand ausdrücklich auslösen. Es werden keine Mails automatisch nachgesendet. Login-Sitzungen sowie Einladungs- und Passwort-Reset-Links behalten ihre bisherigen Laufzeiten.

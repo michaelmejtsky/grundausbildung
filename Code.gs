@@ -6,7 +6,7 @@
  * Wichtig: die Google Tabelle NICHT für Teilnehmer freigeben.
  */
 const GA = Object.freeze({
-  VERSION: '1.13.15',
+  VERSION: '1.13.16',
   SHEETS: {
     Benutzer: ['ID','Name','Email','Rolle','Bereich','Aktiv','Salt','Hash','ErstelltAm'],
     Turnusse: ['ID','Bezeichnung','Bereich','Aktiv','ErstelltAm'],
@@ -1136,7 +1136,7 @@ function gaSaveTermin_(u,d){gaRequireRight_(u,'TerminePlanen');const course=gaFi
 const GA_ADMINMAIL_SETTINGS='GA_ADMINMAIL_SETTINGS_V1',GA_ADMINMAIL_QUEUE='GA_ADMINMAIL_QUEUE_V1_',
  GA_ADMINMAIL_B_SENT='GA_ADMINMAIL_BLOCKB_SENT_V1_',GA_TRANSPONDER_TITLE='Transponder für Zugang',GA_BLAULICHT_TITLE='Blaulicht SMS/Lea',GA_PAGER_TITLE='Pager';
 /** Einmalige, eng begrenzte Mail-Aktionen. GET/Preview ändern niemals einen Nachweis. */
-const GA_MAIL_ACTION_PREFIX='GA_MAIL_ACTION_V1_',GA_AID_MAIL_ACK_PREFIX='GA_AID_MAIL_ACK_V1_';
+const GA_MAIL_ACTION_PREFIX='GA_MAIL_ACTION_V1_',GA_AID_MAIL_ACK_PREFIX='GA_AID_MAIL_ACK_V1_',GA_MAIL_ACTION_LIFETIME_DAYS=60;
 function gaMailHtml_(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function gaMailActionRecipients_(art){
  if(art==='ersteHilfe'){const s=gaAidSettings_();return s.Aktiv?gaAdminMailAddress_(s.Empfaenger):'';}
@@ -1145,14 +1145,14 @@ function gaMailActionRecipients_(art){
 function gaMailActionLink_(delivery,action){
  const token=gaId_().replace(/-/g,'')+gaId_().replace(/-/g,''),digest=gaInviteDigest_(token),
   target={...action,MailKey:delivery.key,MailVersion:delivery.LinkVersion,Art:delivery.Art,
-   EmpfaengerHash:gaInviteDigest_(delivery.Art+'\n'+gaMailActionRecipients_(delivery.Art).split(',').sort().join(',')),AblaufMillis:Date.now()+30*86400000,VerwendetAm:''};
+   EmpfaengerHash:gaInviteDigest_(delivery.Art+'\n'+gaMailActionRecipients_(delivery.Art).split(',').sort().join(',')),AblaufMillis:Date.now()+GA_MAIL_ACTION_LIFETIME_DAYS*86400000,VerwendetAm:''};
  gaAdminMailWrite_(GA_MAIL_ACTION_PREFIX+digest,target);
  const url=gaInviteLink_(token).replace('einladung.html#invite=','checkliste-bestaetigen.html#token=');
  return {...action,url};
 }
 function gaMailActionExtras_(delivery,actions,body,previewOnly){
  if(previewOnly)return {body};
- const links=actions.map(a=>gaMailActionLink_(delivery,a)),intro='Ausgabe bzw. Erfassung bestätigen: Der Link öffnet eine Bestätigungsseite. Erst die ausdrückliche Bestätigung dort ändert den Status. Links sind 30 Tage gültig und nur für die jeweilige Person und Aufgabe bestimmt.';
+ const links=actions.map(a=>gaMailActionLink_(delivery,a)),intro='Ausgabe bzw. Erfassung bestätigen: Der Link öffnet eine Bestätigungsseite. Erst die ausdrückliche Bestätigung dort ändert den Status. Links sind '+GA_MAIL_ACTION_LIFETIME_DAYS+' Tage gültig und nur für die jeweilige Person und Aufgabe bestimmt.';
  const plain=body+'\n\n'+intro+'\n\n'+links.map(a=>a.Label+':\n'+a.url).join('\n\n');
  const html='<div style="font-family:Arial,sans-serif;color:#193047;max-width:660px"><h2>Feuerwehr St. Pölten-Stadt</h2><div style="white-space:pre-wrap">'+gaMailHtml_(body)+'</div><p>'+gaMailHtml_(intro)+'</p>'+links.map(a=>'<p style="margin:18px 0"><a href="'+gaMailHtml_(a.url)+'" style="display:inline-block;background:#175eae;color:white;text-decoration:none;border-radius:8px;padding:13px 18px;font-weight:bold">'+gaMailHtml_(a.Label)+'</a></p>').join('')+'</div>';
  return {body:plain,htmlBody:html};
@@ -1367,7 +1367,7 @@ function gaAdminMailState_(){
  let point=null,pointError='';try{point=gaTransponderItem_(false);}catch(e){pointError=String(e.message||e);}
  let blaulicht=null,blaulichtError='';try{blaulicht=gaBlaulichtItem_(false);}catch(e){blaulichtError=String(e.message||e);}
  let pager=null,pagerError='';try{pager=gaPagerItem_(false);}catch(e){pagerError=String(e.message||e);}
- return {...s,Version:7,ErweiterteAufnahme:true,PagerAuswahl:true,MailNichtErforderlich:true,PagerPunktID:pager?.ID||'',PagerPunktFehler:pagerError,PagerPunktArchiviert:!!pager&&!gaBool_(pager.Aktiv),ZeugkammerAuswahl:true,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
+ return {...s,Version:8,MailLinkTage:GA_MAIL_ACTION_LIFETIME_DAYS,ErweiterteAufnahme:true,PagerAuswahl:true,MailNichtErforderlich:true,PagerPunktID:pager?.ID||'',PagerPunktFehler:pagerError,PagerPunktArchiviert:!!pager&&!gaBool_(pager.Aktiv),ZeugkammerAuswahl:true,BlaulichtSMSLea:true,BlaulichtPunktID:blaulicht?.ID||'',BlaulichtPunktFehler:blaulichtError,BlaulichtPunktArchiviert:!!blaulicht&&!gaBool_(blaulicht.Aktiv),MailBestaetigungen:true,MehrereEmpfaenger:true,TransponderPunktFehler:pointError,TransponderPunktID:point?.ID||'',TransponderPunktArchiviert:!!point&&!gaBool_(point.Aktiv),TriggerAktiv:trigger,
   Verlauf:gaAdminMailRows_().sort((a,b)=>Number(b.AktualisiertMillis||0)-Number(a.AktualisiertMillis||0)).slice(0,40)
    .map(r=>({ID:r.key,Art:r.Art,Status:r.Status,Hinweis:r.Hinweis||'',MitgliedID:r.MitgliedID||'',BerichtID:r.BerichtID||'',TurnusID:r.TurnusID||'',Datum:r.Datum||'',
     Anzahl:r.Anzahl||0,Name:r.Name||'',GesendetAm:r.GesendetAm||'',FaelligMillis:r.FaelligMillis||0}))};

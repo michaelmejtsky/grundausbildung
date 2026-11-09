@@ -63,7 +63,7 @@ assert.equal(pagerMail.to,'pager@example.test,office@example.test');assert(pager
 assert(pagerMail.body.includes('STB-Anna'));assert(pagerMail.body.includes('0660123456'));assert(pagerMail.body.includes('anna@example.test'));assert(pagerMail.body.includes('Bitte nicht auf diese E-Mail antworten'));
 assert.equal(rawTokens(pagerMail).length,2);assert.equal(rawTokens(findMail(anna,'transponder')).length,2);
 const berta=save('Berta');assert(!tables.MitgliedChecks.some(c=>c.MitgliedID===berta.ID&&c.PunktID===pager.PunktID));
-const [pagerYes,pagerNo]=rawTokens(pagerMail),[transYes,transNo]=rawTokens(findMail(anna,'transponder'));
+const [pagerYes,pagerNo]=rawTokens(pagerMail),[transYes,transNo]=rawTokens(findMail(anna,'transponder'));for(const token of [pagerYes,pagerNo,transYes,transNo])assert.equal(JSON.parse(values.get('GA_MAIL_ACTION_V1_'+ctx.gaInviteDigest_(token))).AblaufMillis-now,60*86400000);
 const before=JSON.stringify(tables),propsBefore=JSON.stringify(Object.fromEntries(values));
 let preview=call('previewMailAction',{LinkToken:pagerNo},'');assert(preview.NichtErforderlichAktion);assert.equal(preview.Erledigt,false);assert.equal(preview.Status,'Offen');
 assert.equal(JSON.stringify(tables),before);assert.equal(JSON.stringify(Object.fromEntries(values)),propsBefore);assert(!JSON.stringify(Object.fromEntries(values)).includes(pagerNo));

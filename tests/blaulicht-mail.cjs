@@ -68,7 +68,7 @@ for(const value of ['Anna Beispiel','STB-Anna','0660123456','anna@example.test',
 const point=ctx.gaBlaulichtItem_(false),check=checkFor(anna.ID);assert.equal(point.Titel,'Blaulicht SMS/Lea');assert.equal(point.Zustaendig,'IT');assert.equal(check.Status,'Offen');
 assert(!checkFor('m1'),'Existing members are not assigned implicitly');
 const berta=save('Berta');assert(!checkFor(berta.ID),'Unselected new member stays unaffected');
-const token=rawTokens(mail)[0];assert.equal(rawTokens(mail).length,1);assert(!JSON.stringify(Object.fromEntries(values)).includes(token));
+const token=rawTokens(mail)[0];assert.equal(JSON.parse(values.get('GA_MAIL_ACTION_V1_'+ctx.gaInviteDigest_(token))).AblaufMillis-now,60*86400000);assert.equal(rawTokens(mail).length,1);assert(!JSON.stringify(Object.fromEntries(values)).includes(token));
 const tablesBefore=JSON.stringify(tables),propsBefore=JSON.stringify(Object.fromEntries(values));
 assert.equal(call('previewMailAction',{LinkToken:token},'').Erledigt,false);
 assert.equal(JSON.stringify(tables),tablesBefore);assert.equal(JSON.stringify(Object.fromEntries(values)),propsBefore);
