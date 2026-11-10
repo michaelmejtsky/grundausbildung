@@ -5,8 +5,8 @@
   "start_url": "/grundausbildung/",
   "scope": "/grundausbildung/",
   "display": "standalone",
-  "background_color": "#10283f",
-  "theme_color": "#10283f",
+  "background_color": "#122c3c",
+  "theme_color": "#122c3c",
   "lang": "de-AT",
   "icons": [
     {
