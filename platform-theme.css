@@ -42,3 +42,15 @@ html{scroll-padding-top:110px}body{background:var(--bg);color:var(--text);font-f
 .ga-trainer-shortcut-icon{font-size:0}.ga-trainer-shortcut-icon::after{content:"";display:block;width:19px;height:19px;background:currentColor;mask:var(--ga-menu-icon) center/contain no-repeat;-webkit-mask:var(--ga-menu-icon) center/contain no-repeat}
 
 .ga-brand-symbol,.login-card .logo{position:relative}.ga-brand-symbol::after,.login-card .logo::after{content:"";position:absolute;width:5px;height:5px;right:7px;top:9px;border-top:1.4px solid currentColor;border-right:1.4px solid currentColor}
+
+
+/* iPhone: Formularfokus darf keinen automatischen Zoom hinterlassen. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+@media(max-width:840px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
+  @supports(overflow:clip){html,body{overflow-x:clip}}
+  .layout,#content,.login-wrap,.login-card{min-width:0;max-width:100%}
+  .layout{width:100%}
+  input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px}
+  .tablewrap,.top>.row{overscroll-behavior-x:contain}
+}
